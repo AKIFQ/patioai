@@ -30,19 +30,18 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Get user session
-  const { data } = await supabase.auth.getClaims();
-  const session = data?.claims || null;
+  // Get user session using the proper auth method
+  const { data: { user }, error } = await supabase.auth.getUser();
 
   // Handle route-specific redirects
   const currentRoute = request.nextUrl.pathname;
-  if (currentRoute.startsWith('/protected') && !session) {
+  if (currentRoute.startsWith('/protected') && !user) {
     const redirectUrl = new URL(request.url);
     redirectUrl.pathname = '/signin';
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (currentRoute.startsWith('/chat') && !session) {
+  if (currentRoute.startsWith('/chat') && !user) {
     const redirectUrl = new URL(request.url);
     redirectUrl.pathname = '/signin';
     return NextResponse.redirect(redirectUrl);

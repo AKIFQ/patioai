@@ -1,6 +1,7 @@
 // app/chat/[chatId]/layout.tsx
 import React from 'react';
 import { createServerSupabaseClient } from '@/lib/server/server';
+import { getUserInfo } from '@/lib/server/supabase';
 import ChatHistoryDrawer from './components/chat_history/ChatHistorySidebar';
 import { unstable_noStore as noStore } from 'next/cache';
 import { UploadProvider } from './context/uploadContext';
@@ -25,58 +26,54 @@ interface CategorizedChats {
   older: ChatPreview[];
 }
 
-// Single combined query
-// Single combined query with proper first message fetching
+// Single combined query with proper authentication check
 const fetchUserData = async () => {
   noStore();
+  
+  // First check if user is authenticated
+  const userInfo = await getUserInfo();
+  if (!userInfo) {
+    return null;
+  }
+
   const supabase = await createServerSupabaseClient();
 
   try {
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select(
-        `
+    // Fetch chat sessions and documents for the authenticated user
+    const { data: chatData, error: chatError } = await supabase
+      .from('chat_sessions')
+      .select(`
         id,
-        full_name,
-        email,
-        chat_sessions (
-          id,
-          created_at,
-          chat_title,
-          first_message:chat_messages!inner(content)
-        ),
-        user_documents (
-          id,
-          title,
-          created_at,
-          total_pages,
-          filter_tags
-        )
-      `
-      )
-      .order('created_at', {
-        ascending: false,
-        referencedTable: 'chat_sessions'
-      })
-      .order('created_at', {
-        ascending: false,
-        referencedTable: 'user_documents'
-      })
-      .limit(30, { foreignTable: 'chat_sessions' })
-      .limit(1, { foreignTable: 'chat_sessions.chat_messages' })
-      .maybeSingle();
+        created_at,
+        chat_title,
+        first_message:chat_messages!inner(content)
+      `)
+      .eq('user_id', userInfo.id)
+      .order('created_at', { ascending: false })
+      .limit(30)
+      .limit(1, { foreignTable: 'chat_messages' });
 
-    // Only log real errors, but return null silently if no user session
-    if (userError) {
-      console.error('User Error:', userError);
-      return null;
+    const { data: documentsData, error: docsError } = await supabase
+      .from('user_documents')
+      .select(`
+        id,
+        title,
+        created_at,
+        total_pages,
+        filter_tags
+      `)
+      .eq('user_id', userInfo.id)
+      .order('created_at', { ascending: false });
+
+    if (chatError) {
+      console.error('Chat Error:', chatError);
     }
-    if (!userData) {
-      return null;
+    if (docsError) {
+      console.error('Documents Error:', docsError);
     }
 
-    // Transform chat data using the same logic as the original fetchData function
-    const chatPreviews = (userData.chat_sessions || []).map((session) => ({
+    // Transform chat data
+    const chatPreviews = (chatData || []).map((session) => ({
       id: session.id,
       firstMessage:
         session.chat_title ??
@@ -86,7 +83,7 @@ const fetchUserData = async () => {
     }));
 
     // Transform documents data
-    const documents = (userData.user_documents || []).map((doc) => ({
+    const documents = (documentsData || []).map((doc) => ({
       id: doc.id,
       title: doc.title,
       created_at: doc.created_at,
@@ -95,9 +92,9 @@ const fetchUserData = async () => {
     }));
 
     return {
-      id: userData.id,
-      full_name: userData.full_name,
-      email: userData.email,
+      id: userInfo.id,
+      full_name: userInfo.full_name,
+      email: userInfo.email,
       chatPreviews,
       documents
     };
