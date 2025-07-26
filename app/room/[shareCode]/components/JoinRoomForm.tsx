@@ -10,6 +10,7 @@ import { Users, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getOrCreateSessionId, getStoredDisplayName, storeDisplayName } from '@/lib/utils/session';
 import RoomChat from './RoomChat';
+import { useRouter } from 'next/navigation';
 
 interface Room {
   id: string;
@@ -43,6 +44,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasJoined, setHasJoined] = useState(false);
+  const router = useRouter();
 
   // Generate a session ID for this browser session
   const [sessionId] = useState(() => getOrCreateSessionId());
@@ -55,8 +57,18 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
     const storedName = getStoredDisplayName(shareCode);
     if (storedName) {
       setDisplayName(storedName);
+      
+      // If user has a stored session, try to auto-join them
+      const storedSessionId = getOrCreateSessionId();
+      if (storedSessionId) {
+        // Auto-redirect to chat if they have a stored session (with a small delay to avoid UI jumping)
+        setTimeout(() => {
+          router.push(`/chat/room/${shareCode}?displayName=${encodeURIComponent(storedName)}&sessionId=${encodeURIComponent(storedSessionId)}`);
+        }, 100);
+        return;
+      }
     }
-  }, [shareCode]);
+  }, [shareCode, router]);
 
   const fetchRoomInfo = async () => {
     try {
@@ -119,7 +131,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
       storeDisplayName(shareCode, displayName.trim());
       
       // Redirect to chat interface with room context
-      window.location.href = `/chat/room/${shareCode}?displayName=${encodeURIComponent(displayName.trim())}&sessionId=${encodeURIComponent(sessionId)}`;
+      router.push(`/chat/room/${shareCode}?displayName=${encodeURIComponent(displayName.trim())}&sessionId=${encodeURIComponent(sessionId)}`);
       
     } catch (error) {
       console.error('Error joining room:', error);
@@ -144,7 +156,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin mx-auto" />
           <p className="text-muted-foreground">Loading room...</p>

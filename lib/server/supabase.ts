@@ -25,10 +25,18 @@ export const getSession = cache(async () => {
 export const getUserInfo = cache(async () => {
   const supabase = await createServerSupabaseClient();
   try {
+    // First check if user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return null;
+    }
+
+    // Then get user info from users table
     const { data, error } = await supabase
       .from('users')
       .select('full_name, email, id')
-      .maybeSingle(); // MaybeSingle returns null if no data is found. single() returns an error if no data is found.
+      .eq('id', user.id)
+      .maybeSingle();
 
     if (error) {
       console.error('Supabase Error:', error);

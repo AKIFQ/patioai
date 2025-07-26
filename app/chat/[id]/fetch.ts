@@ -173,6 +173,13 @@ export function formatMessages(messages: ChatMessage[]): Message[] {
 
 export async function fetchChat(chatId: string) {
   noStore();
+  
+  // Don't try to fetch room chats as regular chats
+  if (chatId.startsWith('room_chat_') || chatId.startsWith('room_')) {
+    console.error('Attempted to fetch room chat as regular chat:', chatId);
+    return null;
+  }
+  
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase

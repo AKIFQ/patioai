@@ -14,9 +14,9 @@ export async function GET(
     const { shareCode } = await params;
 
     // Find the room by share code
-    const { data: room, error: roomError } = await supabase
+    const { data: room, error: roomError } = await (supabase as any)
       .from('rooms')
-      .select('id, expires_at')
+      .select('id, name')
       .eq('share_code', shareCode)
       .single();
 
@@ -27,38 +27,36 @@ export async function GET(
       );
     }
 
-    // Check if room has expired
-    const now = new Date();
-    const expiresAt = new Date(room.expires_at);
-    if (now > expiresAt) {
-      return NextResponse.json(
-        { error: 'Room has expired' },
-        { status: 410 }
-      );
-    }
-
     // Get room messages (last 50 messages)
-    const { data: messages, error: messagesError } = await supabase
+    const { data: messages, error: messagesError } = await (supabase as any)
       .from('room_messages')
-      .select('*')
+      .select('id, sender_name, content, is_ai_response, created_at')
       .eq('room_id', room.id)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(50);
 
     if (messagesError) {
-      console.error('Error fetching messages:', messagesError);
+      console.error('Error fetching room messages:', messagesError);
       return NextResponse.json(
         { error: 'Failed to fetch messages' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      messages: messages || []
-    });
+    // Transform messages for chat history display
+    const chatHistory = (messages || []).reverse().map((msg: any) => ({
+      id: msg.id,
+      content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+      isAI: msg.is_ai_response,
+      senderName: msg.sender_name,
+      timestamp: msg.created_at,
+      created_at: msg.created_at
+    }));
+
+    return NextResponse.json(chatHistory);
 
   } catch (error) {
-    console.error('Error fetching room messages:', error);
+    console.error('Error in room messages API:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

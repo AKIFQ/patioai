@@ -82,6 +82,32 @@ const fetchUserData = async () => {
       .eq('created_by', userInfo.id)
       .order('created_at', { ascending: false });
 
+    // Fetch room chats for the user (rooms they created)
+    // First get the user's rooms
+    const userRoomIds = (roomsData || []).map((room: any) => room.id);
+    
+    let roomChatsData = [];
+    let roomChatsError = null;
+    
+    if (userRoomIds.length > 0) {
+      const { data, error } = await (supabase as any)
+        .from('room_messages')
+        .select(`
+          id,
+          created_at,
+          content,
+          sender_name,
+          is_ai_response,
+          room_id
+        `)
+        .in('room_id', userRoomIds)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      roomChatsData = data;
+      roomChatsError = error;
+    }
+
     if (chatError) {
       console.error('Chat Error:', chatError);
     }
@@ -91,6 +117,9 @@ const fetchUserData = async () => {
     if (roomsError) {
       console.error('Rooms Error:', roomsError);
     }
+    if (roomChatsError) {
+      console.error('Room Chats Error:', roomChatsError);
+    }
 
     // Transform chat data
     const chatPreviews = (chatData || []).map((session) => ({
@@ -99,8 +128,42 @@ const fetchUserData = async () => {
         session.chat_title ??
         session.first_message[0]?.content ??
         'No messages yet',
-      created_at: session.created_at
+      created_at: session.created_at,
+      type: 'regular' as const
     }));
+
+    // Transform room chat data and group by room
+    const roomChatPreviews = [];
+    const roomChatsGrouped = new Map();
+    
+    // Create a lookup map for room data
+    const roomsLookup = new Map();
+    (roomsData || []).forEach((room: any) => {
+      roomsLookup.set(room.id, room);
+    });
+    
+    (roomChatsData || []).forEach((msg: any) => {
+      const roomKey = msg.room_id;
+      const roomData = roomsLookup.get(msg.room_id);
+      
+      if (roomData && roomData.share_code && !roomChatsGrouped.has(roomKey)) {
+        roomChatsGrouped.set(roomKey, {
+          id: `room_chat_${msg.room_id}`,
+          firstMessage: `${roomData.name}: ${msg.is_ai_response ? 'AI: ' + msg.content : msg.sender_name + ': ' + msg.content}`,
+          created_at: msg.created_at,
+          type: 'room' as const,
+          roomName: roomData.name,
+          shareCode: roomData.share_code
+        });
+      }
+    });
+    
+    roomChatPreviews.push(...Array.from(roomChatsGrouped.values()));
+
+    // Combine and sort all chats by date
+    const allChatPreviews = [...chatPreviews, ...roomChatPreviews].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
 
     // Transform documents data
     const documents = (documentsData || []).map((doc) => ({
@@ -129,6 +192,7 @@ const fetchUserData = async () => {
       full_name: userInfo.full_name,
       email: userInfo.email,
       chatPreviews,
+      allChatPreviews,
       documents,
       rooms
     };
@@ -192,8 +256,8 @@ export default async function Layout(props: { children: React.ReactNode }) {
             full_name: userData?.full_name || '',
             email: userData?.email || ''
           }}
-          initialChatPreviews={userData?.chatPreviews || []}
-          categorizedChats={categorizeChats(userData?.chatPreviews || [])}
+          initialChatPreviews={userData?.allChatPreviews || []}
+          categorizedChats={categorizeChats(userData?.allChatPreviews || [])}
           documents={userData?.documents || []}
           rooms={userData?.rooms || []}
         />

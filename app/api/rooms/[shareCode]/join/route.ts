@@ -36,7 +36,7 @@ export async function POST(
     }
 
     // Find the room by share code
-    const { data: room, error: roomError } = await supabase
+    const { data: room, error: roomError } = await (supabase as any)
       .from('rooms')
       .select('*')
       .eq('share_code', shareCode)
@@ -60,7 +60,7 @@ export async function POST(
     }
 
     // Check current participant count
-    const { data: participants, error: participantsError } = await supabase
+    const { data: participants, error: participantsError } = await (supabase as any)
       .from('room_participants')
       .select('session_id')
       .eq('room_id', room.id);
@@ -86,7 +86,7 @@ export async function POST(
     
     if (existingParticipant) {
       // Update existing participant's display name
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('room_participants')
         .update({ 
           display_name: displayName.trim(),
@@ -104,7 +104,7 @@ export async function POST(
       }
     } else {
       // Add new participant
-      const { error: insertError } = await supabase
+      const { error: insertError } = await (supabase as any)
         .from('room_participants')
         .insert({
           room_id: room.id,
@@ -122,7 +122,7 @@ export async function POST(
     }
 
     // Get updated participant list
-    const { data: updatedParticipants, error: updatedParticipantsError } = await supabase
+    const { data: updatedParticipants, error: updatedParticipantsError } = await (supabase as any)
       .from('room_participants')
       .select('display_name, joined_at')
       .eq('room_id', room.id)
@@ -169,7 +169,7 @@ export async function GET(
     const { shareCode } = await params;
 
     // Find the room by share code
-    const { data: room, error: roomError } = await supabase
+    const { data: room, error: roomError } = await (supabase as any)
       .from('rooms')
       .select('*')
       .eq('share_code', shareCode)
@@ -193,7 +193,7 @@ export async function GET(
     }
 
     // Get current participants
-    const { data: participants, error: participantsError } = await supabase
+    const { data: participants, error: participantsError } = await (supabase as any)
       .from('room_participants')
       .select('display_name, joined_at')
       .eq('room_id', room.id)
