@@ -17,6 +17,18 @@ interface ChatPreview {
   created_at: string;
 }
 
+interface GroupChatRoom {
+  id: string;
+  name: string;
+  shareCode: string;
+  participantCount: number;
+  maxParticipants: number;
+  tier: 'free' | 'pro';
+  expiresAt: string;
+  createdAt: string;
+  isCreator: boolean;
+}
+
 interface CategorizedChats {
   today: ChatPreview[];
   yesterday: ChatPreview[];
@@ -29,7 +41,7 @@ interface CategorizedChats {
 // Single combined query with proper authentication check
 const fetchUserData = async () => {
   noStore();
-  
+
   // First check if user is authenticated
   const userInfo = await getUserInfo();
   if (!userInfo) {
@@ -65,11 +77,53 @@ const fetchUserData = async () => {
       .eq('user_id', userInfo.id)
       .order('created_at', { ascending: false });
 
+    // Fetch group chat rooms where user is creator or participant
+    const { data: createdRooms, error: createdRoomsError } = await supabase
+      .from('rooms')
+      .select(`
+        id,
+        name,
+        share_code,
+        max_participants,
+        creator_tier,
+        expires_at,
+        created_at
+      `)
+      .eq('created_by', userInfo.id)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+
+    // Get session ID from localStorage (this will be handled client-side)
+    // For now, we'll fetch rooms where user might be a participant
+    // This is a simplified approach - in production, you'd want better session tracking
+    const { data: participantRooms, error: participantRoomsError } = await supabase
+      .from('room_participants')
+      .select(`
+        room_id,
+        rooms!inner(
+          id,
+          name,
+          share_code,
+          max_participants,
+          creator_tier,
+          expires_at,
+          created_at,
+          created_by
+        )
+      `)
+      .gt('rooms.expires_at', new Date().toISOString());
+
     if (chatError) {
       console.error('Chat Error:', chatError);
     }
     if (docsError) {
       console.error('Documents Error:', docsError);
+    }
+    if (createdRoomsError) {
+      console.error('Created Rooms Error:', createdRoomsError);
+    }
+    if (participantRoomsError) {
+      console.error('Participant Rooms Error:', participantRoomsError);
     }
 
     // Transform chat data
@@ -91,12 +145,64 @@ const fetchUserData = async () => {
       filter_tags: doc.filter_tags
     }));
 
+    // Transform group chat rooms data
+    const allRooms = new Map<string, any>();
+
+    // Add created rooms
+    (createdRooms || []).forEach(room => {
+      allRooms.set(room.id, {
+        ...room,
+        isCreator: true,
+        participantCount: 0 // Will be updated below
+      });
+    });
+
+    // Add participant rooms
+    (participantRooms || []).forEach(({ rooms: room }) => {
+      if (room && !allRooms.has(room.id)) {
+        allRooms.set(room.id, {
+          ...room,
+          isCreator: room.created_by === userInfo.id,
+          participantCount: 0 // Will be updated below
+        });
+      }
+    });
+
+    // Get participant counts for all rooms
+    const roomIds = Array.from(allRooms.keys());
+    const participantCounts = new Map<string, number>();
+
+    if (roomIds.length > 0) {
+      const { data: participantCountData } = await supabase
+        .from('room_participants')
+        .select('room_id')
+        .in('room_id', roomIds);
+
+      (participantCountData || []).forEach(({ room_id }) => {
+        participantCounts.set(room_id, (participantCounts.get(room_id) || 0) + 1);
+      });
+    }
+
+    // Update participant counts and transform to final format
+    const groupChatRooms: GroupChatRoom[] = Array.from(allRooms.values()).map(room => ({
+      id: room.id,
+      name: room.name,
+      shareCode: room.share_code,
+      participantCount: participantCounts.get(room.id) || 0,
+      maxParticipants: room.max_participants,
+      tier: room.creator_tier,
+      expiresAt: room.expires_at,
+      createdAt: room.created_at,
+      isCreator: room.isCreator
+    }));
+
     return {
       id: userInfo.id,
       full_name: userInfo.full_name,
       email: userInfo.email,
       chatPreviews,
-      documents
+      documents,
+      groupChatRooms
     };
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -149,7 +255,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
   const userData = await fetchUserData();
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-screen">
       <UploadProvider userId={userData?.id || ''}>
         <ChatHistoryDrawer
           userInfo={{
@@ -160,6 +266,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
           initialChatPreviews={userData?.chatPreviews || []}
           categorizedChats={categorizeChats(userData?.chatPreviews || [])}
           documents={userData?.documents || []}
+          groupChatRooms={userData?.groupChatRooms || []}
         />
         {props.children}
       </UploadProvider>

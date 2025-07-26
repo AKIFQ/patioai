@@ -1,21 +1,44 @@
 import 'server-only';
 import React from 'react';
-import { HeroSection } from './components/landingpage/HeroSection';
-import { FeaturesSection } from './components/landingpage/FeaturesSection';
-import { BentoGrid } from './components/landingpage/BentoGrid';
-import { TestimonialsSection } from './components/landingpage/TestimonialsSection';
-import { CTASection } from './components/landingpage/CTASection';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { getSession } from '@/lib/server/supabase';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const session = await getSession();
+  
   return (
-    <>
-      {/* We pass the promise here and resolve it with react.use in the child to prevent the async request from blocking the UI */}
-      <HeroSection session={getSession()} />
-      <FeaturesSection />
-      <BentoGrid />
-      <TestimonialsSection />
-      <CTASection />
-    </>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="max-w-2xl mx-auto px-4 text-center">
+        <h1 className="text-4xl md:text-6xl font-bold mb-6">
+          Welcome
+        </h1>
+        <p className="text-xl text-muted-foreground mb-8">
+          Your application is ready to be customized.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {session ? (
+            <Button asChild size="lg">
+              <Link href="/chat">
+                Go to Chat
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild size="lg">
+                <Link href="/signin">
+                  Sign In
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/signup">
+                  Sign Up
+                </Link>
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

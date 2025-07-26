@@ -4,9 +4,10 @@ import { searchUserDocument } from '@/app/api/chat/tools/documentChat';
 import { websiteSearchTool } from '@/app/api/chat/tools/WebsiteSearchTool';
 
 // Define the toolset with just the document search tool
+// Note: userId should be passed dynamically from the actual user session
 export const toolSet = {
   searchUserDocument: searchUserDocument({
-    userId: '123',
+    userId: '', // This should be populated with the actual user ID
     selectedBlobs: []
   }),
   websiteSearchTool: websiteSearchTool

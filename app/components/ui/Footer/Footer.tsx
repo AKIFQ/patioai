@@ -20,9 +20,9 @@ const Footer: React.FC = () => {
         {/* Contact Section */}
         <div className="w-[48%] sm:w-[48%] md:w-[21%] lg:w-[21%] xl:w-[30%] flex flex-col gap-3 p-0">
           <h5 className="text-xl font-bold">Contact</h5>
-          <p className="text-sm text-white">Example Company Name</p>
-          <p className="text-sm text-white">123 Example Street, City 12345</p>
-          <p className="text-sm text-white mb-1">ID: 12345678</p>
+          <p className="text-sm text-white">Your Company Name</p>
+          <p className="text-sm text-white">Your Address</p>
+          <p className="text-sm text-white mb-1">Your ID/Registration</p>
           <Link href="#" className="text-sky-300 hover:text-sky-200">
             Privacy Policy
           </Link>
@@ -91,7 +91,7 @@ const Footer: React.FC = () => {
       <div className="max-w-[1600px] mx-auto px-4 flex justify-between items-center py-2">
         <div className="flex-grow">
           <Link href="#" className="text-white hover:text-gray-200">
-            Example Company &copy; {new Date().getFullYear()}
+            Your Company &copy; {new Date().getFullYear()}
           </Link>
         </div>
         <div className="flex items-center">

@@ -17,9 +17,8 @@ const inter = Inter({
 });
 export const metadata: Metadata = {
   metadataBase: new URL('http://localhost:3000/'),
-  title: 'Supabase SSR Auth Example',
-  description:
-    'An example demonstrating server-side rendering with authentication using Supabase.'
+  title: 'Your App',
+  description: 'Your application description goes here.'
 };
 
 export default function RootLayout({

@@ -191,7 +191,7 @@ export default function SignInCard() {
                 <Input
                   id="fullName"
                   name="fullName"
-                  placeholder="John Doe"
+                  placeholder="Full Name"
                   autoComplete="name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}

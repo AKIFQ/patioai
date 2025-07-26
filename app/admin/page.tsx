@@ -82,11 +82,11 @@ export default function AdminPage() {
         </p>
 
         <div className="w-full max-w-md space-y-4 mb-6">
-          <Input placeholder="Hint: It doesn't work" className="bg-card" />
+          <Input placeholder="Username" className="bg-card" />
 
           <Input
             type="password"
-            placeholder="Try 123456 (it still doesn't work)"
+            placeholder="Password"
             className="bg-card"
           />
         </div>

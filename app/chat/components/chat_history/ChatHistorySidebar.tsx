@@ -27,13 +27,16 @@ import {
   MessageSquare,
   PanelLeftIcon,
   FilePlus,
-  Loader2
+  Loader2,
+  Users
 } from 'lucide-react';
 import Link from 'next/link';
 import type { Tables } from '@/types/database';
 import ChatHistorySection from './ChatHistorySection';
 import FilesSection from './FilesSection';
+import GroupChatsSection from './GroupChatsSection';
 import UploadPage from './FileUpload';
+import CreateRoomModal from '../CreateRoomModal';
 
 type UserInfo = Pick<Tables<'users'>, 'full_name' | 'email' | 'id'>;
 type UserDocument = Pick<
@@ -55,21 +58,36 @@ interface CategorizedChats {
   older: ChatPreview[];
 }
 
+interface GroupChatRoom {
+  id: string;
+  name: string;
+  shareCode: string;
+  participantCount: number;
+  maxParticipants: number;
+  tier: 'free' | 'pro';
+  expiresAt: string;
+  createdAt: string;
+  isCreator: boolean;
+}
+
 interface CombinedDrawerProps {
   userInfo: UserInfo;
   initialChatPreviews: ChatPreview[];
   categorizedChats: CategorizedChats;
   documents: UserDocument[];
+  groupChatRooms: GroupChatRoom[];
 }
 
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
   userInfo,
   initialChatPreviews,
   categorizedChats,
-  documents
+  documents,
+  groupChatRooms
 }) => {
   const [activeMode, setActiveMode] = useState<'chat' | 'files'>('chat');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -167,6 +185,23 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={() => setIsCreateGroupModalOpen(true)}
+                aria-label="Create room"
+                className="my-2"
+              >
+                <Users size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Create room</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => {
                   setActiveMode('chat');
                   setSidebarOpen(true);
@@ -209,10 +244,15 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   }
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="h-[calc(100vh-48px)] sticky top-0 border border-[rgba(0,0,0,0.1)] w-0 md:w-[240px] lg:w-[280px] flex-shrink-0"
-    >
+    <>
+      <CreateRoomModal 
+        isOpen={isCreateGroupModalOpen}
+        onClose={() => setIsCreateGroupModalOpen(false)}
+      />
+      <Sidebar
+        collapsible="icon"
+        className="h-[calc(100vh-48px)] sticky top-0 border border-[rgba(0,0,0,0.1)] w-0 md:w-[240px] lg:w-[280px] flex-shrink-0"
+      >
       <SidebarHeader className="p-1">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -258,6 +298,15 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               </Button>
             </div>
           </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              onClick={() => setIsCreateGroupModalOpen(true)}
+              className="w-full"
+            >
+              <Users size={16} />
+              <span>Create Room</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
@@ -278,14 +327,20 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             documents={documents}
           />
         ) : (
-          <ChatHistorySection
-            initialChatPreviews={initialChatPreviews}
-            categorizedChats={categorizedChats}
-            currentChatId={currentChatId}
-            searchParams={searchParams}
-            onChatSelect={handleChatSelect}
-            mutateChatPreviews={mutateChatPreviews}
-          />
+          <div className="space-y-4">
+            <GroupChatsSection
+              groupChatRooms={groupChatRooms}
+              onChatSelect={handleChatSelect}
+            />
+            <ChatHistorySection
+              initialChatPreviews={initialChatPreviews}
+              categorizedChats={categorizedChats}
+              currentChatId={currentChatId}
+              searchParams={searchParams}
+              onChatSelect={handleChatSelect}
+              mutateChatPreviews={mutateChatPreviews}
+            />
+          </div>
         )}
       </SidebarContent>
 
@@ -311,6 +366,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         ) : null}
       </SidebarFooter>
     </Sidebar>
+    </>
   );
 };
 

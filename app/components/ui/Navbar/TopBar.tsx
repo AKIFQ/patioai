@@ -39,14 +39,13 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
   );
 
   const navigationItems = [
-    { href: '/protected', text: 'Protected' },
     { href: '/chat', text: 'AI Chat' }
   ];
 
   return (
     <>
       {/* Desktop navigation */}
-      <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-xl border-b border-border h-12 hidden md:flex shadow-sm">
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border h-12 hidden md:flex shadow-sm w-full md:ml-[240px] md:w-[calc(100%-240px)] lg:ml-[280px] lg:w-[calc(100%-280px)]">
         <div className="flex items-center w-full h-full px-8 mx-auto">
           <div className="flex items-center mr-8">
             <Link href="/" passHref>
@@ -84,16 +83,6 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem asChild>
-                    <Link
-                      href="/protected"
-                      className="w-full cursor-pointer"
-                      prefetch={false}
-                      onMouseEnter={() => router.prefetch('/protected')}
-                    >
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
                   <DropdownMenuItem>
                     <SignOut />
                   </DropdownMenuItem>

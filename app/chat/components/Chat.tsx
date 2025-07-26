@@ -113,21 +113,8 @@ const ChatComponent: React.FC<ChatProps> = ({
             template. Ask questions on any topic and get informative responses
             instantly.
           </p>
-          <p className="font-bold text-foreground/80 pb-2">
-            Check out{' '}
-            <Link
-              href="https://www.lovguiden.dk/"
-              target="_blank"
-              rel="noopener"
-              className="text-xl text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              Lovguiden
-            </Link>
-            , a Danish legal AI platform, for a real-world example of AI in
-            action.
-          </p>
           <h2 className="text-2xl font-semibold text-foreground/80">
-            Start chatting now and enjoy the AI experience!
+            Start your conversation!
           </h2>
         </div>
       ) : (

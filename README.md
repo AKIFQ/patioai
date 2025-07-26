@@ -1,20 +1,19 @@
-# 🤖 AI Chat Bot with RAG (Retrieval-Augmented Generation)
+#  AI Chat Bot with RAG (Retrieval-Augmented Generation)
 
-A modern, full-stack AI chat application built with Next.js 15, Supabase, and multiple AI providers. Features document chat, website analysis, vector search, and comprehensive user management.
+A modern full-stack web application built with Next.js 15 and Supabase. Customize it for your specific use case.
 
-## ✨ Features
+##  Features
 
-- 🔐 **Authentication**: Email/password, magic links, and OAuth (Google, GitHub)
-- 💬 **AI Chat**: Support for OpenAI, Anthropic, Google AI, and Perplexity
-- 📄 **Document Chat**: Upload PDFs and chat with your documents using RAG
-- 🌐 **Website Chat**: Analyze and chat about website content
-- 🔍 **Vector Search**: Semantic search through document content using pgvector
-- 📱 **Responsive UI**: Modern interface built with Radix UI and Tailwind CSS
-- 🔒 **Row Level Security**: Secure data access with Supabase RLS policies
-- 📊 **Chat History**: Persistent chat sessions with categorization
-- 🎯 **Real-time Updates**: Live chat streaming and document processing
+-  **Authentication**: Email/password, magic links, and OAuth (Google, GitHub)
+- **Chat Interface**: Interactive messaging system
+- **File Management**: Upload and manage files
+- **Content Management**: Handle various types of content
+-  **Responsive UI**: Modern interface built with Radix UI and Tailwind CSS
+-  **Row Level Security**: Secure data access with Supabase RLS policies
+-  **Chat History**: Persistent chat sessions with categorization
+-  **Real-time Updates**: Live chat streaming and document processing
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 - **Framework**: Next.js 15 with App Router and Server Components
 - **Database**: Supabase (PostgreSQL with pgvector extension)
@@ -26,7 +25,7 @@ A modern, full-stack AI chat application built with Next.js 15, Supabase, and mu
 - **Rate Limiting**: Upstash Redis
 - **Telemetry**: Langfuse (optional)
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 
@@ -346,16 +345,14 @@ Visit `http://localhost:3000` to see your application!
 ## 📝 Usage
 
 1. **Sign Up/Sign In**: Create an account or sign in with existing credentials
-2. **Start Chatting**: Use the AI chat interface with your preferred model
-3. **Upload Documents**: Upload PDFs and chat with their content
-4. **Website Analysis**: Enter a URL to analyze and chat about website content
-5. **Chat History**: All your conversations are automatically saved and categorized
+2. **Customize**: Adapt the application to your specific needs
+3. **Build**: Add your features and functionality
 
 ## 🔧 Troubleshooting
 
 ### Common Issues
 
-1. **"Sign in to save and view your chats" appears when logged in**
+3. **User sync issues**
    - Ensure the user sync trigger was created properly
    - Try signing out and signing back in
 
@@ -363,19 +360,15 @@ Visit `http://localhost:3000` to see your application!
    - Verify your Supabase environment variables
    - Check that all SQL steps were executed successfully
 
-3. **Vector search not working**
-   - Ensure the `vector` extension is enabled
-   - Verify the `match_documents` function was created
+3. **Application features not working**
+   - Check your configuration and environment variables
+   - Verify all required services are properly set up
 
-4. **AI responses not working**
-   - Check that you have at least one AI provider API key configured
-   - Verify the API keys are valid and have sufficient credits
-
-## 📄 License
+##  License
 
 Licensed under the MIT License. See [LICENSE.md](LICENSE.md) for details.
 
-## 🤝 Contributing
+##  Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -383,6 +376,6 @@ Licensed under the MIT License. See [LICENSE.md](LICENSE.md) for details.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📧 Support
+##  Support
 
 If you encounter any issues, please check the troubleshooting section above or open an issue on GitHub. 
