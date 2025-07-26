@@ -8,7 +8,7 @@ const supabase = createClient(
 
 export async function getRoomInfo(shareCode: string) {
   try {
-    const { data: room, error: roomError } = await supabase
+    const { data: room, error: roomError } = await (supabase as any)
       .from('rooms')
       .select('*')
       .eq('share_code', shareCode)
@@ -26,7 +26,7 @@ export async function getRoomInfo(shareCode: string) {
     }
 
     // Get current participants
-    const { data: participants, error: participantsError } = await supabase
+    const { data: participants, error: participantsError } = await (supabase as any)
       .from('room_participants')
       .select('display_name, joined_at')
       .eq('room_id', room.id)
@@ -36,6 +36,12 @@ export async function getRoomInfo(shareCode: string) {
       console.error('Error fetching participants:', participantsError);
       return null;
     }
+
+    // Transform participants to match expected interface
+    const transformedParticipants = (participants || []).map((p: any) => ({
+      displayName: p.display_name,
+      joinedAt: p.joined_at
+    }));
 
     return {
       room: {
@@ -47,8 +53,8 @@ export async function getRoomInfo(shareCode: string) {
         expiresAt: room.expires_at,
         createdAt: room.created_at
       },
-      participants: participants || [],
-      participantCount: participants?.length || 0
+      participants: transformedParticipants,
+      participantCount: transformedParticipants.length
     };
   } catch (error) {
     console.error('Error fetching room info:', error);
@@ -61,7 +67,7 @@ export async function fetchRoomMessages(shareCode: string): Promise<Message[] | 
     const roomInfo = await getRoomInfo(shareCode);
     if (!roomInfo) return undefined;
 
-    const { data: messages, error } = await supabase
+    const { data: messages, error } = await (supabase as any)
       .from('room_messages')
       .select('*')
       .eq('room_id', roomInfo.room.id)

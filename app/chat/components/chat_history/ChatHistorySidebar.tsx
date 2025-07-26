@@ -48,6 +48,9 @@ interface ChatPreview {
   id: string;
   firstMessage: string;
   created_at: string;
+  type?: 'regular' | 'room';
+  roomName?: string;
+  shareCode?: string;
 }
 
 interface CategorizedChats {
@@ -91,6 +94,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
   const [roomChatHistory, setRoomChatHistory] = useState<any[]>([]);
+  const [isLoadingRoomHistory, setIsLoadingRoomHistory] = useState(false);
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -136,6 +140,34 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       setOpenMobile(false);
     }
   }, [setOpenMobile]);
+
+  // Fetch room chat history when room is selected
+  const fetchRoomChatHistory = useCallback(async (shareCode: string) => {
+    setIsLoadingRoomHistory(true);
+    try {
+      const response = await fetch(`/api/rooms/${shareCode}/messages`);
+      if (response.ok) {
+        const messages = await response.json();
+        setRoomChatHistory(messages);
+      } else {
+        setRoomChatHistory([]);
+      }
+    } catch (error) {
+      console.error('Error fetching room chat history:', error);
+      setRoomChatHistory([]);
+    } finally {
+      setIsLoadingRoomHistory(false);
+    }
+  }, []);
+
+  // Fetch room history when room changes
+  React.useEffect(() => {
+    if (currentRoomShareCode) {
+      fetchRoomChatHistory(currentRoomShareCode);
+    } else {
+      setRoomChatHistory([]);
+    }
+  }, [currentRoomShareCode, fetchRoomChatHistory]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -236,6 +268,20 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         className="h-[calc(100vh-48px)] sticky top-0 border border-[rgba(0,0,0,0.1)] w-0 md:w-[240px] lg:w-[280px] flex-shrink-0"
       >
         <SidebarHeader className="p-4 border-b">
+          {/* Home Chat Button - At the very top */}
+          <Button 
+            asChild
+            variant="outline"
+            className="w-full mb-3"
+            size="sm"
+          >
+            <Link href="/chat">
+              <MessageSquare size={16} className="mr-2" />
+              Home Chat
+            </Link>
+          </Button>
+          
+          {/* ROOMS Header with close button */}
           <div className="flex items-center justify-between w-full mb-2">
             <h2 className="text-sm font-semibold">ROOMS</h2>
             <Button
@@ -248,6 +294,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               <PanelLeftIcon size={16} />
             </Button>
           </div>
+          
+          {/* New Room Button - Below ROOMS header */}
           <Button 
             onClick={() => setIsCreateGroupModalOpen(true)}
             className="w-full"
@@ -314,10 +362,51 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           <div className="flex-1 overflow-y-auto">
             {currentRoomShareCode ? (
               <div className="p-2">
-                <div className="text-center p-4">
-                  <p className="text-sm text-muted-foreground">Room chat history</p>
-                  <p className="text-xs text-muted-foreground mt-1">Coming soon...</p>
-                </div>
+                {isLoadingRoomHistory ? (
+                  <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <span className="text-sm text-muted-foreground">Loading messages...</span>
+                  </div>
+                ) : roomChatHistory.length === 0 ? (
+                  <div className="text-center p-4">
+                    <p className="text-sm text-muted-foreground">No messages yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Start chatting in the room!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {roomChatHistory.slice(-10).map((message: any) => (
+                      <div
+                        key={message.id}
+                        className="p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="text-xs text-muted-foreground mb-1">
+                          {new Date(message.created_at).toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </div>
+                        <div className="text-sm">
+                          {message.isAI ? (
+                            <div className="text-blue-600 dark:text-blue-400">
+                              <span className="font-medium">AI:</span> {message.content.substring(0, 100)}
+                              {message.content.length > 100 && '...'}
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="font-medium text-green-600 dark:text-green-400">
+                                {message.senderName}:
+                              </span>{' '}
+                              <span className="text-muted-foreground">
+                                {message.content.replace(`${message.senderName}: `, '').substring(0, 80)}
+                                {message.content.length > 80 && '...'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-2">

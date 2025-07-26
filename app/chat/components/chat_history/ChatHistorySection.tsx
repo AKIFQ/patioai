@@ -1,7 +1,7 @@
 import React, { type FC, useState, startTransition } from 'react';
 import { deleteChatData, updateChatTitle } from '../../actions';
 import { useRouter } from 'next/navigation';
-import { MoreHorizontal, Share, Edit, Trash } from 'lucide-react';
+import { MoreHorizontal, Share, Edit, Trash, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,6 +33,9 @@ interface ChatPreview {
   id: string;
   firstMessage: string;
   created_at: string;
+  type?: 'regular' | 'room';
+  roomName?: string;
+  shareCode?: string;
 }
 
 interface CategorizedChats {
@@ -267,54 +270,70 @@ const RenderChatSectionWithSidebar: FC<RenderChatSectionProps> = ({
       <SidebarGroupLabel>{title}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {chats.map(({ id, firstMessage }) => {
+          {chats.map(({ id, firstMessage, type, roomName, shareCode }) => {
             const currentParams = new URLSearchParams(searchParams.toString());
-            const href = `/chat/${id}${
-              currentParams.toString() ? '?' + currentParams.toString() : ''
-            }`;
+            
+            // For room chats, link to the room page
+            const href = type === 'room' && shareCode 
+              ? `/room/${shareCode}`
+              : `/chat/${id}${currentParams.toString() ? '?' + currentParams.toString() : ''}`;
 
             return (
               <SidebarMenuItem key={id}>
                 <SidebarMenuButton
                   asChild
-                  isActive={currentChatId === id}
+                  isActive={type !== 'room' && currentChatId === id}
                   onClick={() => onChatSelect()}
                 >
                   <a href={href}>
-                    <span className="truncate">{firstMessage}</span>
+                    <div className="flex items-start gap-2 w-full">
+                      {type === 'room' && (
+                        <Users className="h-3 w-3 mt-0.5 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <div className="flex flex-col items-start w-full min-w-0">
+                        <span className="truncate">{firstMessage}</span>
+                        {type === 'room' && roomName && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            Room: {roomName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </a>
                 </SidebarMenuButton>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <SidebarMenuAction>
-                      <MoreHorizontal size={16} />
-                    </SidebarMenuAction>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="rounded-lg">
-                    <DropdownMenuItem
-                      disabled
-                      className="text-sm cursor-not-allowed"
-                    >
-                      <Share className="mr-2 h-4 w-4" />
-                      <span>Share</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleOpenRename(id)}
-                      className="text-sm"
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      <span>Rename</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleDeleteClick(id)}
-                      className="text-destructive text-sm"
-                    >
-                      <Trash className="mr-2 h-4 w-4" />
-                      <span>Delete</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {type !== 'room' && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <SidebarMenuAction>
+                        <MoreHorizontal size={16} />
+                      </SidebarMenuAction>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="rounded-lg">
+                      <DropdownMenuItem
+                        disabled
+                        className="text-sm cursor-not-allowed"
+                      >
+                        <Share className="mr-2 h-4 w-4" />
+                        <span>Share</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleOpenRename(id)}
+                        className="text-sm"
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        <span>Rename</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteClick(id)}
+                        className="text-destructive text-sm"
+                      >
+                        <Trash className="mr-2 h-4 w-4" />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </SidebarMenuItem>
             );
           })}
