@@ -30,9 +30,8 @@ FORMATTING: Your responses are rendered using react-markdown with the following 
   if (selectedFiles.length > 0) {
     return `${basePrompt}
 
-IMPORTANT: The user has uploaded ${
-      selectedFiles.length
-    } document(s): ${selectedFiles.join(', ')}. 
+IMPORTANT: The user has uploaded ${selectedFiles.length
+      } document(s): ${selectedFiles.join(', ')}. 
 
 When answering questions that might be addressed in these documents:
 1. ALWAYS use the searchUserDocument tool to retrieve relevant information from the uploaded documents

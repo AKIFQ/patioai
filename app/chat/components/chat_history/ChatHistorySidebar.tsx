@@ -34,7 +34,7 @@ import Link from 'next/link';
 import type { Tables } from '@/types/database';
 import ChatHistorySection from './ChatHistorySection';
 import FilesSection from './FilesSection';
-import GroupChatsSection from './GroupChatsSection';
+import RoomChatsSection from './RoomChatsSection';
 import UploadPage from './FileUpload';
 import CreateRoomModal from '../CreateRoomModal';
 
@@ -58,7 +58,9 @@ interface CategorizedChats {
   older: ChatPreview[];
 }
 
-interface GroupChatRoom {
+
+
+interface RoomPreview {
   id: string;
   name: string;
   shareCode: string;
@@ -75,15 +77,14 @@ interface CombinedDrawerProps {
   initialChatPreviews: ChatPreview[];
   categorizedChats: CategorizedChats;
   documents: UserDocument[];
-  groupChatRooms: GroupChatRoom[];
+  rooms: RoomPreview[];
 }
 
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
   userInfo,
   initialChatPreviews,
   categorizedChats,
-  documents,
-  groupChatRooms
+  documents
 }) => {
   const [activeMode, setActiveMode] = useState<'chat' | 'files'>('chat');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -328,8 +329,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           />
         ) : (
           <div className="space-y-4">
-            <GroupChatsSection
-              groupChatRooms={groupChatRooms}
+            <RoomChatsSection
               onChatSelect={handleChatSelect}
             />
             <ChatHistorySection

@@ -27,18 +27,30 @@ import { toast } from 'sonner';
 // Icons from Lucide React
 import { User, Bot, Copy, CheckCircle, FileIcon } from 'lucide-react';
 
+interface RoomContext {
+  shareCode: string;
+  roomName: string;
+  displayName: string;
+  sessionId: string;
+  participants: Array<{ displayName: string; joinedAt: string }>;
+  maxParticipants: number;
+  tier: 'free' | 'pro';
+}
+
 interface ChatProps {
   currentChat?: Message[];
   chatId: string;
   initialModelType: string;
   initialSelectedOption: string;
+  roomContext?: RoomContext;
 }
 
 const ChatComponent: React.FC<ChatProps> = ({
   currentChat,
   chatId,
   initialModelType,
-  initialSelectedOption
+  initialSelectedOption,
+  roomContext
 }) => {
   const param = useParams();
   const currentChatId = param.id as string;
@@ -67,8 +79,12 @@ const ChatComponent: React.FC<ChatProps> = ({
     });
   };
 
-  // Determine API endpoint based on model type
+  // Determine API endpoint based on model type and room context
   const getApiEndpoint = () => {
+    if (roomContext) {
+      return `/api/rooms/${roomContext.shareCode}/chat`;
+    }
+    
     switch (optimisticModelType) {
       case 'perplex':
         return '/api/perplexity';
@@ -82,11 +98,16 @@ const ChatComponent: React.FC<ChatProps> = ({
   const apiEndpoint = getApiEndpoint();
 
   // Get messages from chat
-  const { messages, status } = useChat({
-    id: 'chat',
+  const { messages, status, append, setMessages } = useChat({
+    id: roomContext ? `room_${roomContext.shareCode}` : 'chat',
     api: apiEndpoint,
     experimental_throttle: 50,
     initialMessages: currentChat,
+    body: roomContext ? {
+      displayName: roomContext.displayName,
+      sessionId: roomContext.sessionId,
+      option: optimisticOption
+    } : undefined,
     onFinish: async () => {
       if (chatId === currentChatId) return;
 
@@ -102,6 +123,28 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   return (
     <div className="flex h-[calc(100vh-48px)] w-full flex-col overflow-y-auto">
+      {/* Room Header */}
+      {roomContext && (
+        <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold">{roomContext.roomName}</h1>
+              <p className="text-sm text-muted-foreground">
+                Room: {roomContext.shareCode} • You: {roomContext.displayName}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                {roomContext.participants.length}/{roomContext.maxParticipants} participants
+              </span>
+              <span className="text-xs px-2 py-1 bg-secondary rounded">
+                {roomContext.tier}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {messages.length === 0 ? (
         <div className="flex flex-col justify-center items-center h-[90vh] text-center px-4">
           <h2 className="text-2xl font-semibold text-foreground/80 pb-2">

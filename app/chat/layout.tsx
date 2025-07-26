@@ -17,7 +17,7 @@ interface ChatPreview {
   created_at: string;
 }
 
-interface GroupChatRoom {
+interface RoomPreview {
   id: string;
   name: string;
   shareCode: string;
@@ -28,6 +28,8 @@ interface GroupChatRoom {
   createdAt: string;
   isCreator: boolean;
 }
+
+
 
 interface CategorizedChats {
   today: ChatPreview[];
@@ -77,41 +79,22 @@ const fetchUserData = async () => {
       .eq('user_id', userInfo.id)
       .order('created_at', { ascending: false });
 
-    // Fetch group chat rooms where user is creator or participant
+    // Fetch user's rooms (created by them or participated in)
     const { data: createdRooms, error: createdRoomsError } = await supabase
       .from('rooms')
-      .select(`
-        id,
-        name,
-        share_code,
-        max_participants,
-        creator_tier,
-        expires_at,
-        created_at
-      `)
+      .select('*')
       .eq('created_by', userInfo.id)
-      .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
 
-    // Get session ID from localStorage (this will be handled client-side)
-    // For now, we'll fetch rooms where user might be a participant
-    // This is a simplified approach - in production, you'd want better session tracking
-    const { data: participantRooms, error: participantRoomsError } = await supabase
+    const { data: participatedRooms, error: participatedRoomsError } = await supabase
       .from('room_participants')
       .select(`
         room_id,
-        rooms!inner(
-          id,
-          name,
-          share_code,
-          max_participants,
-          creator_tier,
-          expires_at,
-          created_at,
-          created_by
-        )
+        joined_at,
+        rooms!inner(*)
       `)
-      .gt('rooms.expires_at', new Date().toISOString());
+      .neq('rooms.created_by', userInfo.id)
+      .order('joined_at', { ascending: false });
 
     if (chatError) {
       console.error('Chat Error:', chatError);
@@ -122,8 +105,8 @@ const fetchUserData = async () => {
     if (createdRoomsError) {
       console.error('Created Rooms Error:', createdRoomsError);
     }
-    if (participantRoomsError) {
-      console.error('Participant Rooms Error:', participantRoomsError);
+    if (participatedRoomsError) {
+      console.error('Participated Rooms Error:', participatedRoomsError);
     }
 
     // Transform chat data
@@ -145,56 +128,33 @@ const fetchUserData = async () => {
       filter_tags: doc.filter_tags
     }));
 
-    // Transform group chat rooms data
-    const allRooms = new Map<string, any>();
+    // Transform rooms data
+    const allRooms = [
+      ...(createdRooms || []).map(room => ({ ...room, isCreator: true })),
+      ...(participatedRooms || []).map(pr => ({ ...pr.rooms, isCreator: false }))
+    ];
 
-    // Add created rooms
-    (createdRooms || []).forEach(room => {
-      allRooms.set(room.id, {
-        ...room,
-        isCreator: true,
-        participantCount: 0 // Will be updated below
-      });
-    });
+    // Get participant counts for each room
+    const roomsWithCounts = await Promise.all(
+      allRooms.map(async (room) => {
+        const { data: participants } = await supabase
+          .from('room_participants')
+          .select('session_id')
+          .eq('room_id', room.id);
 
-    // Add participant rooms
-    (participantRooms || []).forEach(({ rooms: room }) => {
-      if (room && !allRooms.has(room.id)) {
-        allRooms.set(room.id, {
-          ...room,
-          isCreator: room.created_by === userInfo.id,
-          participantCount: 0 // Will be updated below
-        });
-      }
-    });
-
-    // Get participant counts for all rooms
-    const roomIds = Array.from(allRooms.keys());
-    const participantCounts = new Map<string, number>();
-
-    if (roomIds.length > 0) {
-      const { data: participantCountData } = await supabase
-        .from('room_participants')
-        .select('room_id')
-        .in('room_id', roomIds);
-
-      (participantCountData || []).forEach(({ room_id }) => {
-        participantCounts.set(room_id, (participantCounts.get(room_id) || 0) + 1);
-      });
-    }
-
-    // Update participant counts and transform to final format
-    const groupChatRooms: GroupChatRoom[] = Array.from(allRooms.values()).map(room => ({
-      id: room.id,
-      name: room.name,
-      shareCode: room.share_code,
-      participantCount: participantCounts.get(room.id) || 0,
-      maxParticipants: room.max_participants,
-      tier: room.creator_tier,
-      expiresAt: room.expires_at,
-      createdAt: room.created_at,
-      isCreator: room.isCreator
-    }));
+        return {
+          id: room.id,
+          name: room.name,
+          shareCode: room.share_code,
+          participantCount: participants?.length || 0,
+          maxParticipants: room.max_participants,
+          tier: room.creator_tier,
+          expiresAt: room.expires_at,
+          createdAt: room.created_at,
+          isCreator: room.isCreator
+        };
+      })
+    );
 
     return {
       id: userInfo.id,
@@ -202,7 +162,7 @@ const fetchUserData = async () => {
       email: userInfo.email,
       chatPreviews,
       documents,
-      groupChatRooms
+      rooms: roomsWithCounts
     };
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -266,7 +226,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
           initialChatPreviews={userData?.chatPreviews || []}
           categorizedChats={categorizeChats(userData?.chatPreviews || [])}
           documents={userData?.documents || []}
-          groupChatRooms={userData?.groupChatRooms || []}
+          rooms={userData?.rooms || []}
         />
         {props.children}
       </UploadProvider>

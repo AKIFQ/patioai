@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Users, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getOrCreateSessionId, getStoredDisplayName, storeDisplayName } from '@/lib/utils/session';
+import RoomChat from './RoomChat';
 
 interface Room {
   id: string;
@@ -117,6 +118,9 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
       // Store display name for this session
       storeDisplayName(shareCode, displayName.trim());
       
+      // Redirect to chat interface with room context
+      window.location.href = `/chat/room/${shareCode}?displayName=${encodeURIComponent(displayName.trim())}&sessionId=${encodeURIComponent(sessionId)}`;
+      
     } catch (error) {
       console.error('Error joining room:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to join room');
@@ -181,55 +185,16 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
     );
   }
 
-  if (hasJoined) {
+  if (hasJoined && roomInfo) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-center">Welcome to the Room!</CardTitle>
-            <CardDescription className="text-center">
-              You've successfully joined "{roomInfo.room.name}"
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-muted/50 p-4 rounded-lg space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Your Name:</span>
-                <span className="text-sm text-muted-foreground">{displayName}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Participants:</span>
-                <span className="text-sm text-muted-foreground">
-                  {roomInfo.participantCount}/{roomInfo.room.maxParticipants}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Expires in:</span>
-                <span className="text-sm text-muted-foreground">
-                  {formatExpirationDate(roomInfo.room.expiresAt)}
-                </span>
-              </div>
-            </div>
-            
-            {roomInfo.participants.length > 0 && (
-              <div>
-                <Label className="text-sm font-medium">Current Participants:</Label>
-                <div className="mt-2 space-y-1">
-                  {roomInfo.participants.map((participant, index) => (
-                    <div key={index} className="text-sm text-muted-foreground">
-                      {participant.displayName}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <div className="text-center text-sm text-muted-foreground">
-              Room chat functionality will be available in Task 3
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <RoomChat
+        room={roomInfo.room}
+        participant={{
+          displayName: displayName,
+          sessionId: sessionId
+        }}
+        participants={roomInfo.participants}
+      />
     );
   }
 
