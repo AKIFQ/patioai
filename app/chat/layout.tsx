@@ -17,20 +17,6 @@ interface ChatPreview {
   created_at: string;
 }
 
-interface RoomPreview {
-  id: string;
-  name: string;
-  shareCode: string;
-  participantCount: number;
-  maxParticipants: number;
-  tier: 'free' | 'pro';
-  expiresAt: string;
-  createdAt: string;
-  isCreator: boolean;
-}
-
-
-
 interface CategorizedChats {
   today: ChatPreview[];
   yesterday: ChatPreview[];
@@ -43,7 +29,7 @@ interface CategorizedChats {
 // Single combined query with proper authentication check
 const fetchUserData = async () => {
   noStore();
-
+  
   // First check if user is authenticated
   const userInfo = await getUserInfo();
   if (!userInfo) {
@@ -79,22 +65,22 @@ const fetchUserData = async () => {
       .eq('user_id', userInfo.id)
       .order('created_at', { ascending: false });
 
-    // Fetch user's rooms (created by them or participated in)
-    const { data: createdRooms, error: createdRoomsError } = await supabase
+    // Fetch rooms data - using any type to bypass TypeScript issues with missing table types
+    const { data: roomsData, error: roomsError } = await (supabase as any)
       .from('rooms')
-      .select('*')
+      .select(`
+        id,
+        name,
+        share_code,
+        max_participants,
+        creator_tier,
+        expires_at,
+        created_at,
+        created_by,
+        room_participants(session_id)
+      `)
       .eq('created_by', userInfo.id)
       .order('created_at', { ascending: false });
-
-    const { data: participatedRooms, error: participatedRoomsError } = await supabase
-      .from('room_participants')
-      .select(`
-        room_id,
-        joined_at,
-        rooms!inner(*)
-      `)
-      .neq('rooms.created_by', userInfo.id)
-      .order('joined_at', { ascending: false });
 
     if (chatError) {
       console.error('Chat Error:', chatError);
@@ -102,11 +88,8 @@ const fetchUserData = async () => {
     if (docsError) {
       console.error('Documents Error:', docsError);
     }
-    if (createdRoomsError) {
-      console.error('Created Rooms Error:', createdRoomsError);
-    }
-    if (participatedRoomsError) {
-      console.error('Participated Rooms Error:', participatedRoomsError);
+    if (roomsError) {
+      console.error('Rooms Error:', roomsError);
     }
 
     // Transform chat data
@@ -129,32 +112,17 @@ const fetchUserData = async () => {
     }));
 
     // Transform rooms data
-    const allRooms = [
-      ...(createdRooms || []).map(room => ({ ...room, isCreator: true })),
-      ...(participatedRooms || []).map(pr => ({ ...pr.rooms, isCreator: false }))
-    ];
-
-    // Get participant counts for each room
-    const roomsWithCounts = await Promise.all(
-      allRooms.map(async (room) => {
-        const { data: participants } = await supabase
-          .from('room_participants')
-          .select('session_id')
-          .eq('room_id', room.id);
-
-        return {
-          id: room.id,
-          name: room.name,
-          shareCode: room.share_code,
-          participantCount: participants?.length || 0,
-          maxParticipants: room.max_participants,
-          tier: room.creator_tier,
-          expiresAt: room.expires_at,
-          createdAt: room.created_at,
-          isCreator: room.isCreator
-        };
-      })
-    );
+    const rooms = (roomsData || []).map((room) => ({
+      id: room.id,
+      name: room.name,
+      shareCode: room.share_code,
+      participantCount: room.room_participants?.length || 0,
+      maxParticipants: room.max_participants,
+      tier: room.creator_tier as 'free' | 'pro',
+      expiresAt: room.expires_at,
+      createdAt: room.created_at,
+      isCreator: room.created_by === userInfo.id
+    }));
 
     return {
       id: userInfo.id,
@@ -162,13 +130,14 @@ const fetchUserData = async () => {
       email: userInfo.email,
       chatPreviews,
       documents,
-      rooms: roomsWithCounts
+      rooms
     };
   } catch (error) {
     console.error('Error fetching user data:', error);
     return null;
   }
 };
+
 function categorizeChats(chatPreviews: ChatPreview[]): CategorizedChats {
   const getZonedDate = (date: string) =>
     new TZDate(new Date(date), 'Europe/Copenhagen');

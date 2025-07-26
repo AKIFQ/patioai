@@ -28,13 +28,14 @@ import {
   PanelLeftIcon,
   FilePlus,
   Loader2,
-  Users
+  Users,
+  Crown
 } from 'lucide-react';
 import Link from 'next/link';
 import type { Tables } from '@/types/database';
 import ChatHistorySection from './ChatHistorySection';
 import FilesSection from './FilesSection';
-import RoomChatsSection from './RoomChatsSection';
+import RoomsSection from './RoomsSection';
 import UploadPage from './FileUpload';
 import CreateRoomModal from '../CreateRoomModal';
 
@@ -77,22 +78,24 @@ interface CombinedDrawerProps {
   initialChatPreviews: ChatPreview[];
   categorizedChats: CategorizedChats;
   documents: UserDocument[];
-  rooms: RoomPreview[];
+  rooms?: RoomPreview[];
 }
 
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
   userInfo,
   initialChatPreviews,
   categorizedChats,
-  documents
+  documents,
+  rooms = []
 }) => {
-  const [activeMode, setActiveMode] = useState<'chat' | 'files'>('chat');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
+  const [roomChatHistory, setRoomChatHistory] = useState<any[]>([]);
 
   const params = useParams();
   const searchParams = useSearchParams();
   const currentChatId = typeof params.id === 'string' ? params.id : undefined;
+  const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
   const { setOpenMobile } = useSidebar();
 
   // Only chat data needs infinite loading
@@ -203,13 +206,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => {
-                  setActiveMode('chat');
-                  setSidebarOpen(true);
-                }}
-                className={`my-2 ${
-                  activeMode === 'chat' ? 'text-primary' : ''
-                }`}
+                onClick={() => setSidebarOpen(true)}
+                className="my-2"
                 aria-label="Chat mode"
               >
                 <MessageSquare size={20} />
@@ -218,31 +216,14 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             <TooltipContent side="right">Chat history</TooltipContent>
           </Tooltip>
         </TooltipProvider>
-
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setActiveMode('files');
-                  setSidebarOpen(true);
-                }}
-                className={`my-2 ${
-                  activeMode === 'files' ? 'text-primary' : ''
-                }`}
-                aria-label="Files mode"
-              >
-                <FileText size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Documents</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       </div>
     );
   }
+
+  const handleRoomSelect = () => {
+    // Room selection is handled by navigation
+    handleChatSelect();
+  };
 
   return (
     <>
@@ -254,118 +235,105 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         collapsible="icon"
         className="h-[calc(100vh-48px)] sticky top-0 border border-[rgba(0,0,0,0.1)] w-0 md:w-[240px] lg:w-[280px] flex-shrink-0"
       >
-      <SidebarHeader className="p-1">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden w-full mb-2">
-              <button
-                className={`px-3 py-1.5 text-xs font-medium flex-1 ${
-                  activeMode === 'chat'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-transparent text-foreground hover:bg-muted/50'
-                } transition-colors`}
-                onClick={() => setActiveMode('chat')}
-              >
-                Chat History
-              </button>
-              <button
-                className={`px-3 py-1.5 text-xs font-medium flex-1 ${
-                  activeMode === 'files'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-transparent text-foreground hover:bg-muted/50'
-                } transition-colors`}
-                onClick={() => setActiveMode('files')}
-              >
-                Files
-              </button>
-            </div>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <div className="flex items-center justify-between w-full">
-              <SidebarMenuButton asChild className="flex-grow">
-                <a href="/chat" aria-label="Start new chat">
-                  <FilePlus size={16} />
-                  <span>New Chat</span>
-                </a>
-              </SidebarMenuButton>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebar}
-                className="text-muted-foreground hover:text-foreground ml-2 hidden sm:block"
-                aria-label="Close sidebar"
-              >
-                <PanelLeftIcon size={18} />
-              </Button>
-            </div>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton 
-              onClick={() => setIsCreateGroupModalOpen(true)}
-              className="w-full"
+        <SidebarHeader className="p-4 border-b">
+          <div className="flex items-center justify-between w-full mb-2">
+            <h2 className="text-sm font-semibold">ROOMS</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="text-muted-foreground hover:text-foreground hidden sm:block"
+              aria-label="Close sidebar"
             >
-              <Users size={16} />
-              <span>Create Room</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-
-      <SidebarContent className="border-t border-gray-200">
-        {!userInfo.email ? (
-          <div className="flex flex-col items-center justify-center h-[90vh] text-center p-4 space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">
-              Sign in to save and view your chats
-            </h3>
-            <Button asChild className="rounded-md px-6 py-2 font-normal">
-              <Link href="/signin">Sign in</Link>
+              <PanelLeftIcon size={16} />
             </Button>
           </div>
-        ) : activeMode === 'files' ? (
-          <FilesSection
-            searchParams={searchParams}
-            onChatSelect={handleChatSelect}
-            documents={documents}
-          />
-        ) : (
-          <div className="space-y-4">
-            <RoomChatsSection
-              onChatSelect={handleChatSelect}
-            />
-            <ChatHistorySection
-              initialChatPreviews={initialChatPreviews}
-              categorizedChats={categorizedChats}
-              currentChatId={currentChatId}
-              searchParams={searchParams}
-              onChatSelect={handleChatSelect}
-              mutateChatPreviews={mutateChatPreviews}
-            />
-          </div>
-        )}
-      </SidebarContent>
-
-      <SidebarFooter className="px-0 pb-0">
-        {activeMode === 'files' ? (
-          <UploadPage />
-        ) : hasMore ? (
-          <Button
-            onClick={loadMoreChats}
-            disabled={isLoadingMore}
-            variant="outline"
-            className="rounded-lg m-2"
+          <Button 
+            onClick={() => setIsCreateGroupModalOpen(true)}
+            className="w-full"
+            size="sm"
           >
-            {isLoadingMore ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
+            <Users size={16} className="mr-2" />
+            New Room
           </Button>
-        ) : null}
-      </SidebarFooter>
-    </Sidebar>
+        </SidebarHeader>
+
+        {/* Rooms List - Top Section (Scrollable) */}
+        <div className="flex-1 overflow-y-auto border-b">
+          <div className="p-2">
+            {!userInfo.email ? (
+              <div className="text-center p-4 space-y-2">
+                <p className="text-sm text-muted-foreground">Sign in to view rooms</p>
+                <Button asChild size="sm">
+                  <Link href="/signin">Sign in</Link>
+                </Button>
+              </div>
+            ) : rooms.length === 0 ? (
+              <div className="text-center p-4">
+                <p className="text-sm text-muted-foreground">No rooms yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Create your first room above</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {rooms.map((room) => (
+                  <Link
+                    key={room.id}
+                    href={`/room/${room.shareCode}`}
+                    onClick={handleRoomSelect}
+                    className={`block w-full text-left p-3 rounded-lg border transition-colors ${
+                      currentRoomShareCode === room.shareCode
+                        ? 'bg-primary/10 border-primary/20 text-primary'
+                        : 'hover:bg-muted/50 border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="font-medium text-sm truncate">{room.name}</span>
+                      {room.isCreator && (
+                        <Crown className="h-3 w-3 text-yellow-500 ml-auto" />
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{room.participantCount}/{room.maxParticipants} users</span>
+                      <span className="capitalize">{room.tier}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Chat History - Bottom Section (Scrollable) */}
+        <div className="h-1/2 flex flex-col">
+          <div className="p-2 border-b bg-muted/30">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              {currentRoomShareCode ? 'ROOM CHATS' : 'CHATS'}
+            </h3>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {currentRoomShareCode ? (
+              <div className="p-2">
+                <div className="text-center p-4">
+                  <p className="text-sm text-muted-foreground">Room chat history</p>
+                  <p className="text-xs text-muted-foreground mt-1">Coming soon...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2">
+                <ChatHistorySection
+                  initialChatPreviews={initialChatPreviews}
+                  categorizedChats={categorizedChats}
+                  currentChatId={currentChatId}
+                  searchParams={searchParams}
+                  onChatSelect={handleChatSelect}
+                  mutateChatPreviews={mutateChatPreviews}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </Sidebar>
     </>
   );
 };

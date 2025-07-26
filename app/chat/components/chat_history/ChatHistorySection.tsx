@@ -27,6 +27,7 @@ import {
   SidebarMenuButton,
   SidebarMenuAction
 } from '@/components/ui/sidebar';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ChatPreview {
   id: string;
@@ -104,7 +105,7 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
   };
 
   return (
-    <>
+    <ScrollArea className="h-[calc(100vh-200px)]">
       <RenderChatSectionWithSidebar
         title="Today"
         chats={categorizedChats.today}
@@ -236,7 +237,7 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
           </form>
         </DialogContent>
       </Dialog>
-    </>
+    </ScrollArea>
   );
 };
 
