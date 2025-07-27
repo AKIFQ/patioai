@@ -177,3 +177,19 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Chat page styles - Hide header and footer for full-screen chat experience */
+body:has([data-chat-page]) header,
+body:has([data-chat-page]) footer {
+  display: none !important;
+}
+
+/* Ensure chat pages take full viewport */
+[data-chat-page] {
+  height: 100vh !important;
+}
+
+/* Full height sidebar for chat pages */
+[data-chat-page] .sidebar-container {
+  height: 100vh !important;
+}

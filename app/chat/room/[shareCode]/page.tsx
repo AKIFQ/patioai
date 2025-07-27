@@ -67,7 +67,7 @@ export default async function RoomChatPage(props: {
         cookieStore.get('selectedOption')?.value ?? 'gpt-3.5-turbo-1106';
 
     return (
-        <div className="flex w-full h-[calc(100vh-48px)] overflow-hidden">
+        <div className="flex w-full h-full overflow-hidden">
             <div className="flex-1">
                 <ChatComponent
                     currentChat={roomMessages}

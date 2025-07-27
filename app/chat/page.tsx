@@ -19,7 +19,7 @@ export default async function ChatPage(props: PageProps) {
   const createChatId = uuidv4();
 
   return (
-    <div className="flex w-full h-[calc(100vh-48px)] overflow-hidden">
+    <div className="flex w-full h-full overflow-hidden">
       <div className="flex-1">
         <ChatComponent
           chatId={createChatId}

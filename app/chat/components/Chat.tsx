@@ -122,10 +122,10 @@ const ChatComponent: React.FC<ChatProps> = ({
   const { mutate } = useSWRConfig();
 
   return (
-    <div className="flex h-[calc(100vh-48px)] w-full flex-col overflow-y-auto">
+    <div className="flex h-full w-full flex-col">
       {/* Room Header */}
       {roomContext && (
-        <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 px-4 py-3">
+        <div className="border-b bg-background px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-lg font-semibold">{roomContext.roomName}</h1>

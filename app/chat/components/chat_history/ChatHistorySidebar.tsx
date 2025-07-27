@@ -19,6 +19,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarInset,
   useSidebar
 } from '@/components/ui/sidebar';
 import {
@@ -38,6 +39,7 @@ import FilesSection from './FilesSection';
 import RoomsSection from './RoomsSection';
 import UploadPage from './FileUpload';
 import CreateRoomModal from '../CreateRoomModal';
+import ChatSidebarFooter from './SidebarFooter';
 
 type UserInfo = Pick<Tables<'users'>, 'full_name' | 'email' | 'id'>;
 type UserDocument = Pick<
@@ -176,7 +178,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   // Minimized sidebar when closed
   if (!sidebarOpen) {
     return (
-      <div className="h-[calc(100vh-48px)] sticky top-0 border border-[rgba(0,0,0,0.1)] w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2">
+      <div className="h-full border-r border-border w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -265,7 +267,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       />
       <Sidebar
         collapsible="icon"
-        className="h-[calc(100vh-48px)] sticky top-0 border border-[rgba(0,0,0,0.1)] w-0 md:w-[240px] lg:w-[280px] flex-shrink-0"
+        className="h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col"
       >
         <SidebarHeader className="p-4 border-b">
           {/* Home Chat Button - At the very top */}
@@ -422,6 +424,9 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             )}
           </div>
         </div>
+
+        {/* Settings Footer - Like ChatGPT */}
+        <ChatSidebarFooter userInfo={userInfo} />
       </Sidebar>
     </>
   );

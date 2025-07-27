@@ -8,6 +8,7 @@ import { UploadProvider } from './context/uploadContext';
 import { isToday, isYesterday, subDays } from 'date-fns';
 import { TZDate } from '@date-fns/tz';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import SidebarAwareContent from './components/SidebarAwareContent';
 
 export const maxDuration = 60;
 
@@ -248,8 +249,8 @@ export default async function Layout(props: { children: React.ReactNode }) {
   const userData = await fetchUserData();
 
   return (
-    <SidebarProvider className="h-screen">
-      <UploadProvider userId={userData?.id || ''}>
+    <div className="fixed inset-0 bg-background" data-chat-page>
+      <SidebarProvider className="h-full flex">
         <ChatHistoryDrawer
           userInfo={{
             id: userData?.id || '',
@@ -261,8 +262,12 @@ export default async function Layout(props: { children: React.ReactNode }) {
           documents={userData?.documents || []}
           rooms={userData?.rooms || []}
         />
-        {props.children}
-      </UploadProvider>
-    </SidebarProvider>
+        <SidebarAwareContent>
+          <UploadProvider userId={userData?.id || ''}>
+            {props.children}
+          </UploadProvider>
+        </SidebarAwareContent>
+      </SidebarProvider>
+    </div>
   );
 }
