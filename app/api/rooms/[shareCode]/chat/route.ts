@@ -93,8 +93,58 @@ async function getRoomMessages(roomId: string, limit: number = 30) {
   return messages || [];
 }
 
+async function getOrCreateRoomChatSession(
+  roomId: string,
+  sessionId: string,
+  displayName: string
+): Promise<string | null> {
+  try {
+    // First try to find existing chat session for this user in this room
+    const { data: existingSession, error: findError } = await supabase
+      .from('room_chat_sessions')
+      .select('id')
+      .eq('room_id', roomId)
+      .eq('session_id', sessionId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (existingSession && !findError) {
+      // Update the existing session timestamp
+      await supabase
+        .from('room_chat_sessions')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', existingSession.id);
+      
+      return existingSession.id;
+    }
+
+    // Create new chat session
+    const { data: newSession, error: createError } = await supabase
+      .from('room_chat_sessions')
+      .insert({
+        room_id: roomId,
+        session_id: sessionId,
+        display_name: displayName
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      console.error('Error creating room chat session:', createError);
+      return null;
+    }
+
+    return newSession.id;
+  } catch (error) {
+    console.error('Error in getOrCreateRoomChatSession:', error);
+    return null;
+  }
+}
+
 async function saveRoomMessage(
   roomId: string,
+  roomChatSessionId: string,
   senderName: string,
   content: string,
   isAiResponse: boolean = false,
@@ -105,6 +155,7 @@ async function saveRoomMessage(
     .from('room_messages')
     .insert({
       room_id: roomId,
+      room_chat_session_id: roomChatSessionId,
       sender_name: senderName,
       content,
       is_ai_response: isAiResponse,
@@ -282,8 +333,17 @@ export async function POST(
       });
     }
 
+    // Get or create room chat session
+    const roomChatSessionId = await getOrCreateRoomChatSession(room.id, sessionId, displayName);
+    if (!roomChatSessionId) {
+      return new NextResponse('Failed to create chat session', {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // Save user message
-    await saveRoomMessage(room.id, displayName, message, false);
+    await saveRoomMessage(room.id, roomChatSessionId, displayName, message, false);
     
     // Increment daily usage
     await incrementDailyUsage(session.id, room.id);
@@ -364,6 +424,7 @@ export async function POST(
         // Save AI response to room messages
         await saveRoomMessage(
           room.id,
+          roomChatSessionId,
           'AI Assistant',
           text,
           true,

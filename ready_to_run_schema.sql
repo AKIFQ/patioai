@@ -108,10 +108,25 @@ CREATE TABLE IF NOT EXISTS public.room_participants (
 );
 ALTER TABLE public.room_participants ENABLE ROW LEVEL SECURITY;
 
+-- Room chat sessions table for tracking individual chat sessions within rooms
+CREATE TABLE IF NOT EXISTS public.room_chat_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  room_id uuid NOT NULL,
+  session_id text NOT NULL,
+  display_name text NOT NULL,
+  chat_title text,
+  created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT room_chat_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT room_chat_sessions_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE CASCADE
+);
+ALTER TABLE public.room_chat_sessions ENABLE ROW LEVEL SECURITY;
+
 -- Room messages table for group chat messages
 CREATE TABLE IF NOT EXISTS public.room_messages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   room_id uuid NOT NULL,
+  room_chat_session_id uuid,
   sender_name text NOT NULL,
   content text,
   is_ai_response boolean NOT NULL DEFAULT false,
@@ -119,7 +134,8 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
   reasoning text,
   created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT room_messages_pkey PRIMARY KEY (id),
-  CONSTRAINT room_messages_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE CASCADE
+  CONSTRAINT room_messages_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE CASCADE,
+  CONSTRAINT room_messages_session_fkey FOREIGN KEY (room_chat_session_id) REFERENCES public.room_chat_sessions(id) ON DELETE CASCADE
 );
 ALTER TABLE public.room_messages ENABLE ROW LEVEL SECURITY;
 
@@ -139,7 +155,10 @@ ALTER TABLE public.daily_message_usage ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_rooms_share_code ON public.rooms(share_code);
 CREATE INDEX IF NOT EXISTS idx_rooms_created_by ON public.rooms(created_by);
 CREATE INDEX IF NOT EXISTS idx_room_participants_room_id ON public.room_participants(room_id);
+CREATE INDEX IF NOT EXISTS idx_room_chat_sessions_room_id ON public.room_chat_sessions(room_id);
+CREATE INDEX IF NOT EXISTS idx_room_chat_sessions_session_id ON public.room_chat_sessions(session_id);
 CREATE INDEX IF NOT EXISTS idx_room_messages_room_id_created_at ON public.room_messages(room_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_room_messages_session_id ON public.room_messages(room_chat_session_id);
 CREATE INDEX IF NOT EXISTS idx_daily_usage_user_room_date ON public.daily_message_usage(user_id, room_id, date);
 
 -- Row Level Security Policies
@@ -204,6 +223,25 @@ END $$;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'room_participants' AND policyname = 'Users can leave rooms') THEN
     CREATE POLICY "Users can leave rooms" ON public.room_participants FOR DELETE USING (true);
+  END IF;
+END $$;
+
+-- Room chat sessions policies (allow all users to view and manage sessions)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'room_chat_sessions' AND policyname = 'Users can view room chat sessions') THEN
+    CREATE POLICY "Users can view room chat sessions" ON public.room_chat_sessions FOR SELECT USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'room_chat_sessions' AND policyname = 'Users can create room chat sessions') THEN
+    CREATE POLICY "Users can create room chat sessions" ON public.room_chat_sessions FOR INSERT WITH CHECK (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'room_chat_sessions' AND policyname = 'Users can update room chat sessions') THEN
+    CREATE POLICY "Users can update room chat sessions" ON public.room_chat_sessions FOR UPDATE USING (true);
   END IF;
 END $$;
 

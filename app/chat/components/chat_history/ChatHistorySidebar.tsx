@@ -143,19 +143,19 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     }
   }, [setOpenMobile]);
 
-  // Fetch room chat history when room is selected
+  // Fetch room chat sessions when room is selected
   const fetchRoomChatHistory = useCallback(async (shareCode: string) => {
     setIsLoadingRoomHistory(true);
     try {
-      const response = await fetch(`/api/rooms/${shareCode}/messages`);
+      const response = await fetch(`/api/rooms/${shareCode}/sessions`);
       if (response.ok) {
-        const messages = await response.json();
-        setRoomChatHistory(messages);
+        const sessions = await response.json();
+        setRoomChatHistory(sessions);
       } else {
         setRoomChatHistory([]);
       }
     } catch (error) {
-      console.error('Error fetching room chat history:', error);
+      console.error('Error fetching room chat sessions:', error);
       setRoomChatHistory([]);
     } finally {
       setIsLoadingRoomHistory(false);
@@ -371,41 +371,29 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   </div>
                 ) : roomChatHistory.length === 0 ? (
                   <div className="text-center p-4">
-                    <p className="text-sm text-muted-foreground">No messages yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">Start chatting in the room!</p>
+                    <p className="text-sm text-muted-foreground">No chat sessions yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Start a new conversation!</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {roomChatHistory.slice(-10).map((message: any) => (
-                      <div
-                        key={message.id}
-                        className="p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                  <div className="space-y-1">
+                    {roomChatHistory.map((session: any) => (
+                      <Link
+                        key={session.id}
+                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&loadHistory=true&chatSession=${session.id}`}
+                        onClick={handleChatSelect}
+                        className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                       >
                         <div className="text-xs text-muted-foreground mb-1">
-                          {new Date(message.created_at).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
+                          {new Date(session.created_at).toLocaleDateString([], { 
+                            month: 'short',
+                            day: 'numeric'
+                          })} • {session.displayName}
                         </div>
-                        <div className="text-sm">
-                          {message.isAI ? (
-                            <div className="text-blue-600 dark:text-blue-400">
-                              <span className="font-medium">AI:</span> {message.content.substring(0, 100)}
-                              {message.content.length > 100 && '...'}
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="font-medium text-green-600 dark:text-green-400">
-                                {message.senderName}:
-                              </span>{' '}
-                              <span className="text-muted-foreground">
-                                {message.content.replace(`${message.senderName}: `, '').substring(0, 80)}
-                                {message.content.length > 80 && '...'}
-                              </span>
-                            </div>
-                          )}
+                        <div className="text-sm text-foreground">
+                          {session.firstMessage.substring(0, 60)}
+                          {session.firstMessage.length > 60 && '...'}
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}

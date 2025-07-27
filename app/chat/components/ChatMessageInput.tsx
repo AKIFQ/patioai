@@ -115,6 +115,16 @@ const modelTypes = [
   { value: 'website', label: 'Website' }
 ];
 
+interface RoomContext {
+  shareCode: string;
+  roomName: string;
+  displayName: string;
+  sessionId: string;
+  participants: Array<{ displayName: string; joinedAt: string }>;
+  maxParticipants: number;
+  tier: 'free' | 'pro';
+}
+
 const MessageInput = ({
   chatId,
   apiEndpoint,
@@ -124,7 +134,8 @@ const MessageInput = ({
   modelType,
   selectedOption,
   handleModelTypeChange,
-  handleOptionChange
+  handleOptionChange,
+  roomContext
 }: {
   chatId: string;
   apiEndpoint: string;
@@ -135,6 +146,7 @@ const MessageInput = ({
   selectedOption: string;
   handleModelTypeChange: (value: string) => void;
   handleOptionChange: (value: string) => void;
+  roomContext?: RoomContext;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
@@ -146,7 +158,11 @@ const MessageInput = ({
     id: chatId, // Use the actual chat ID for proper state isolation
     api: apiEndpoint,
     initialMessages: currentChat,
-    body: {
+    body: roomContext ? {
+      displayName: roomContext.displayName,
+      sessionId: roomContext.sessionId,
+      option: option
+    } : {
       chatId: chatId,
       option: option,
       selectedBlobs: selectedBlobs

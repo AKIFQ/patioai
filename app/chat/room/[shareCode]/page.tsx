@@ -40,7 +40,7 @@ async function ensureUserInRoom(shareCode: string, displayName: string, sessionI
 
 export default async function RoomChatPage(props: {
     params: Promise<{ shareCode: string }>;
-    searchParams: Promise<{ displayName?: string; sessionId?: string }>;
+    searchParams: Promise<{ displayName?: string; sessionId?: string; loadHistory?: string; chatSession?: string }>;
 }) {
     const params = await props.params;
     const searchParams = await props.searchParams;
@@ -59,7 +59,68 @@ export default async function RoomChatPage(props: {
         redirect(`/room/${shareCode}`);
     }
 
-    const roomMessages = await fetchRoomMessages(shareCode);
+    // Load messages based on context:
+    // 1. If chatSession is specified, load that specific session
+    // 2. If loadHistory is true, load all room messages (legacy)
+    // 3. Otherwise start with empty chat for new conversations
+    let roomMessages: any[] = [];
+    if (searchParams.chatSession) {
+        // Check if this is a legacy session (virtual session for old messages)
+        if (searchParams.chatSession.startsWith('legacy_')) {
+            // Extract sender name from legacy session ID
+            const parts = searchParams.chatSession.split('_');
+            const senderName = parts.slice(2).join('_'); // Handle names with underscores
+            
+            // Load legacy messages for this sender
+            try {
+                const { data: legacyMessages } = await (supabase as any)
+                    .from('room_messages')
+                    .select('*')
+                    .eq('room_id', roomInfo.room.id)
+                    .eq('sender_name', senderName)
+                    .is('room_chat_session_id', null)
+                    .order('created_at', { ascending: true });
+                
+                if (legacyMessages) {
+                    // Convert to Message format
+                    roomMessages = legacyMessages.map((msg: any) => ({
+                        id: msg.id,
+                        role: msg.is_ai_response ? 'assistant' : 'user',
+                        content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+                        createdAt: new Date(msg.created_at)
+                    }));
+                }
+            } catch (error) {
+                console.error('Error loading legacy messages:', error);
+            }
+        } else {
+            // Load specific chat session messages (new format)
+            try {
+                const { data: sessionMessages } = await (supabase as any)
+                    .from('room_messages')
+                    .select('*')
+                    .eq('room_chat_session_id', searchParams.chatSession)
+                    .order('created_at', { ascending: true });
+                
+                if (sessionMessages) {
+                    // Convert to Message format
+                    roomMessages = sessionMessages.map((msg: any) => ({
+                        id: msg.id,
+                        role: msg.is_ai_response ? 'assistant' : 'user',
+                        content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+                        createdAt: new Date(msg.created_at)
+                    }));
+                }
+            } catch (error) {
+                console.error('Error loading chat session:', error);
+            }
+        }
+    } else if (searchParams.loadHistory === 'true') {
+        // Load all room messages (legacy behavior)
+        const fetchedMessages = await fetchRoomMessages(shareCode);
+        roomMessages = fetchedMessages || [];
+    }
+    // Otherwise start with empty chat
 
     const cookieStore = await cookies();
     const modelType = cookieStore.get('modelType')?.value ?? 'standart';
@@ -70,9 +131,9 @@ export default async function RoomChatPage(props: {
         <div className="flex w-full h-full overflow-hidden">
             <div className="flex-1">
                 <ChatComponent
-                    key={`room_${shareCode}_${searchParams.sessionId}`}
+                    key={`room_${shareCode}_${searchParams.sessionId}_${searchParams.chatSession || 'new'}`}
                     currentChat={roomMessages}
-                    chatId={`room_${shareCode}`}
+                    chatId={searchParams.chatSession ? `room_session_${searchParams.chatSession}` : `room_${shareCode}`}
                     initialModelType={modelType}
                     initialSelectedOption={selectedOption}
                     roomContext={{

@@ -457,6 +457,7 @@ const ChatComponent: React.FC<ChatProps> = ({
           selectedOption={optimisticOption}
           handleModelTypeChange={handleModelTypeChange}
           handleOptionChange={handleOptionChange}
+          roomContext={roomContext}
         />
       </div>
     </div>
