@@ -266,7 +266,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         onClose={() => setIsCreateGroupModalOpen(false)}
       />
       <Sidebar
-        collapsible="icon"
+        collapsible="none"
         className="h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col"
       >
         <SidebarHeader className="p-4 border-b">
