@@ -29,7 +29,7 @@ interface CategorizedChats {
 // Single combined query with proper authentication check
 const fetchUserData = async () => {
   noStore();
-  
+
   // First check if user is authenticated
   const userInfo = await getUserInfo();
   if (!userInfo) {
@@ -85,10 +85,10 @@ const fetchUserData = async () => {
     // Fetch room chats for the user (rooms they created)
     // First get the user's rooms
     const userRoomIds = (roomsData || []).map((room: any) => room.id);
-    
+
     let roomChatsData = [];
     let roomChatsError = null;
-    
+
     if (userRoomIds.length > 0) {
       const { data, error } = await (supabase as any)
         .from('room_messages')
@@ -103,7 +103,7 @@ const fetchUserData = async () => {
         .in('room_id', userRoomIds)
         .order('created_at', { ascending: false })
         .limit(20);
-      
+
       roomChatsData = data;
       roomChatsError = error;
     }
@@ -135,17 +135,17 @@ const fetchUserData = async () => {
     // Transform room chat data and group by room
     const roomChatPreviews = [];
     const roomChatsGrouped = new Map();
-    
+
     // Create a lookup map for room data
     const roomsLookup = new Map();
     (roomsData || []).forEach((room: any) => {
       roomsLookup.set(room.id, room);
     });
-    
+
     (roomChatsData || []).forEach((msg: any) => {
       const roomKey = msg.room_id;
       const roomData = roomsLookup.get(msg.room_id);
-      
+
       if (roomData && roomData.share_code && !roomChatsGrouped.has(roomKey)) {
         roomChatsGrouped.set(roomKey, {
           id: `room_chat_${msg.room_id}`,
@@ -157,7 +157,7 @@ const fetchUserData = async () => {
         });
       }
     });
-    
+
     roomChatPreviews.push(...Array.from(roomChatsGrouped.values()));
 
     // Combine and sort all chats by date
@@ -248,8 +248,8 @@ export default async function Layout(props: { children: React.ReactNode }) {
   const userData = await fetchUserData();
 
   return (
-    <SidebarProvider className="h-screen">
-      <UploadProvider userId={userData?.id || ''}>
+    <div className="h-screen bg-background" data-chat-page>
+      <SidebarProvider className="h-full flex">
         <ChatHistoryDrawer
           userInfo={{
             id: userData?.id || '',
@@ -261,8 +261,12 @@ export default async function Layout(props: { children: React.ReactNode }) {
           documents={userData?.documents || []}
           rooms={userData?.rooms || []}
         />
-        {props.children}
-      </UploadProvider>
-    </SidebarProvider>
+        <main className="flex-1 overflow-hidden">
+          <UploadProvider userId={userData?.id || ''}>
+            {props.children}
+          </UploadProvider>
+        </main>
+      </SidebarProvider>
+    </div>
   );
 }
