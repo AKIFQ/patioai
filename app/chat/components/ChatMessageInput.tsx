@@ -143,7 +143,7 @@ const MessageInput = ({
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   const { input, handleInputChange, handleSubmit, status, stop } = useChat({
-    id: 'chat', // Use the same ID to share state
+    id: chatId, // Use the actual chat ID for proper state isolation
     api: apiEndpoint,
     initialMessages: currentChat,
     body: {
@@ -211,7 +211,8 @@ const MessageInput = ({
     e.preventDefault();
     if (!input.trim() && attachedFiles.length === 0) return;
 
-    if (chatId !== currentChatId) {
+    // Only navigate for regular chats, not room chats
+    if (chatId !== currentChatId && !chatId.startsWith('room_')) {
       const currentSearchParams = new URLSearchParams(window.location.search);
       let newUrl = `/chat/${chatId}`;
 

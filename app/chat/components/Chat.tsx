@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useOptimistic, startTransition } from 'react';
+import React, { useState, useOptimistic, startTransition, useEffect } from 'react';
 import { useChat, type Message } from '@ai-sdk/react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
+import { v4 as uuidv4 } from 'uuid';
 import { ChatScrollAnchor } from '../hooks/chat-scroll-anchor';
 import { setModelSettings } from '../actions';
 import Link from 'next/link';
@@ -25,7 +26,7 @@ import MessageInput from './ChatMessageInput';
 import { toast } from 'sonner';
 
 // Icons from Lucide React
-import { User, Bot, Copy, CheckCircle, FileIcon } from 'lucide-react';
+import { User, Bot, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
 
 interface RoomContext {
   shareCode: string;
@@ -53,6 +54,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   roomContext
 }) => {
   const param = useParams();
+  const router = useRouter();
   const currentChatId = param.id as string;
 
   const [optimisticModelType, setOptimisticModelType] = useOptimistic<
@@ -60,6 +62,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     string
   >(initialModelType, (_, newValue) => newValue);
   const [isCopied, setIsCopied] = useState(false);
+  const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [optimisticOption, setOptimisticOption] = useOptimistic<string, string>(
     initialSelectedOption,
     (_, newValue) => newValue
@@ -99,7 +102,7 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Get messages from chat
   const { messages, status, append, setMessages } = useChat({
-    id: roomContext ? `room_${roomContext.shareCode}` : 'chat',
+    id: roomContext ? `room_${roomContext.shareCode}` : chatId,
     api: apiEndpoint,
     experimental_throttle: 50,
     initialMessages: currentChat,
@@ -107,7 +110,10 @@ const ChatComponent: React.FC<ChatProps> = ({
       displayName: roomContext.displayName,
       sessionId: roomContext.sessionId,
       option: optimisticOption
-    } : undefined,
+    } : {
+      chatId: chatId,
+      option: optimisticOption
+    },
     onFinish: async () => {
       if (chatId === currentChatId) return;
 
@@ -121,48 +127,116 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   const { mutate } = useSWRConfig();
 
+  // Ensure messages are cleared when chat ID changes (atomicity)
+  useEffect(() => {
+    // Clear messages when switching to a different chat (only for regular chats)
+    if (!roomContext && currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
+      setMessages([]);
+    }
+  }, [chatId, currentChatId, roomContext, setMessages]);
+
+  const handleNewChat = async () => {
+    setIsCreatingNewChat(true);
+    
+    try {
+      if (roomContext) {
+        // For room chats, just clear the local messages and refresh the component
+        // Since room messages are shared, we don't create a "new chat" but just refresh the view
+        setMessages([]);
+        
+        // Trigger a re-fetch of the room messages by refreshing the page
+        router.refresh();
+      } else {
+        // For regular chats, create a new chat session
+        // Clear current messages immediately for better UX
+        setMessages([]);
+        
+        // Create new chat ID
+        const newChatId = uuidv4();
+        
+        // Navigate to the new chat - this creates a fresh chat instance
+        router.push(`/chat/${newChatId}`);
+        
+        // Refresh the sidebar chat history
+        await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+      }
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+      toast.error('Failed to create new chat');
+    } finally {
+      setIsCreatingNewChat(false);
+    }
+  };
+
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Room Header */}
-      {roomContext && (
-        <div className="border-b bg-background px-4 py-3 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-semibold">{roomContext.roomName}</h1>
-              <p className="text-sm text-muted-foreground">
-                Room: {roomContext.shareCode} • You: {roomContext.displayName}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {roomContext.participants.length}/{roomContext.maxParticipants} participants
-              </span>
-              <span className="text-xs px-2 py-1 bg-secondary rounded">
-                {roomContext.tier}
-              </span>
-            </div>
+      {/* Sticky Chat Header with New Chat Button */}
+      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            {roomContext ? (
+              <>
+                <h1 className="text-lg font-semibold">{roomContext.roomName}</h1>
+                <p className="text-sm text-muted-foreground">
+                  Room: {roomContext.shareCode} • You: {roomContext.displayName}
+                </p>
+              </>
+            ) : (
+              <h1 className="text-lg font-semibold">Chat with AI</h1>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {roomContext && (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {roomContext.participants.length}/{roomContext.maxParticipants} participants
+                </span>
+                <span className="text-xs px-2 py-1 bg-secondary rounded">
+                  {roomContext.tier}
+                </span>
+              </>
+            )}
+            
+            {/* New Chat Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewChat}
+              disabled={isCreatingNewChat}
+              className="flex items-center gap-2"
+            >
+              {isCreatingNewChat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              {isCreatingNewChat ? 'Creating...' : 'New Chat'}
+            </Button>
           </div>
         </div>
-      )}
+      </div>
       
-      {messages.length === 0 ? (
-        <div className="flex flex-col justify-center items-center h-[90vh] text-center px-4">
-          <h2 className="text-2xl font-semibold text-foreground/80 pb-2">
-            Chat with our AI Assistant
-          </h2>
+      {/* Scrollable Chat Content */}
+      <div className="flex-1 overflow-y-auto">
+        {messages.length === 0 ? (
+          <div className="flex flex-col justify-center items-center min-h-full text-center px-4">
+            <h2 className="text-2xl font-semibold text-foreground/80 pb-2">
+              Chat with our AI Assistant
+            </h2>
 
-          <p className="text-muted-foreground pb-2 max-w-2xl">
-            Experience the power of AI-driven conversations with our chat
-            template. Ask questions on any topic and get informative responses
-            instantly.
-          </p>
-          <h2 className="text-2xl font-semibold text-foreground/80">
-            Start your conversation!
-          </h2>
-        </div>
-      ) : (
-        <ul className="flex-1 w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4">
-          {messages.map((message, index) => {
+            <p className="text-muted-foreground pb-2 max-w-2xl">
+              Experience the power of AI-driven conversations with our chat
+              template. Ask questions on any topic and get informative responses
+              instantly.
+            </p>
+            <h2 className="text-2xl font-semibold text-foreground/80">
+              Start your conversation!
+            </h2>
+          </div>
+        ) : (
+          <ul className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
+            {messages.map((message, index) => {
             const isUserMessage = message.role === 'user';
             const copyToClipboard = (str: string) => {
               window.navigator.clipboard.writeText(str);
@@ -366,9 +440,10 @@ const ChatComponent: React.FC<ChatProps> = ({
               </li>
             );
           })}
-          <ChatScrollAnchor trackVisibility status={status} />
-        </ul>
-      )}
+            <ChatScrollAnchor trackVisibility status={status} />
+          </ul>
+        )}
+      </div>
 
       <div className="sticky bottom-0 mt-auto max-w-[720px] mx-auto w-full z-5 pb-2">
         {/*Separate message input component, to avoid re-rendering the chat messages when typing */}

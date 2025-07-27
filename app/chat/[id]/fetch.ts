@@ -176,7 +176,7 @@ export async function fetchChat(chatId: string) {
   
   // Don't try to fetch room chats as regular chats
   if (chatId.startsWith('room_chat_') || chatId.startsWith('room_')) {
-    console.error('Attempted to fetch room chat as regular chat:', chatId);
+    console.warn('Skipping room chat fetch as regular chat:', chatId);
     return null;
   }
   

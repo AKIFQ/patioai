@@ -30,9 +30,14 @@ interface RoomPreview {
 interface RoomsSectionProps {
   rooms: RoomPreview[];
   onRoomSelect: () => void;
+  userInfo?: {
+    id: string;
+    full_name?: string;
+    email?: string;
+  };
 }
 
-export default function RoomsSection({ rooms, onRoomSelect }: RoomsSectionProps) {
+export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSectionProps) {
   const params = useParams();
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
 
@@ -80,7 +85,10 @@ export default function RoomsSection({ rooms, onRoomSelect }: RoomsSectionProps)
                     className={`w-full ${isActive ? 'bg-accent text-accent-foreground' : ''}`}
                   >
                     <Link 
-                      href={`/room/${room.shareCode}`}
+                      href={userInfo ? 
+                        `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}` :
+                        `/room/${room.shareCode}`
+                      }
                       onClick={onRoomSelect}
                       className="flex flex-col items-start gap-1 p-2"
                     >

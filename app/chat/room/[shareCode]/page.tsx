@@ -1,7 +1,7 @@
 import ChatComponent from '../../components/Chat';
 import { cookies } from 'next/headers';
 import { fetchRoomMessages, getRoomInfo } from './fetch';
-import { getUserInfo } from '@/lib/server/supabase';
+
 import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
@@ -70,6 +70,7 @@ export default async function RoomChatPage(props: {
         <div className="flex w-full h-full overflow-hidden">
             <div className="flex-1">
                 <ChatComponent
+                    key={`room_${shareCode}_${searchParams.sessionId}`}
                     currentChat={roomMessages}
                     chatId={`room_${shareCode}`}
                     initialModelType={modelType}
