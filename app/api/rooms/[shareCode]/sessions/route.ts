@@ -1,5 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSession } from '@/lib/server/supabase';
+import { Ratelimit } from '@upstash/ratelimit';
+import { redis } from '@/lib/server/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,6 +15,39 @@ export async function GET(
 ) {
   try {
     const { shareCode } = await params;
+    
+    // CRITICAL: Add authentication check
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // CRITICAL: Add rate limiting to prevent abuse
+    const ratelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(60, '1m') // 60 requests per minute
+    });
+
+    const { success, limit, reset, remaining } = await ratelimit.limit(
+      `room_sessions_${session.id}_${shareCode}`
+    );
+
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': limit.toString(),
+            'X-RateLimit-Remaining': remaining.toString(),
+            'X-RateLimit-Reset': new Date(reset * 1000).toISOString()
+          }
+        }
+      );
+    }
 
     // Find the room by share code
     const { data: room, error: roomError } = await (supabase as any)
@@ -42,37 +78,48 @@ export async function GET(
       );
     }
 
-    // Get first message for each session
-    const chatSessions = await Promise.all((sessions || []).map(async (session: any) => {
-      // Get first message for this session
-      const { data: firstMessage } = await (supabase as any)
+    // PERFORMANCE FIX: Get all first messages in single query instead of N+1
+    const sessionIds = (sessions || []).map(s => s.id);
+    let firstMessages: { [key: string]: string } = {};
+    
+    if (sessionIds.length > 0) {
+      const { data: messagesData } = await (supabase as any)
         .from('room_messages')
-        .select('content')
-        .eq('room_chat_session_id', session.id)
+        .select('room_chat_session_id, content')
+        .in('room_chat_session_id', sessionIds)
         .eq('is_ai_response', false)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
+        .order('created_at', { ascending: true });
+      
+      // Group by session ID and take first message
+      if (messagesData) {
+        messagesData.forEach((msg: any) => {
+          if (!firstMessages[msg.room_chat_session_id]) {
+            firstMessages[msg.room_chat_session_id] = msg.content;
+          }
+        });
+      }
+    }
 
-      return {
-        id: session.id,
-        firstMessage: session.chat_title || firstMessage?.content || 'New conversation',
-        created_at: session.created_at,
-        displayName: session.display_name,
-        type: 'room',
-        roomName: room.name,
-        shareCode: shareCode
-      };
+    // Build sessions with first messages
+    const chatSessions = (sessions || []).map((session: any) => ({
+      id: session.id,
+      firstMessage: session.chat_title || firstMessages[session.id] || 'New conversation',
+      created_at: session.created_at,
+      displayName: session.display_name,
+      type: 'room',
+      roomName: room.name,
+      shareCode: shareCode
     }));
 
-    // Also check for legacy messages (messages without session IDs) and create virtual sessions
+    // MEMORY FIX: Limit legacy messages to prevent memory exhaustion
     const { data: legacyMessages, error: legacyError } = await (supabase as any)
       .from('room_messages')
       .select('id, sender_name, content, created_at')
       .eq('room_id', room.id)
       .is('room_chat_session_id', null)
       .eq('is_ai_response', false)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(100); // CRITICAL: Prevent memory exhaustion
 
     if (!legacyError && legacyMessages && legacyMessages.length > 0) {
       // Group legacy messages by sender and create virtual sessions
@@ -88,7 +135,7 @@ export async function GET(
       Object.entries(senderGroups).forEach(([senderName, messages]) => {
         const firstMessage = messages[0];
         chatSessions.push({
-          id: `legacy_${room.id}_${senderName}`, // Virtual ID for legacy messages
+          id: `legacy_${room.id}_${encodeURIComponent(senderName)}`, // Virtual ID for legacy messages (URL encoded)
           firstMessage: firstMessage.content || 'Legacy conversation',
           created_at: firstMessage.created_at,
           displayName: senderName,
@@ -106,7 +153,15 @@ export async function GET(
     return NextResponse.json(chatSessions);
 
   } catch (error) {
-    console.error('Error in room sessions API:', error);
+    // MONITORING: Enhanced error logging
+    console.error('CRITICAL ERROR in room sessions API:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      shareCode,
+      userId: session?.id,
+      timestamp: new Date().toISOString()
+    });
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

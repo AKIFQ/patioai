@@ -102,9 +102,11 @@ CREATE TABLE IF NOT EXISTS public.room_participants (
   room_id uuid NOT NULL,
   session_id text NOT NULL,
   display_name text NOT NULL,
+  user_id uuid, -- Optional: link to authenticated user
   joined_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT room_participants_pkey PRIMARY KEY (room_id, session_id),
-  CONSTRAINT room_participants_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE CASCADE
+  CONSTRAINT room_participants_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE CASCADE,
+  CONSTRAINT room_participants_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 ALTER TABLE public.room_participants ENABLE ROW LEVEL SECURITY;
 
@@ -118,6 +120,7 @@ CREATE TABLE IF NOT EXISTS public.room_chat_sessions (
   created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT room_chat_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT room_chat_sessions_room_session_unique UNIQUE (room_id, session_id),
   CONSTRAINT room_chat_sessions_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE CASCADE
 );
 ALTER TABLE public.room_chat_sessions ENABLE ROW LEVEL SECURITY;
@@ -151,15 +154,31 @@ CREATE TABLE IF NOT EXISTS public.daily_message_usage (
 );
 ALTER TABLE public.daily_message_usage ENABLE ROW LEVEL SECURITY;
 
--- Indexes for performance
+-- CRITICAL PERFORMANCE INDEXES
 CREATE INDEX IF NOT EXISTS idx_rooms_share_code ON public.rooms(share_code);
 CREATE INDEX IF NOT EXISTS idx_rooms_created_by ON public.rooms(created_by);
+CREATE INDEX IF NOT EXISTS idx_rooms_expires_at ON public.rooms(expires_at);
 CREATE INDEX IF NOT EXISTS idx_room_participants_room_id ON public.room_participants(room_id);
-CREATE INDEX IF NOT EXISTS idx_room_chat_sessions_room_id ON public.room_chat_sessions(room_id);
-CREATE INDEX IF NOT EXISTS idx_room_chat_sessions_session_id ON public.room_chat_sessions(session_id);
-CREATE INDEX IF NOT EXISTS idx_room_messages_room_id_created_at ON public.room_messages(room_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_room_messages_session_id ON public.room_messages(room_chat_session_id);
+
+-- CRITICAL: Composite indexes for room chat sessions
+CREATE INDEX IF NOT EXISTS idx_room_chat_sessions_room_session ON public.room_chat_sessions(room_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_room_chat_sessions_updated_at ON public.room_chat_sessions(updated_at DESC);
+
+-- CRITICAL: Composite indexes for room messages (MOST IMPORTANT FOR PERFORMANCE)
+CREATE INDEX IF NOT EXISTS idx_room_messages_room_id_created_at ON public.room_messages(room_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_room_messages_session_created ON public.room_messages(room_chat_session_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_room_messages_room_ai_created ON public.room_messages(room_id, is_ai_response, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_room_messages_session_null ON public.room_messages(room_id, room_chat_session_id) WHERE room_chat_session_id IS NULL;
+
+-- CRITICAL: Daily usage composite index with proper constraint support
 CREATE INDEX IF NOT EXISTS idx_daily_usage_user_room_date ON public.daily_message_usage(user_id, room_id, date);
+
+-- CRITICAL: Chat sessions and messages indexes for layout performance
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_created ON public.chat_sessions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created ON public.chat_messages(chat_session_id, created_at ASC);
+
+-- CRITICAL: User documents indexes for layout performance
+CREATE INDEX IF NOT EXISTS idx_user_documents_user_created ON public.user_documents(user_id, created_at DESC);
 
 -- Row Level Security Policies
 

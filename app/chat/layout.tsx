@@ -65,8 +65,8 @@ const fetchUserData = async () => {
       .eq('user_id', userInfo.id)
       .order('created_at', { ascending: false });
 
-    // Fetch rooms data - using any type to bypass TypeScript issues with missing table types
-    const { data: roomsData, error: roomsError } = await (supabase as any)
+    // FIXED: Get rooms user created
+    const { data: createdRooms, error: createdRoomsError } = await (supabase as any)
       .from('rooms')
       .select(`
         id,
@@ -80,16 +80,62 @@ const fetchUserData = async () => {
         room_participants(session_id)
       `)
       .eq('created_by', userInfo.id)
+      .gt('expires_at', new Date().toISOString()) // Only active rooms
       .order('created_at', { ascending: false });
 
-    // Fetch room chats for the user (rooms they created)
-    // First get the user's rooms
-    const userRoomIds = (roomsData || []).map((room: any) => room.id);
+    // FIXED: Get rooms user joined as participant (using user_id)
+    const { data: joinedRooms, error: joinedRoomsError } = await (supabase as any)
+      .from('room_participants')
+      .select(`
+        room_id,
+        session_id,
+        display_name,
+        joined_at,
+        rooms!inner(
+          id,
+          name,
+          share_code,
+          max_participants,
+          creator_tier,
+          expires_at,
+          created_at,
+          created_by
+        )
+      `)
+      .eq('user_id', userInfo.id) // Match by authenticated user ID
+      .gt('rooms.expires_at', new Date().toISOString()) // Only active rooms
+      .order('joined_at', { ascending: false });
 
+    // Combine rooms (created + joined, avoiding duplicates)
+    const allRooms = [...(createdRooms || [])];
+    
+    if (joinedRooms) {
+      joinedRooms.forEach((jr: any) => {
+        const room = jr.rooms;
+        // Add room if not already in the list (not created by this user)
+        if (!allRooms.find((r: any) => r.id === room.id)) {
+          // Add participant info to the room
+          allRooms.push({
+            ...room,
+            room_participants: [{ session_id: jr.session_id }],
+            joinedAs: jr.display_name,
+            joinedAt: jr.joined_at
+          });
+        }
+      });
+    }
+
+    const roomsData = allRooms;
+    const roomsError = createdRoomsError || joinedRoomsError;
+
+    // PERFORMANCE FIX: Fetch room chats with single optimized query
     let roomChatsData = [];
     let roomChatsError = null;
 
-    if (userRoomIds.length > 0) {
+    if (roomsData && roomsData.length > 0) {
+      const userRoomIds = roomsData.map((room: any) => room.id);
+      
+      // Single query to get the most recent message per room
       const { data, error } = await (supabase as any)
         .from('room_messages')
         .select(`
@@ -102,7 +148,7 @@ const fetchUserData = async () => {
         `)
         .in('room_id', userRoomIds)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50); // Get more messages to ensure we have recent ones per room
 
       roomChatsData = data;
       roomChatsError = error;
@@ -175,7 +221,7 @@ const fetchUserData = async () => {
     }));
 
     // Transform rooms data
-    const rooms = (roomsData || []).map((room) => ({
+    const rooms = (roomsData || []).map((room: any) => ({
       id: room.id,
       name: room.name,
       shareCode: room.share_code,
@@ -184,7 +230,9 @@ const fetchUserData = async () => {
       tier: room.creator_tier as 'free' | 'pro',
       expiresAt: room.expires_at,
       createdAt: room.created_at,
-      isCreator: room.created_by === userInfo.id
+      isCreator: room.created_by === userInfo.id,
+      joinedAs: room.joinedAs, // Display name when joined as participant
+      joinedAt: room.joinedAt   // When joined as participant
     }));
 
     return {

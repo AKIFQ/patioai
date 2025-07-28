@@ -99,43 +99,37 @@ async function getOrCreateRoomChatSession(
   displayName: string
 ): Promise<string | null> {
   try {
-    // First try to find existing chat session for this user in this room
-    const { data: existingSession, error: findError } = await supabase
+    // RACE CONDITION FIX: Use upsert to handle concurrent creation
+    const { data: session, error } = await supabase
       .from('room_chat_sessions')
-      .select('id')
-      .eq('room_id', roomId)
-      .eq('session_id', sessionId)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (existingSession && !findError) {
-      // Update the existing session timestamp
-      await supabase
-        .from('room_chat_sessions')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', existingSession.id);
-      
-      return existingSession.id;
-    }
-
-    // Create new chat session
-    const { data: newSession, error: createError } = await supabase
-      .from('room_chat_sessions')
-      .insert({
+      .upsert({
         room_id: roomId,
         session_id: sessionId,
-        display_name: displayName
+        display_name: displayName,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'room_id,session_id', // Requires unique constraint
+        ignoreDuplicates: false
       })
       .select('id')
       .single();
 
-    if (createError) {
-      console.error('Error creating room chat session:', createError);
-      return null;
+    if (error) {
+      console.error('Error creating/updating room chat session:', error);
+      
+      // Fallback: try to find existing session
+      const { data: existingSession } = await supabase
+        .from('room_chat_sessions')
+        .select('id')
+        .eq('room_id', roomId)
+        .eq('session_id', sessionId)
+        .limit(1)
+        .single();
+      
+      return existingSession?.id || null;
     }
 
-    return newSession.id;
+    return session.id;
   } catch (error) {
     console.error('Error in getOrCreateRoomChatSession:', error);
     return null;
@@ -150,21 +144,29 @@ async function saveRoomMessage(
   isAiResponse: boolean = false,
   sources?: any,
   reasoning?: string
-) {
-  const { error } = await supabase
-    .from('room_messages')
-    .insert({
-      room_id: roomId,
-      room_chat_session_id: roomChatSessionId,
-      sender_name: senderName,
-      content,
-      is_ai_response: isAiResponse,
-      sources,
-      reasoning
-    });
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('room_messages')
+      .insert({
+        room_id: roomId,
+        room_chat_session_id: roomChatSessionId,
+        sender_name: senderName,
+        content,
+        is_ai_response: isAiResponse,
+        sources,
+        reasoning
+      });
 
-  if (error) {
-    console.error('Error saving room message:', error);
+    if (error) {
+      console.error('Error saving room message:', error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Exception saving room message:', error);
+    return false;
   }
 }
 
@@ -207,44 +209,52 @@ async function checkDailyUsage(userId: string, roomId: string): Promise<{ canSen
   };
 }
 
-async function incrementDailyUsage(userId: string, roomId: string) {
-  const today = new Date().toISOString().split('T')[0];
-  
-  // First try to get existing record
-  const { data: existing } = await supabase
-    .from('daily_message_usage')
-    .select('message_count')
-    .eq('user_id', userId)
-    .eq('room_id', roomId)
-    .eq('date', today)
-    .single();
-
-  if (existing) {
-    // Update existing record
+async function incrementDailyUsage(userId: string, roomId: string): Promise<boolean> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // ATOMIC OPERATION: Use upsert to handle concurrent increments
     const { error } = await supabase
       .from('daily_message_usage')
-      .update({ message_count: existing.message_count + 1 })
-      .eq('user_id', userId)
-      .eq('room_id', roomId)
-      .eq('date', today);
-
-    if (error) {
-      console.error('Error updating daily usage:', error);
-    }
-  } else {
-    // Insert new record
-    const { error } = await supabase
-      .from('daily_message_usage')
-      .insert({
+      .upsert({
         user_id: userId,
         room_id: roomId,
         date: today,
         message_count: 1
+      }, {
+        onConflict: 'user_id,room_id,date',
+        ignoreDuplicates: false
       });
 
     if (error) {
-      console.error('Error inserting daily usage:', error);
+      // If upsert fails, try manual increment
+      const { data: existing } = await supabase
+        .from('daily_message_usage')
+        .select('message_count')
+        .eq('user_id', userId)
+        .eq('room_id', roomId)
+        .eq('date', today)
+        .single();
+
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from('daily_message_usage')
+          .update({ message_count: existing.message_count + 1 })
+          .eq('user_id', userId)
+          .eq('room_id', roomId)
+          .eq('date', today);
+
+        if (updateError) {
+          console.error('Error updating daily usage:', updateError);
+          return false;
+        }
+      }
     }
+    
+    return true;
+  } catch (error) {
+    console.error('Exception incrementing daily usage:', error);
+    return false;
   }
 }
 
@@ -342,8 +352,14 @@ export async function POST(
       });
     }
 
-    // Save user message
-    await saveRoomMessage(room.id, roomChatSessionId, displayName, message, false);
+    // Save user message with error handling
+    const messageSaved = await saveRoomMessage(room.id, roomChatSessionId, displayName, message, false);
+    if (!messageSaved) {
+      return new NextResponse('Failed to save message', {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     
     // Increment daily usage
     await incrementDailyUsage(session.id, room.id);
@@ -449,6 +465,25 @@ export async function POST(
 
   } catch (error) {
     console.error('Error in room chat:', error);
+    
+    // Log critical error with context (simplified for now)
+    const errorContext = {
+      userId: session?.id,
+      shareCode,
+      endpoint: 'room_chat',
+      userAgent: req.headers.get('user-agent') || undefined,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.error('PRODUCTION ERROR:', JSON.stringify({
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : String(error),
+      context: errorContext
+    }, null, 2));
+    
     return new NextResponse('Internal server error', {
       status: 500,
       headers: { 'Content-Type': 'application/json' }

@@ -39,6 +39,7 @@ import FilesSection from './FilesSection';
 import RoomsSection from './RoomsSection';
 import UploadPage from './FileUpload';
 import CreateRoomModal from '../CreateRoomModal';
+import JoinRoomModal from '../JoinRoomModal';
 import ChatSidebarFooter from './SidebarFooter';
 
 type UserInfo = Pick<Tables<'users'>, 'full_name' | 'email' | 'id'>;
@@ -95,6 +96,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
+  const [isJoinRoomModalOpen, setIsJoinRoomModalOpen] = useState(false);
   const [roomChatHistory, setRoomChatHistory] = useState<any[]>([]);
   const [isLoadingRoomHistory, setIsLoadingRoomHistory] = useState(false);
 
@@ -265,6 +267,11 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         isOpen={isCreateGroupModalOpen}
         onClose={() => setIsCreateGroupModalOpen(false)}
       />
+      
+      <JoinRoomModal 
+        isOpen={isJoinRoomModalOpen}
+        onClose={() => setIsJoinRoomModalOpen(false)}
+      />
       <Sidebar
         collapsible="none"
         className="h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col"
@@ -297,15 +304,27 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             </Button>
           </div>
           
-          {/* New Room Button - Below ROOMS header */}
-          <Button 
-            onClick={() => setIsCreateGroupModalOpen(true)}
-            className="w-full"
-            size="sm"
-          >
-            <Users size={16} className="mr-2" />
-            New Room
-          </Button>
+          {/* Room Action Buttons - Below ROOMS header */}
+          <div className="space-y-2">
+            <Button 
+              onClick={() => setIsCreateGroupModalOpen(true)}
+              className="w-full"
+              size="sm"
+            >
+              <Users size={16} className="mr-2" />
+              New Room
+            </Button>
+            
+            <Button 
+              onClick={() => setIsJoinRoomModalOpen(true)}
+              className="w-full"
+              size="sm"
+              variant="outline"
+            >
+              <Users size={16} className="mr-2" />
+              Join Room
+            </Button>
+          </div>
         </SidebarHeader>
 
         {/* Rooms List - Top Section (Scrollable) */}

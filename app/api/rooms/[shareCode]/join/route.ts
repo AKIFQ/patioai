@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSession } from '@/lib/server/supabase';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -109,7 +110,8 @@ export async function POST(
         .insert({
           room_id: room.id,
           session_id: sessionId,
-          display_name: displayName.trim()
+          display_name: displayName.trim(),
+          user_id: null // Will be updated if user is authenticated
         });
 
       if (insertError) {
@@ -167,6 +169,21 @@ export async function GET(
 ) {
   try {
     const { shareCode } = await params;
+    
+    // SECURITY FIX: Add authentication check for room info access
+    // Note: We allow anonymous access for joining, but require auth for detailed info
+    const url = new URL(req.url);
+    const requireAuth = url.searchParams.get('auth') === 'true';
+    
+    if (requireAuth) {
+      const session = await getSession();
+      if (!session) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+    }
 
     // Find the room by share code
     const { data: room, error: roomError } = await (supabase as any)

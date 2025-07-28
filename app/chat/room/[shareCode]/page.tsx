@@ -1,6 +1,7 @@
 import ChatComponent from '../../components/Chat';
 import { cookies } from 'next/headers';
 import { fetchRoomMessages, getRoomInfo } from './fetch';
+import { getUserInfo } from '@/lib/server/supabase';
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
@@ -15,10 +16,13 @@ async function ensureUserInRoom(shareCode: string, displayName: string, sessionI
         const roomInfo = await getRoomInfo(shareCode);
         if (!roomInfo) return;
 
+        // Get authenticated user info if available
+        const userInfo = await getUserInfo();
+
         // Check if this session is already in the participants
         const { data: existingParticipant } = await (supabase as any)
             .from('room_participants')
-            .select('session_id')
+            .select('session_id, user_id')
             .eq('room_id', roomInfo.room.id)
             .eq('session_id', sessionId)
             .single();
@@ -30,8 +34,20 @@ async function ensureUserInRoom(shareCode: string, displayName: string, sessionI
                 .insert({
                     room_id: roomInfo.room.id,
                     session_id: sessionId,
-                    display_name: displayName
+                    display_name: displayName,
+                    user_id: userInfo?.id || null // Link to authenticated user
                 });
+        } else {
+            // Update display name, last seen, and user_id if participant exists
+            await (supabase as any)
+                .from('room_participants')
+                .update({
+                    display_name: displayName,
+                    user_id: userInfo?.id || existingParticipant.user_id, // Preserve or set user_id
+                    joined_at: new Date().toISOString() // Update last seen
+                })
+                .eq('room_id', roomInfo.room.id)
+                .eq('session_id', sessionId);
         }
     } catch (error) {
         console.error('Error ensuring user in room:', error);
@@ -69,7 +85,8 @@ export default async function RoomChatPage(props: {
         if (searchParams.chatSession.startsWith('legacy_')) {
             // Extract sender name from legacy session ID
             const parts = searchParams.chatSession.split('_');
-            const senderName = parts.slice(2).join('_'); // Handle names with underscores
+            const encodedSenderName = parts.slice(2).join('_'); // Handle names with underscores
+            const senderName = decodeURIComponent(encodedSenderName); // Decode URL encoding
             
             // Load legacy messages for this sender
             try {
