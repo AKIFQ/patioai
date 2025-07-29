@@ -2,7 +2,7 @@ import ChatComponent from '../../components/Chat';
 import { cookies } from 'next/headers';
 import { fetchRoomMessages, getRoomInfo } from './fetch';
 import { getUserInfo } from '@/lib/server/supabase';
-
+import { v4 as uuidv4 } from 'uuid';
 import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
@@ -67,6 +67,17 @@ export default async function RoomChatPage(props: {
         redirect(`/room/${shareCode}`);
     }
 
+    // If no chatSession is provided, generate a new one for a fresh chat
+    let chatSessionId = searchParams.chatSession;
+    
+    // Always ensure we have a chatSessionId for proper session isolation
+    if (!chatSessionId && searchParams.loadHistory !== 'true') {
+        chatSessionId = uuidv4();
+        console.log('Generated new chatSessionId:', chatSessionId);
+    }
+    
+    console.log('Final chatSessionId being used:', chatSessionId);
+
     // Ensure the user is added to the room participants
     await ensureUserInRoom(shareCode, searchParams.displayName, searchParams.sessionId);
 
@@ -82,13 +93,13 @@ export default async function RoomChatPage(props: {
     // Load messages based on context:
     // 1. If chatSession is specified, load that specific session
     // 2. If loadHistory is true, load all room messages (legacy)
-    // 3. Otherwise load recent room messages (default behavior)
+    // 3. Otherwise start with empty messages (fresh chat)
     let roomMessages: any[] = [];
-    if (searchParams.chatSession) {
+    if (chatSessionId) {
         // Check if this is a legacy session (virtual session for old messages)
-        if (searchParams.chatSession.startsWith('legacy_')) {
+        if (chatSessionId.startsWith('legacy_')) {
             // Extract sender name from legacy session ID
-            const parts = searchParams.chatSession.split('_');
+            const parts = chatSessionId.split('_');
             const encodedSenderName = parts.slice(2).join('_'); // Handle names with underscores
             const senderName = decodeURIComponent(encodedSenderName); // Decode URL encoding
             
@@ -120,7 +131,7 @@ export default async function RoomChatPage(props: {
                 const { data: sessionMessages } = await (supabase as any)
                     .from('room_messages')
                     .select('*')
-                    .eq('room_chat_session_id', searchParams.chatSession)
+                    .eq('room_chat_session_id', chatSessionId)
                     .order('created_at', { ascending: true });
                 
                 if (sessionMessages) {
@@ -138,12 +149,11 @@ export default async function RoomChatPage(props: {
         }
     } else if (searchParams.loadHistory === 'true') {
         // Load all room messages (legacy behavior)
-        const fetchedMessages = await fetchRoomMessages(shareCode);
+        const fetchedMessages = await fetchRoomMessages(shareCode, chatSessionId);
         roomMessages = fetchedMessages || [];
     } else {
-        // Default: Load recent room messages (last 20 messages)
-        const fetchedMessages = await fetchRoomMessages(shareCode);
-        roomMessages = fetchedMessages || [];
+        // Default: Start with empty messages (fresh chat)
+        roomMessages = [];
     }
 
     const cookieStore = await cookies();
@@ -151,13 +161,16 @@ export default async function RoomChatPage(props: {
     const selectedOption =
         cookieStore.get('selectedOption')?.value ?? 'gpt-3.5-turbo-1106';
 
+    console.log('Room page rendering with chatSessionId:', chatSessionId);
+    console.log('Room messages count:', roomMessages.length);
+
     return (
         <div className="flex w-full h-full overflow-hidden">
             <div className="flex-1">
                 <ChatComponent
-                    key={`room_${shareCode}_${searchParams.sessionId}_${searchParams.chatSession || 'default'}`}
+                    key={`room_${shareCode}_${searchParams.sessionId}_${chatSessionId || 'generated'}`}
                     currentChat={roomMessages}
-                    chatId={searchParams.chatSession ? `room_session_${searchParams.chatSession}` : `room_${shareCode}_default`}
+                    chatId={`room_session_${chatSessionId}`}
                     initialModelType={modelType}
                     initialSelectedOption={selectedOption}
                     roomContext={{
@@ -169,7 +182,8 @@ export default async function RoomChatPage(props: {
                         maxParticipants: roomInfo.room.maxParticipants,
                         tier: roomInfo.room.tier,
                         createdBy: roomInfo.room.createdBy,
-                        expiresAt: roomInfo.room.expiresAt
+                        expiresAt: roomInfo.room.expiresAt,
+                        chatSessionId: chatSessionId
                     }}
                 />
             </div>

@@ -91,24 +91,64 @@ async function getRoomMessages(roomId: string, limit: number = 30) {
   return messages || [];
 }
 
+async function generateChatTitle(firstMessage: string): Promise<string> {
+  try {
+    // Create a simple title from the first few words of the message
+    const words = firstMessage.trim().split(/\s+/);
+    let title = words.slice(0, 5).join(' ');
+    
+    // If the title is too short, use more words
+    if (title.length < 15 && words.length > 5) {
+      title = words.slice(0, 8).join(' ');
+    }
+    
+    // If still too short, use the whole message (up to 50 chars)
+    if (title.length < 15) {
+      title = firstMessage.substring(0, 50);
+    }
+    
+    // Ensure it ends properly
+    if (title.length === 50 && firstMessage.length > 50) {
+      title += '...';
+    }
+    
+    return title || 'New Chat';
+  } catch (error) {
+    console.error('Error generating chat title:', error);
+    return 'New Chat';
+  }
+}
+
 async function getOrCreateRoomChatSession(
   roomId: string,
   sessionId: string,
   displayName: string,
-  chatSessionId?: string
+  chatSessionId?: string,
+  firstMessage?: string
 ): Promise<string | null> {
   try {
     // If chatSessionId is provided, try to find or create that specific session
     if (chatSessionId) {
       const { data: existingSession } = await supabase
         .from('room_chat_sessions')
-        .select('id')
+        .select('id, chat_title')
         .eq('id', chatSessionId)
         .single();
 
       if (existingSession) {
+        // If session exists but has no title and we have a first message, generate one
+        if (!existingSession.chat_title && firstMessage) {
+          const title = await generateChatTitle(firstMessage);
+          await supabase
+            .from('room_chat_sessions')
+            .update({ chat_title: title })
+            .eq('id', chatSessionId);
+        }
         return existingSession.id;
       }
+
+      // Generate title for new session if we have the first message
+      const chatTitle = firstMessage ? await generateChatTitle(firstMessage) : null;
 
       // Create new session with specific ID
       const { data: newSession, error: createError } = await supabase
@@ -117,7 +157,8 @@ async function getOrCreateRoomChatSession(
           id: chatSessionId,
           room_id: roomId,
           session_id: sessionId,
-          display_name: displayName
+          display_name: displayName,
+          chat_title: chatTitle
         })
         .select('id')
         .single();
@@ -278,6 +319,14 @@ export async function POST(
     const body = await req.json();
     const { messages, displayName, sessionId, option, chatSessionId } = body;
 
+    console.log('Room chat API received:', {
+      shareCode,
+      displayName,
+      sessionId,
+      chatSessionId,
+      messagesCount: messages?.length
+    });
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new NextResponse('No messages provided', {
         status: 400,
@@ -351,7 +400,9 @@ export async function POST(
     }
 
     // Get or create room chat session
-    const roomChatSessionId = await getOrCreateRoomChatSession(room.id, sessionId, displayName, chatSessionId);
+    const roomChatSessionId = await getOrCreateRoomChatSession(room.id, sessionId, displayName, chatSessionId, message);
+    console.log('Created/found room chat session:', roomChatSessionId);
+    
     if (!roomChatSessionId) {
       return new NextResponse('Failed to create chat session', {
         status: 500,

@@ -41,6 +41,7 @@ interface RoomContext {
   tier: 'free' | 'pro';
   createdBy?: string;
   expiresAt?: string;
+  chatSessionId?: string;
 }
 
 interface ChatProps {
@@ -125,7 +126,7 @@ const ChatComponent: React.FC<ChatProps> = ({
       displayName: roomContext.displayName,
       sessionId: roomContext.sessionId,
       option: optimisticOption,
-      chatSessionId: chatId.startsWith('room_session_') ? chatId.replace('room_session_', '') : undefined
+      chatSessionId: roomContext.chatSessionId || (chatId.startsWith('room_session_') ? chatId.replace('room_session_', '') : undefined)
     } : {
       chatId: chatId,
       option: optimisticOption
@@ -167,6 +168,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const realtimeHook = roomContext ? useRoomRealtime({
     shareCode: roomContext.shareCode,
     displayName: roomContext.displayName,
+    chatSessionId: roomContext.chatSessionId,
     onNewMessage: handleNewMessage,
     onTypingUpdate: handleTypingUpdate
   }) : null;
@@ -178,12 +180,20 @@ const ChatComponent: React.FC<ChatProps> = ({
     stopTyping = undefined 
   } = realtimeHook || {};
 
-  // Update realtime messages when chat messages change
+  // Initialize realtime messages with current chat messages
   useEffect(() => {
     if (roomContext) {
-      setRealtimeMessages(messages);
+      if (currentChat && currentChat.length > 0) {
+        // Initialize with current chat messages
+        console.log('Initializing realtime messages with currentChat:', currentChat.length);
+        setRealtimeMessages(currentChat);
+      } else if (messages.length > 0) {
+        // Sync with useChat messages if currentChat is empty
+        console.log('Syncing realtime messages with useChat messages:', messages.length);
+        setRealtimeMessages(messages);
+      }
     }
-  }, [messages, roomContext]);
+  }, [roomContext, currentChat, messages]);
 
   // Ensure messages are cleared when chat ID changes (atomicity)
   useEffect(() => {
@@ -198,12 +208,6 @@ const ChatComponent: React.FC<ChatProps> = ({
     
     try {
       if (roomContext) {
-        // Only room creator can create new chat sessions
-        if (!roomContext.createdBy) {
-          toast.error('Only the room creator can start new chat sessions');
-          return;
-        }
-        
         // For room chats, create a new chat session within the room
         const newChatSessionId = uuidv4();
         
@@ -290,8 +294,8 @@ const ChatComponent: React.FC<ChatProps> = ({
               </>
             )}
             
-            {/* New Chat Button - Only show for room creators or regular chats */}
-            {(!roomContext || roomContext.createdBy) && (
+            {/* New Chat Button - Show for all participants */}
+            {(
               <Button
                 variant="outline"
                 size="sm"
@@ -423,15 +427,25 @@ const ChatComponent: React.FC<ChatProps> = ({
 
                   <CardContent className="py-0 px-4">
                     {/* Render text parts first (main message content) */}
-                    {textParts.map((part, partIndex) => (
-                      <MemoizedMarkdown
-                        key={`text-${partIndex}`}
-                        content={part.text}
-                        id={`${isUserMessage ? 'user' : 'assistant'}-text-${
-                          message.id
-                        }-${partIndex}`}
-                      />
-                    ))}
+                    {textParts.length > 0 ? (
+                      textParts.map((part, partIndex) => (
+                        <MemoizedMarkdown
+                          key={`text-${partIndex}`}
+                          content={part.text}
+                          id={`${isUserMessage ? 'user' : 'assistant'}-text-${
+                            message.id
+                          }-${partIndex}`}
+                        />
+                      ))
+                    ) : (
+                      // Fallback for messages that don't have parts (like room messages)
+                      message.content && (
+                        <MemoizedMarkdown
+                          content={message.content}
+                          id={`${isUserMessage ? 'user' : 'assistant'}-content-${message.id}`}
+                        />
+                      )
+                    )}
 
                     {/* Then render reasoning parts (only for assistant messages) */}
                     {!isUserMessage &&
@@ -555,7 +569,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         <MessageInput
           chatId={chatId}
           apiEndpoint={apiEndpoint}
-          currentChat={messages}
+          currentChat={roomContext ? realtimeMessages : messages}
           option={optimisticOption}
           currentChatId={currentChatId}
           modelType={optimisticModelType}

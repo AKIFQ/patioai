@@ -28,9 +28,10 @@ interface Room {
 interface CreateRoomModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onRoomCreated?: () => void;
 }
 
-export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProps) {
+export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: CreateRoomModalProps) {
   const [roomName, setRoomName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createdRoom, setCreatedRoom] = useState<{ room: Room; shareableLink: string } | null>(null);
@@ -83,10 +84,16 @@ export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProp
   };
 
   const handleClose = () => {
+    const wasRoomCreated = !!createdRoom;
     setRoomName('');
     setCreatedRoom(null);
     setIsCopied(false);
     onClose();
+    
+    // Notify parent that a room was created so it can refresh the room list
+    if (wasRoomCreated && onRoomCreated) {
+      onRoomCreated();
+    }
   };
 
   const formatExpirationDate = (dateString: string) => {

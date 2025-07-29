@@ -123,6 +123,7 @@ interface RoomContext {
   participants: Array<{ displayName: string; joinedAt: string }>;
   maxParticipants: number;
   tier: 'free' | 'pro';
+  chatSessionId?: string;
 }
 
 const MessageInput = ({
@@ -184,6 +185,12 @@ const MessageInput = ({
     };
   }, []);
 
+  const chatSessionIdForRoom = roomContext ? (roomContext.chatSessionId || (chatId.startsWith('room_session_') ? chatId.replace('room_session_', '') : undefined)) : undefined;
+  
+  console.log('MessageInput - chatId:', chatId);
+  console.log('MessageInput - roomContext.chatSessionId:', roomContext?.chatSessionId);
+  console.log('MessageInput - final chatSessionId:', chatSessionIdForRoom);
+
   const { input, handleInputChange, handleSubmit, status, stop } = useChat({
     id: chatId, // Use the actual chat ID for proper state isolation
     api: apiEndpoint,
@@ -191,7 +198,8 @@ const MessageInput = ({
     body: roomContext ? {
       displayName: roomContext.displayName,
       sessionId: roomContext.sessionId,
-      option: option
+      option: option,
+      chatSessionId: chatSessionIdForRoom
     } : {
       chatId: chatId,
       option: option,
@@ -199,7 +207,10 @@ const MessageInput = ({
     },
     onFinish: async () => {
       await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-      router.refresh();
+      // Don't refresh for room chats as it causes chatSessionId regeneration
+      if (!roomContext) {
+        router.refresh();
+      }
     },
     onError: (error) => {
       toast.error(error.message || 'An error occurred'); // This could lead to sensitive information exposure. A general error message is safer.

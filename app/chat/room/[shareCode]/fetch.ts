@@ -135,53 +135,72 @@ export async function getRoomInfo(shareCode: string, currentUserId?: string) {
   }
 }
 
-export async function fetchRoomMessages(shareCode: string): Promise<Message[] | undefined> {
+export async function fetchRoomMessages(shareCode: string, chatSessionId?: string): Promise<Message[]> {
   try {
     const roomInfo = await getRoomInfo(shareCode);
-    if (!roomInfo) return undefined;
-
-    const { data: messages, error } = await (supabase as any)
-      .from('room_messages')
-      .select('*')
-      .eq('room_id', roomInfo.room.id)
-      .order('created_at', { ascending: true })
-      .limit(50);
-
-    if (error) {
-      console.error('Error fetching room messages:', error);
-      return undefined;
-    }
-
-    if (!messages || messages.length === 0) {
+    if (!roomInfo) {
       return [];
     }
 
-    // Convert room messages to AI SDK Message format
-    const formattedMessages: Message[] = [];
+    let query = (supabase as any)
+      .from('room_messages')
+      .select('*')
+      .eq('room_id', roomInfo.room.id);
 
-    for (const msg of messages) {
-      if (msg.is_ai_response) {
-        // AI message
-        formattedMessages.push({
-          id: msg.id,
-          role: 'assistant',
-          content: msg.content,
-          createdAt: new Date(msg.created_at)
-        });
-      } else {
-        // User message - format with sender name for room context
-        formattedMessages.push({
-          id: msg.id,
-          role: 'user',
-          content: `${msg.sender_name}: ${msg.content}`,
-          createdAt: new Date(msg.created_at)
-        });
-      }
+    // If chatSessionId is provided, filter by it
+    if (chatSessionId) {
+      query = query.eq('room_chat_session_id', chatSessionId);
     }
 
-    return formattedMessages;
+    const { data: messages, error } = await query
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching room messages:', error);
+      return [];
+    }
+
+    // Convert room messages to Message format
+    return (messages || []).map((msg: any) => ({
+      id: msg.id,
+      role: msg.is_ai_response ? 'assistant' : 'user',
+      content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+      createdAt: new Date(msg.created_at)
+    }));
   } catch (error) {
     console.error('Error in fetchRoomMessages:', error);
-    return undefined;
+    return [];
+  }
+}
+
+export async function fetchRoomChatSessions(shareCode: string, userId?: string): Promise<any[]> {
+  try {
+    const roomInfo = await getRoomInfo(shareCode);
+    if (!roomInfo) {
+      return [];
+    }
+
+    let query = (supabase as any)
+      .from('room_chat_sessions')
+      .select('id, chat_title, display_name, created_at, updated_at')
+      .eq('room_id', roomInfo.room.id);
+
+    // If userId is provided, filter to sessions where the user is a participant
+    if (userId) {
+      query = query.eq('session_id', `auth_${userId}`);
+    }
+
+    const { data: sessions, error } = await query
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching room chat sessions:', error);
+      return [];
+    }
+
+    return sessions || [];
+  } catch (error) {
+    console.error('Error in fetchRoomChatSessions:', error);
+    return [];
   }
 }

@@ -10,6 +10,7 @@ const supabase = createClient(
 interface RoomRealtimeHookProps {
   shareCode: string;
   displayName: string;
+  chatSessionId?: string; // Add chat session filtering
   onNewMessage: (message: Message) => void;
   onTypingUpdate: (users: string[]) => void;
   onParticipantChange?: (participants: any[]) => void;
@@ -18,6 +19,7 @@ interface RoomRealtimeHookProps {
 export function useRoomRealtime({
   shareCode,
   displayName,
+  chatSessionId,
   onNewMessage,
   onTypingUpdate,
   onParticipantChange
@@ -92,6 +94,20 @@ export function useRoomRealtime({
               const newMessage = payload.new as any;
 
               console.log('Real-time message received:', newMessage);
+              console.log('Current chatSessionId:', chatSessionId);
+              console.log('Message chatSessionId:', newMessage.room_chat_session_id);
+
+              // Filter by chat session if specified
+              if (chatSessionId && newMessage.room_chat_session_id !== chatSessionId) {
+                console.log('Skipping message - different chat session');
+                return;
+              }
+
+              // For legacy messages (no chatSessionId), only show if we're in legacy mode
+              if (!chatSessionId && newMessage.room_chat_session_id) {
+                console.log('Skipping message - has session ID but we\'re in legacy mode');
+                return;
+              }
 
               // Don't show own messages via realtime (they're already in the chat)
               if (newMessage.sender_name === displayName && !newMessage.is_ai_response) {
@@ -172,7 +188,7 @@ export function useRoomRealtime({
     initializeRealtime();
 
     return cleanup;
-  }, [shareCode, displayName, onNewMessage, onTypingUpdate, onParticipantChange, cleanup]);
+  }, [shareCode, displayName, onNewMessage, onTypingUpdate, onParticipantChange, cleanup, chatSessionId]);
 
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {

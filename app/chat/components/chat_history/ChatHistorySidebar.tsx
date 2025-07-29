@@ -3,6 +3,7 @@ import React, { type FC, useState, useCallback } from 'react';
 import { fetchMoreChatPreviews } from '../../actions';
 import { useParams, useSearchParams } from 'next/navigation';
 import useSWRInfinite from 'swr/infinite';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import Image from 'next/image';
@@ -88,6 +89,16 @@ interface CombinedDrawerProps {
   rooms?: RoomPreview[];
 }
 
+// Function to fetch rooms
+const fetchRooms = async (): Promise<RoomPreview[]> => {
+  const response = await fetch('/api/rooms');
+  if (!response.ok) {
+    throw new Error('Failed to fetch rooms');
+  }
+  const data = await response.json();
+  return data.rooms || [];
+};
+
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
   userInfo,
   initialChatPreviews,
@@ -100,6 +111,17 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const [isJoinRoomModalOpen, setIsJoinRoomModalOpen] = useState(false);
   const [roomChatHistory, setRoomChatHistory] = useState<any[]>([]);
   const [isLoadingRoomHistory, setIsLoadingRoomHistory] = useState(false);
+
+  // Use SWR to manage room data with fallback to initial rooms
+  const { data: currentRooms, mutate: mutateRooms, isLoading: isLoadingRooms } = useSWR(
+    userInfo.email ? 'rooms' : null,
+    fetchRooms,
+    {
+      fallbackData: rooms,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false
+    }
+  );
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -152,8 +174,10 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     try {
       const response = await fetch(`/api/rooms/${shareCode}/sessions`);
       if (response.ok) {
-        const sessions = await response.json();
-        setRoomChatHistory(sessions);
+        const data = await response.json();
+        // Extract sessions from the response object
+        const sessions = data.sessions || [];
+        setRoomChatHistory(Array.isArray(sessions) ? sessions : []);
       } else {
         setRoomChatHistory([]);
       }
@@ -262,11 +286,17 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     handleChatSelect();
   };
 
+  const handleRoomCreated = useCallback(() => {
+    // Refresh the rooms list when a new room is created
+    mutateRooms();
+  }, [mutateRooms]);
+
   return (
     <>
       <CreateRoomModal 
         isOpen={isCreateGroupModalOpen}
         onClose={() => setIsCreateGroupModalOpen(false)}
+        onRoomCreated={handleRoomCreated}
       />
       
       <JoinRoomModal 
@@ -349,14 +379,19 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   <Link href="/signin">Sign in</Link>
                 </Button>
               </div>
-            ) : rooms.length === 0 ? (
+            ) : isLoadingRooms ? (
+              <div className="text-center p-4">
+                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Loading rooms...</p>
+              </div>
+            ) : currentRooms.length === 0 ? (
               <div className="text-center p-4">
                 <p className="text-sm text-muted-foreground">No rooms yet</p>
                 <p className="text-xs text-muted-foreground mt-1">Create your first room above</p>
               </div>
             ) : (
               <div className="space-y-1">
-                {rooms.map((room) => (
+                {currentRooms.map((room) => (
                   <Link
                     key={room.id}
                     href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}`}
@@ -400,7 +435,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     <span className="text-sm text-muted-foreground">Loading messages...</span>
                   </div>
-                ) : roomChatHistory.length === 0 ? (
+                ) : !Array.isArray(roomChatHistory) || roomChatHistory.length === 0 ? (
                   <div className="text-center p-4">
                     <p className="text-sm text-muted-foreground">No chat sessions yet</p>
                     <p className="text-xs text-muted-foreground mt-1">Start a new conversation!</p>
@@ -418,11 +453,10 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                           {new Date(session.created_at).toLocaleDateString([], { 
                             month: 'short',
                             day: 'numeric'
-                          })} • {session.displayName}
+                          })} • {session.display_name}
                         </div>
                         <div className="text-sm text-foreground">
-                          {session.firstMessage.substring(0, 60)}
-                          {session.firstMessage.length > 60 && '...'}
+                          {session.title}
                         </div>
                       </Link>
                     ))}
