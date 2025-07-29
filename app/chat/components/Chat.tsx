@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useOptimistic, startTransition, useEffect } from 'react';
+import React, { useState, useOptimistic, startTransition, useEffect, useCallback } from 'react';
 import { useChat, type Message } from '@ai-sdk/react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
@@ -24,6 +24,9 @@ import DocumentSearchTool from './tools/DocumentChatTool';
 import WebsiteSearchTool from './tools/WebsiteChatTool';
 import MessageInput from './ChatMessageInput';
 import { toast } from 'sonner';
+import RoomSettingsModal from './RoomSettingsModal';
+import { useRoomRealtime } from '../hooks/useRoomRealtime';
+import TypingIndicator from './TypingIndicator';
 
 // Icons from Lucide React
 import { User, Bot, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
@@ -33,9 +36,11 @@ interface RoomContext {
   roomName: string;
   displayName: string;
   sessionId: string;
-  participants: Array<{ displayName: string; joinedAt: string }>;
+  participants: Array<{ displayName: string; joinedAt: string; sessionId: string; userId?: string }>;
   maxParticipants: number;
   tier: 'free' | 'pro';
+  createdBy?: string;
+  expiresAt?: string;
 }
 
 interface ChatProps {
@@ -67,6 +72,16 @@ const ChatComponent: React.FC<ChatProps> = ({
     initialSelectedOption,
     (_, newValue) => newValue
   );
+  
+  // Real-time state for room chats
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [realtimeMessages, setRealtimeMessages] = useState<Message[]>(currentChat || []);
+  const [isClient, setIsClient] = useState(false);
+
+  // Prevent hydration issues with real-time connection status
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleModelTypeChange = async (newValue: string) => {
     startTransition(async () => {
@@ -109,7 +124,8 @@ const ChatComponent: React.FC<ChatProps> = ({
     body: roomContext ? {
       displayName: roomContext.displayName,
       sessionId: roomContext.sessionId,
-      option: optimisticOption
+      option: optimisticOption,
+      chatSessionId: chatId.startsWith('room_session_') ? chatId.replace('room_session_', '') : undefined
     } : {
       chatId: chatId,
       option: optimisticOption
@@ -127,6 +143,48 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   const { mutate } = useSWRConfig();
 
+  // Real-time functionality for room chats
+  const handleNewMessage = useCallback((newMessage: Message) => {
+    console.log('Chat component received new message:', newMessage);
+    // Only add if it's not already in the messages (avoid duplicates)
+    setRealtimeMessages(prev => {
+      const exists = prev.find(msg => msg.id === newMessage.id);
+      if (exists) {
+        console.log('Message already exists, skipping');
+        return prev;
+      }
+      console.log('Adding new message to chat');
+      return [...prev, newMessage];
+    });
+  }, []);
+
+  const handleTypingUpdate = useCallback((users: string[]) => {
+    console.log('Typing users updated in Chat:', users);
+    setTypingUsers(users);
+  }, []);
+
+  // Initialize real-time hook with safe fallbacks
+  const realtimeHook = roomContext ? useRoomRealtime({
+    shareCode: roomContext.shareCode,
+    displayName: roomContext.displayName,
+    onNewMessage: handleNewMessage,
+    onTypingUpdate: handleTypingUpdate
+  }) : null;
+
+  const { 
+    isConnected = false, 
+    connectionStatus = 'DISCONNECTED', 
+    broadcastTyping = undefined, 
+    stopTyping = undefined 
+  } = realtimeHook || {};
+
+  // Update realtime messages when chat messages change
+  useEffect(() => {
+    if (roomContext) {
+      setRealtimeMessages(messages);
+    }
+  }, [messages, roomContext]);
+
   // Ensure messages are cleared when chat ID changes (atomicity)
   useEffect(() => {
     // Clear messages when switching to a different chat (only for regular chats)
@@ -140,12 +198,22 @@ const ChatComponent: React.FC<ChatProps> = ({
     
     try {
       if (roomContext) {
-        // For room chats, just clear the local messages and refresh the component
-        // Since room messages are shared, we don't create a "new chat" but just refresh the view
-        setMessages([]);
+        // Only room creator can create new chat sessions
+        if (!roomContext.createdBy) {
+          toast.error('Only the room creator can start new chat sessions');
+          return;
+        }
         
-        // Trigger a re-fetch of the room messages by refreshing the page
-        router.refresh();
+        // For room chats, create a new chat session within the room
+        const newChatSessionId = uuidv4();
+        
+        // Clear current messages immediately for better UX
+        setMessages([]);
+        setRealtimeMessages([]);
+        
+        // Navigate to new chat session
+        const newUrl = `/chat/room/${roomContext.shareCode}?displayName=${encodeURIComponent(roomContext.displayName)}&sessionId=${roomContext.sessionId}&chatSession=${newChatSessionId}`;
+        router.push(newUrl);
       } else {
         // For regular chats, create a new chat session
         // Clear current messages immediately for better UX
@@ -177,9 +245,22 @@ const ChatComponent: React.FC<ChatProps> = ({
             {roomContext ? (
               <>
                 <h1 className="text-lg font-semibold">{roomContext.roomName}</h1>
-                <p className="text-sm text-muted-foreground">
-                  Room: {roomContext.shareCode} • You: {roomContext.displayName}
-                </p>
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <span>Room: {roomContext.shareCode} • You: {roomContext.displayName}</span>
+                  {/* Real-time connection status - only show on client to prevent hydration issues */}
+                  {isClient && (
+                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+                      isConnected 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                    }`}>
+                      <div className={`w-2 h-2 rounded-full ${
+                        isConnected ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      {isConnected ? 'Live' : 'Connecting...'}
+                    </span>
+                  )}
+                </div>
               </>
             ) : (
               <h1 className="text-lg font-semibold">Chat with AI</h1>
@@ -195,31 +276,45 @@ const ChatComponent: React.FC<ChatProps> = ({
                 <span className="text-xs px-2 py-1 bg-secondary rounded">
                   {roomContext.tier}
                 </span>
+                
+                {/* Room Settings Modal */}
+                <RoomSettingsModal
+                  roomContext={roomContext}
+                  isCreator={roomContext.createdBy !== undefined} // Will be true if createdBy is set (meaning current user is creator)
+                  expiresAt={roomContext.expiresAt}
+                  onRoomUpdate={() => {
+                    // Refresh the page to get updated room data
+                    router.refresh();
+                  }}
+                />
               </>
             )}
             
-            {/* New Chat Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleNewChat}
-              disabled={isCreatingNewChat}
-              className="flex items-center gap-2"
-            >
-              {isCreatingNewChat ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              {isCreatingNewChat ? 'Creating...' : 'New Chat'}
-            </Button>
+            {/* New Chat Button - Only show for room creators or regular chats */}
+            {(!roomContext || roomContext.createdBy) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNewChat}
+                disabled={isCreatingNewChat}
+                className="flex items-center gap-2"
+              >
+                {isCreatingNewChat ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {isCreatingNewChat ? 'Creating...' : 'New Chat'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
       
       {/* Scrollable Chat Content */}
       <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 ? (
+        {/* Use realtime messages for room chats, regular messages for individual chats */}
+        {(roomContext ? realtimeMessages : messages).length === 0 ? (
           <div className="flex flex-col justify-center items-center min-h-full text-center px-4">
             <h2 className="text-2xl font-semibold text-foreground/80 pb-2">
               Chat with our AI Assistant
@@ -235,8 +330,9 @@ const ChatComponent: React.FC<ChatProps> = ({
             </h2>
           </div>
         ) : (
-          <ul className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
-            {messages.map((message, index) => {
+          <div>
+            <ul className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
+              {(roomContext ? realtimeMessages : messages).map((message, index) => {
             const isUserMessage = message.role === 'user';
             const copyToClipboard = (str: string) => {
               window.navigator.clipboard.writeText(str);
@@ -440,8 +536,17 @@ const ChatComponent: React.FC<ChatProps> = ({
               </li>
             );
           })}
-            <ChatScrollAnchor trackVisibility status={status} />
-          </ul>
+              <ChatScrollAnchor trackVisibility status={status} />
+            </ul>
+            
+            {/* Typing indicator for room chats */}
+            {roomContext && (
+              <TypingIndicator 
+                typingUsers={typingUsers} 
+                currentUser={roomContext.displayName}
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -458,6 +563,7 @@ const ChatComponent: React.FC<ChatProps> = ({
           handleModelTypeChange={handleModelTypeChange}
           handleOptionChange={handleOptionChange}
           roomContext={roomContext}
+          onTyping={roomContext && typeof broadcastTyping === 'function' ? broadcastTyping : undefined}
         />
       </div>
     </div>

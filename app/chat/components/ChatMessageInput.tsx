@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat, type Message } from '@ai-sdk/react';
 import { useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
@@ -135,7 +135,8 @@ const MessageInput = ({
   selectedOption,
   handleModelTypeChange,
   handleOptionChange,
-  roomContext
+  roomContext,
+  onTyping
 }: {
   chatId: string;
   apiEndpoint: string;
@@ -147,12 +148,41 @@ const MessageInput = ({
   handleModelTypeChange: (value: string) => void;
   handleOptionChange: (value: string) => void;
   roomContext?: RoomContext;
+  onTyping?: (isTyping: boolean) => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const onTypingRef = useRef(onTyping);
+
+  // Update the ref when onTyping changes
+  useEffect(() => {
+    onTypingRef.current = onTyping;
+  }, [onTyping]);
+
+  // Create a safe typing handler using ref
+  const safeOnTyping = useCallback((isTyping: boolean) => {
+    try {
+      const currentOnTyping = onTypingRef.current;
+      if (currentOnTyping && typeof currentOnTyping === 'function') {
+        currentOnTyping(isTyping);
+      }
+    } catch (error) {
+      console.warn('Error calling onTyping:', error);
+    }
+  }, []); // No dependencies needed since we use ref
+
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const { input, handleInputChange, handleSubmit, status, stop } = useChat({
     id: chatId, // Use the actual chat ID for proper state isolation
@@ -176,13 +206,54 @@ const MessageInput = ({
     }
   });
 
+  // Handle typing indicators for room chats
+  const handleTyping = useCallback(() => {
+    if (!roomContext) return;
+
+    // Start typing
+    safeOnTyping(true);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Stop typing after 1 second of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      safeOnTyping(false);
+    }, 1000);
+  }, [roomContext, safeOnTyping]);
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle typing indicators
+    if (roomContext) {
+      handleTyping();
+    }
+
     if (event.key === 'Enter' && event.shiftKey) {
       // Allow newline on Shift + Enter
     } else if (event.key === 'Enter') {
       // Prevent default behavior and submit form on Enter only
       event.preventDefault();
+      // Stop typing when sending message
+      if (roomContext) {
+        safeOnTyping(false);
+      }
       handleFormSubmit(event);
+    }
+  };
+
+  // Handle input change with typing indicators
+  const handleInputChangeWithTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleInputChange(e);
+    
+    // Handle typing indicators for room chats
+    if (roomContext) {
+      if (e.target.value.length > 0) {
+        handleTyping();
+      } else {
+        safeOnTyping(false);
+      }
     }
   };
 
@@ -269,7 +340,7 @@ const MessageInput = ({
 
         <Textarea
           value={input}
-          onChange={handleInputChange}
+          onChange={handleInputChangeWithTyping}
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
           disabled={status !== 'ready'}

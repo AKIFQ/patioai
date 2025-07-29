@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import useSWRInfinite from 'swr/infinite';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import Image from 'next/image';
 import {
   Tooltip,
   TooltipContent,
@@ -276,8 +277,29 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         collapsible="none"
         className="h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col"
       >
-        <SidebarHeader className="p-4 border-b">
-          {/* Home Chat Button - At the very top */}
+        <SidebarHeader className="px-3 !py-0 !gap-0 border-b">
+          {/* PatioAI Logo - At the very top */}
+          <div className="flex items-center justify-between px-3 py-0 mb-0">
+            <Image
+              src="/logos/transparent-logo.png"
+              alt="PatioAI"
+              width={144}
+              height={44}
+              priority
+              className="rounded-lg"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Close sidebar"
+            >
+              <PanelLeftIcon size={16} />
+            </Button>
+          </div>
+          
+          {/* Home Chat Button - Below logo */}
           <Button 
             asChild
             variant="outline"
@@ -293,36 +315,26 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           {/* ROOMS Header with close button */}
           <div className="flex items-center justify-between w-full mb-2">
             <h2 className="text-sm font-semibold">ROOMS</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="text-muted-foreground hover:text-foreground hidden sm:block"
-              aria-label="Close sidebar"
-            >
-              <PanelLeftIcon size={16} />
-            </Button>
           </div>
           
           {/* Room Action Buttons - Below ROOMS header */}
-          <div className="space-y-2">
-            <Button 
+          <div className="flex items-center space-x-2 px-3 mb-2">
+            <Button
               onClick={() => setIsCreateGroupModalOpen(true)}
-              className="w-full"
+              className="flex-1"
               size="sm"
             >
-              <Users size={16} className="mr-2" />
-              New Room
+              <Users size={16} className="mr-1" />
+              New
             </Button>
-            
-            <Button 
+            <Button
               onClick={() => setIsJoinRoomModalOpen(true)}
-              className="w-full"
+              className="flex-1"
               size="sm"
               variant="outline"
             >
-              <Users size={16} className="mr-2" />
-              Join Room
+              <Users size={16} className="mr-1" />
+              Join
             </Button>
           </div>
         </SidebarHeader>
@@ -374,7 +386,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         </div>
 
         {/* Chat History - Bottom Section (Scrollable) */}
-        <div className="h-1/2 flex flex-col">
+        <div className="h-[40%] flex flex-col">
           <div className="p-2 border-b bg-muted/30">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               {currentRoomShareCode ? 'ROOM CHATS' : 'CHATS'}

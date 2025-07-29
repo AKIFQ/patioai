@@ -17,8 +17,51 @@ const inter = Inter({
 });
 export const metadata: Metadata = {
   metadataBase: new URL('http://localhost:3000/'),
-  title: 'Your App',
-  description: 'Your application description goes here.'
+  title: {
+    default: 'PatioAI',
+    template: '%s | PatioAI'
+  },
+  description: 'Experience the power of AI-driven conversations with PatioAI. Ask questions on any topic and get informative responses instantly.',
+  keywords: ['AI', 'Chat', 'Assistant', 'Artificial Intelligence', 'Conversation'],
+  authors: [{ name: 'PatioAI' }],
+  creator: 'PatioAI',
+  publisher: 'PatioAI',
+  icons: {
+    icon: [
+      { url: '/icon.png', sizes: '96x96', type: 'image/png' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' }
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
+    ],
+    shortcut: [
+      { url: '/icon.png', type: 'image/png' }
+    ]
+  },
+  manifest: '/site.webmanifest',
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'http://localhost:3000/',
+    title: 'PatioAI',
+    description: 'Experience the power of AI-driven conversations with PatioAI',
+    siteName: 'PatioAI',
+    images: [
+      {
+        url: '/logos/logo-horizontal.png',
+        width: 1200,
+        height: 630,
+        alt: 'PatioAI Logo'
+      }
+    ]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'PatioAI - AI Chat Assistant',
+    description: 'Experience the power of AI-driven conversations with PatioAI',
+    images: ['/logos/logo-horizontal.png']
+  }
 };
 
 export default function RootLayout({
