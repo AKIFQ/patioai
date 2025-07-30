@@ -74,6 +74,7 @@ export default async function RoomChatPage(props: {
     if (!chatSessionId && searchParams.loadHistory !== 'true') {
         chatSessionId = uuidv4();
         console.log('Generated new chatSessionId:', chatSessionId);
+        // Note: Client-side redirect will be handled in the component
     }
     
     console.log('Final chatSessionId being used:', chatSessionId);

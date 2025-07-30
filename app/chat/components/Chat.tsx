@@ -84,6 +84,23 @@ const ChatComponent: React.FC<ChatProps> = ({
     setIsClient(true);
   }, []);
 
+  // Update URL with chatSessionId for room chats (client-side only)
+  useEffect(() => {
+    if (isClient && roomContext && roomContext.chatSessionId) {
+      const currentParams = new URLSearchParams(window.location.search);
+      const urlChatSession = currentParams.get('chatSession');
+      
+      // If chatSessionId exists but not in URL, update URL
+      if (!urlChatSession && roomContext.chatSessionId) {
+        const newParams = new URLSearchParams(currentParams);
+        newParams.set('chatSession', roomContext.chatSessionId);
+        
+        const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [isClient, roomContext]);
+
   const handleModelTypeChange = async (newValue: string) => {
     startTransition(async () => {
       setOptimisticModelType(newValue);
@@ -146,23 +163,24 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Real-time functionality for room chats
   const handleNewMessage = useCallback((newMessage: Message) => {
-    console.log('Chat component received new message:', newMessage);
+    console.log('🏠 Chat received RT message:', newMessage.role, 'from', newMessage.content?.substring(0, 30));
     // Only add if it's not already in the messages (avoid duplicates)
     setRealtimeMessages(prev => {
       const exists = prev.find(msg => msg.id === newMessage.id);
       if (exists) {
-        console.log('Message already exists, skipping');
+        console.log('⚠️ Message already exists, skipping:', newMessage.id);
         return prev;
       }
-      console.log('Adding new message to chat');
+      console.log('✅ Adding new RT message to chat UI:', newMessage.id);
       return [...prev, newMessage];
     });
   }, []);
 
   const handleTypingUpdate = useCallback((users: string[]) => {
-    console.log('Typing users updated in Chat:', users);
+    console.log('👥 Typing users updated in Chat:', users);
+    console.log('Current user:', roomContext?.displayName);
     setTypingUsers(users);
-  }, []);
+  }, [roomContext?.displayName]);
 
   // Initialize real-time hook with safe fallbacks
   const realtimeHook = roomContext ? useRoomRealtime({
@@ -187,13 +205,40 @@ const ChatComponent: React.FC<ChatProps> = ({
         // Initialize with current chat messages
         console.log('Initializing realtime messages with currentChat:', currentChat.length);
         setRealtimeMessages(currentChat);
-      } else if (messages.length > 0) {
-        // Sync with useChat messages if currentChat is empty
-        console.log('Syncing realtime messages with useChat messages:', messages.length);
-        setRealtimeMessages(messages);
+      } else {
+        // Start with empty array for fresh sessions
+        setRealtimeMessages([]);
       }
     }
-  }, [roomContext, currentChat, messages]);
+  }, [roomContext, currentChat]);
+
+    // For room chats, combine useChat (streaming) with real-time (other users)
+  useEffect(() => {
+    if (roomContext) {
+      // Always sync useChat messages (includes live streaming)
+      setRealtimeMessages(prevRealtime => {
+        // Start fresh with useChat messages (preserves streaming)
+        const merged = [...messages] as any[];
+        
+        // Add real-time messages that aren't in useChat (from other users)
+        prevRealtime.forEach(rtMessage => {
+          const existsInUseChat = messages.find(msg => msg.id === rtMessage.id);
+          if (!existsInUseChat) {
+            merged.push(rtMessage);
+          }
+        });
+        
+        // Sort by timestamp
+        merged.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeA - timeB;
+        });
+        
+        return merged;
+      });
+    }
+  }, [roomContext, messages]);
 
   // Ensure messages are cleared when chat ID changes (atomicity)
   useEffect(() => {
@@ -262,6 +307,13 @@ const ChatComponent: React.FC<ChatProps> = ({
                         isConnected ? 'bg-green-500' : 'bg-red-500'
                       }`} />
                       {isConnected ? 'Live' : 'Connecting...'}
+                    </span>
+                  )}
+                  
+                  {/* Debug info - remove this after testing */}
+                  {isClient && process.env.NODE_ENV === 'development' && (
+                    <span className="text-xs text-muted-foreground">
+                      RT:{realtimeMessages.length} UC:{messages.length} T:{typingUsers.length}
                     </span>
                   )}
                 </div>

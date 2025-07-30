@@ -187,12 +187,13 @@ const MessageInput = ({
 
   const chatSessionIdForRoom = roomContext ? (roomContext.chatSessionId || (chatId.startsWith('room_session_') ? chatId.replace('room_session_', '') : undefined)) : undefined;
   
-  console.log('MessageInput - chatId:', chatId);
-  console.log('MessageInput - roomContext.chatSessionId:', roomContext?.chatSessionId);
-  console.log('MessageInput - final chatSessionId:', chatSessionIdForRoom);
+  // Debug logging (reduced to prevent spam)
+  // console.log('MessageInput - chatId:', chatId);
+  // console.log('MessageInput - roomContext.chatSessionId:', roomContext?.chatSessionId);
+  // console.log('MessageInput - final chatSessionId:', chatSessionIdForRoom);
 
   const { input, handleInputChange, handleSubmit, status, stop } = useChat({
-    id: chatId, // Use the actual chat ID for proper state isolation
+    id: roomContext ? `room_${roomContext.shareCode}` : chatId, // Match the Chat component's ID
     api: apiEndpoint,
     initialMessages: currentChat,
     body: roomContext ? {
@@ -213,7 +214,14 @@ const MessageInput = ({
       }
     },
     onError: (error) => {
-      toast.error(error.message || 'An error occurred'); // This could lead to sensitive information exposure. A general error message is safer.
+      console.error('Chat error:', error);
+      if (error.message.includes('quota')) {
+        toast.error('OpenAI quota exceeded. Please check your billing.');
+      } else if (error.message.includes('rate limit')) {
+        toast.error('Rate limit exceeded. Please wait a moment.');
+      } else {
+        toast.error(error.message || 'An error occurred');
+      }
     }
   });
 

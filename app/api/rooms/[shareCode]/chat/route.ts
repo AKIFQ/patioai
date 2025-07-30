@@ -384,12 +384,12 @@ export async function POST(
       session_id: sessionId
     });
 
-    // Verify participant is in the room
+    // Verify participant is in the room (check both session_id and user_id)
     const { data: participant } = await supabase
       .from('room_participants')
       .select('display_name')
       .eq('room_id', room.id)
-      .eq('session_id', sessionId)
+      .or(`session_id.eq.${sessionId},user_id.eq.${session?.id || 'null'}`)
       .single();
 
     if (!participant) {

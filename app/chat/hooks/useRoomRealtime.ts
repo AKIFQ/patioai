@@ -1,11 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/client/client';
 import type { Message } from 'ai';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = createClient();
 
 interface RoomRealtimeHookProps {
   shareCode: string;
@@ -76,7 +73,7 @@ export function useRoomRealtime({
 
         // Subscribe to new messages for this specific room
         messageChannelRef.current = supabase
-          .channel(`room_messages_${shareCode}`, {
+          .channel(`room_messages_${roomUuid}`, {
             config: {
               broadcast: { self: false },
               presence: { key: displayName }
@@ -93,27 +90,21 @@ export function useRoomRealtime({
             (payload) => {
               const newMessage = payload.new as any;
 
-              console.log('Real-time message received:', newMessage);
-              console.log('Current chatSessionId:', chatSessionId);
-              console.log('Message chatSessionId:', newMessage.room_chat_session_id);
+              console.log('🔔 RT MSG received:', {
+                sender: newMessage.sender_name,
+                isAI: newMessage.is_ai_response,
+                content: newMessage.content?.substring(0, 50) + '...',
+                roomId: newMessage.room_id,
+                currentUser: displayName
+              });
 
-              // Filter by chat session if specified
-              if (chatSessionId && newMessage.room_chat_session_id !== chatSessionId) {
-                console.log('Skipping message - different chat session');
-                return;
-              }
-
-              // For legacy messages (no chatSessionId), only show if we're in legacy mode
-              if (!chatSessionId && newMessage.room_chat_session_id) {
-                console.log('Skipping message - has session ID but we\'re in legacy mode');
-                return;
-              }
-
-              // Don't show own messages via realtime (they're already in the chat)
+              // Skip own user messages to avoid duplicates with optimistic updates
               if (newMessage.sender_name === displayName && !newMessage.is_ai_response) {
-                console.log('Skipping own message');
+                console.log('⏭️ SKIPPING: Own user message to avoid duplicate');
                 return;
               }
+              
+              console.log('✅ ACCEPTING RT MSG from:', newMessage.sender_name);
 
               // Convert to Message format
               const message: Message = {
@@ -125,23 +116,22 @@ export function useRoomRealtime({
                 createdAt: new Date(newMessage.created_at)
               };
 
-              console.log('Calling onNewMessage with:', message);
               onNewMessage(message);
             }
           )
           .subscribe((status, err) => {
-            console.log('Message channel status:', status);
+            console.log('📡 Message channel status:', status, 'for room:', roomUuid);
             setConnectionStatus(status);
             setIsConnected(status === 'SUBSCRIBED');
 
             if (err) {
-              console.error('Real-time subscription error:', err);
+              console.error('❌ Real-time subscription error:', err);
             }
           });
 
         // Subscribe to typing indicators using presence
         typingChannelRef.current = supabase
-          .channel(`room_typing_${shareCode}`, {
+          .channel(`room_typing_${roomUuid}`, {
             config: {
               presence: { key: displayName }
             }
@@ -153,17 +143,23 @@ export function useRoomRealtime({
               .map((user: any) => user.displayName)
               .filter((name: string) => name && name !== displayName);
 
-            console.log('Typing users updated:', typingUsers);
+            console.log('👥 Typing users updated:', typingUsers);
             onTypingUpdate(typingUsers);
           })
+          .on('presence', { event: 'join' }, ({ key, newPresences }: any) => {
+            console.log('👋 User joined typing:', key, newPresences);
+          })
+          .on('presence', { event: 'leave' }, ({ key, leftPresences }: any) => {
+            console.log('👋 User left typing:', key, leftPresences);
+          })
           .subscribe((status) => {
-            console.log('Typing channel status:', status);
+            console.log('💬 Typing channel status:', status, 'for room:', roomUuid);
           });
 
         // Subscribe to participant changes (optional)
         if (onParticipantChange) {
           participantChannelRef.current = supabase
-            .channel(`room_participants_${shareCode}`)
+            .channel(`room_participants_${roomUuid}`)
             .on(
               'postgres_changes',
               {
@@ -173,11 +169,13 @@ export function useRoomRealtime({
                 filter: `room_id=eq.${roomUuid}`
               },
               (payload) => {
-                console.log('Participant change:', payload);
+                console.log('👥 Participant change:', payload);
                 onParticipantChange([]);
               }
             )
-            .subscribe();
+            .subscribe((status) => {
+              console.log('👥 Participants channel status:', status, 'for room:', roomUuid);
+            });
         }
 
       } catch (error) {
@@ -192,7 +190,11 @@ export function useRoomRealtime({
 
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {
-    if (!typingChannelRef.current || !displayName) return;
+    console.log('broadcastTyping called:', isTyping, 'displayName:', displayName);
+    if (!typingChannelRef.current || !displayName) {
+      console.log('No typing channel or displayName, skipping broadcast');
+      return;
+    }
 
     if (isTyping) {
       // Clear existing timeout
@@ -201,6 +203,7 @@ export function useRoomRealtime({
       }
 
       // Track typing
+      console.log('Broadcasting typing start for:', displayName);
       typingChannelRef.current.track({
         displayName,
         isTyping: true,
@@ -209,9 +212,11 @@ export function useRoomRealtime({
 
       // Auto-stop typing after 3 seconds
       typingTimeoutRef.current = setTimeout(() => {
+        console.log('Auto-stopping typing for:', displayName);
         stopTyping();
       }, 3000);
     } else {
+      console.log('Broadcasting typing stop for:', displayName);
       stopTyping();
     }
   }, [displayName]);
