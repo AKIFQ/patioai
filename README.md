@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/logos/logo-horizontal.png" alt="PatioAI Logo" width="400" height="800"/>
+  <img src="public/logos/logo-horizontal.png" alt="PatioAI Logo" width="400" height="400"/>
   
   # PatioAI - Collaborative AI Chat Platform
   
