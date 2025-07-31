@@ -55,6 +55,8 @@ export default function RoomChatWrapper({
 
     // Use thread ID from URL, or create main thread if none specified
     let finalThreadId = threadId;
+    let shouldUpdateUrl = false;
+    
     if (!finalThreadId) {
       // Create deterministic main thread using a simple but valid UUID
       // Convert share code to a deterministic UUID
@@ -64,13 +66,21 @@ export default function RoomChatWrapper({
       }, 0);
       const hashStr = Math.abs(shareCodeHash).toString(16).padStart(8, '0');
       finalThreadId = `${hashStr.substring(0, 8)}-0000-4000-8000-${hashStr.padEnd(12, '0').substring(0, 12)}`;
+      shouldUpdateUrl = true;
       
-      // Update URL to include the thread ID (use threadId parameter for consistency)
+      console.log('🏠 Creating main thread for room:', finalThreadId);
+    } else {
+      console.log('🆕 Using existing thread ID:', finalThreadId);
+    }
+    
+    // Only update URL if we're creating the main thread (not for new chat sessions)
+    if (shouldUpdateUrl) {
       const currentParams = new URLSearchParams(searchParams.toString());
       currentParams.set('threadId', finalThreadId);
       // Remove legacy chatSession param if it exists
       currentParams.delete('chatSession');
       const newUrl = `/chat/room/${shareCode}?${currentParams.toString()}`;
+      console.log('🔄 Updating URL to include main thread ID');
       window.history.replaceState({}, '', newUrl);
     }
 
@@ -120,12 +130,27 @@ export default function RoomChatWrapper({
     );
   }
 
+  // Determine if this is a new chat session (not the main thread)
+  const isMainThread = roomContext.chatSessionId?.includes('-0000-4000-8000-');
+  const isNewChatSession = !isMainThread;
+  
+  // For new chat sessions, start with empty messages
+  // For main thread, use the loaded historical messages
+  const chatMessages = isNewChatSession ? [] : initialMessages;
+
+  console.log('🎯 Room chat rendering:', {
+    threadId: roomContext.chatSessionId,
+    isMainThread,
+    isNewChatSession,
+    messageCount: chatMessages.length
+  });
+
   return (
     <div className="flex w-full h-full overflow-hidden">
       <div className="flex-1">
         <ChatComponent
-          key={`room_${shareCode}_${roomContext.chatSessionId}`}
-          currentChat={initialMessages}
+          key={`room_${shareCode}_${roomContext.chatSessionId}_${isNewChatSession ? Date.now() : 'main'}`}
+          currentChat={chatMessages}
           chatId={`room_session_${roomContext.chatSessionId}`}
           initialModelType={initialModelType}
           initialSelectedOption={initialSelectedOption}

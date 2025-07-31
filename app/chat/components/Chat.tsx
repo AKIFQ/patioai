@@ -139,18 +139,25 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Track component lifecycle (only in development)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`🎬 CHAT COMPONENT: Component mounted for ${chatId_debug}`);
+      console.log(`🎬 CHAT COMPONENT: Component mounted for ${chatId_debug}`, {
+        roomContext: roomContext ? {
+          shareCode: roomContext.shareCode,
+          chatSessionId: roomContext.chatSessionId,
+          displayName: roomContext.displayName
+        } : null,
+        currentChatLength: currentChat?.length || 0
+      });
       return () => {
         console.log(`🎬 CHAT COMPONENT: Component unmounting for ${chatId_debug}`);
       };
     }
-  }, [chatId_debug]);
+  }, [chatId_debug, roomContext, currentChat]);
   
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
     id: chatId_debug,
     api: apiEndpoint,
     experimental_throttle: 50,
-    initialMessages: currentChat,
+    initialMessages: currentChat || [], // Ensure we always have an array
     body: roomContext ? {
       displayName: roomContext.displayName,
       option: optimisticOption,
@@ -281,9 +288,18 @@ const ChatComponent: React.FC<ChatProps> = ({
   useEffect(() => {
     // Clear messages when switching to a different chat (only for regular chats)
     if (!roomContext && currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
+      console.log(`🧹 CHAT: Clearing messages due to chat ID change: ${currentChatId} -> ${chatId}`);
       setMessages([]);
     }
   }, [chatId, currentChatId, roomContext, setMessages]);
+
+  // Force clear messages when component mounts with a new chat ID
+  useEffect(() => {
+    if (!roomContext && !currentChat) {
+      console.log(`🆕 CHAT: New chat detected, ensuring clean state for ${chatId}`);
+      setMessages([]);
+    }
+  }, [chatId, roomContext, currentChat, setMessages]);
 
   const handleNewChat = async () => {
     setIsCreatingNewChat(true);
@@ -293,23 +309,29 @@ const ChatComponent: React.FC<ChatProps> = ({
         // For room chats, create a new chat session within the room
         const newChatSessionId = uuidv4();
         
+        console.log('🆕 Creating new room chat session:', newChatSessionId);
+        
         // Clear current messages immediately for better UX
         setMessages([]);
         setRealtimeMessages([]);
         
-        // Navigate to new chat session
-        const newUrl = `/chat/room/${roomContext.shareCode}?displayName=${encodeURIComponent(roomContext.displayName)}&sessionId=${roomContext.sessionId}&chatSession=${newChatSessionId}`;
-        router.push(newUrl);
+        // Navigate to new chat session using threadId parameter (not chatSession)
+        const currentParams = new URLSearchParams(window.location.search);
+        currentParams.set('threadId', newChatSessionId);
+        currentParams.delete('chatSession'); // Remove legacy parameter
+        
+        const newUrl = `/chat/room/${roomContext.shareCode}?${currentParams.toString()}`;
+        
+        // Use replace instead of push to avoid back button issues
+        router.replace(newUrl);
       } else {
-        // For regular chats, create a new chat session
-        // Clear current messages immediately for better UX
-        setMessages([]);
+        // For regular chats, navigate to the main chat page which auto-generates a new ID
+        // Add timestamp to force a fresh navigation
+        const timestamp = Date.now();
+        router.push(`/chat?t=${timestamp}`);
         
-        // Create new chat ID
-        const newChatId = uuidv4();
-        
-        // Navigate to the new chat - this creates a fresh chat instance
-        router.push(`/chat/${newChatId}`);
+        // Force a hard refresh to ensure clean state
+        router.refresh();
         
         // Refresh the sidebar chat history
         await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
