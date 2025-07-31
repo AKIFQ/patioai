@@ -1,12 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Message, Attachment } from 'ai';
+import type { Message } from 'ai';
 import { streamText, convertToCoreMessages } from 'ai';
-import { Ratelimit } from '@upstash/ratelimit';
 import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
 import { openai } from '@ai-sdk/openai';
 import type { AnthropicProviderOptions } from '@ai-sdk/anthropic';
 import { anthropic } from '@ai-sdk/anthropic';
-import { redis } from '@/lib/server/server';
 import { getSession } from '@/lib/server/supabase';
 import { websiteSearchTool } from '@/app/api/chat/tools/WebsiteSearchTool';
 import { google } from '@ai-sdk/google';
@@ -77,157 +75,110 @@ const getModel = (selectedModel: string) => {
   }
 };
 
-async function getRoomMessages(roomId: string, limit: number = 30) {
-  const { data: messages, error } = await supabase
-    .from('room_messages')
-    .select('*')
-    .eq('room_id', roomId)
-    .order('created_at', { ascending: true })
-    .limit(limit);
+// Removed unused getRoomMessages function - we load messages directly in the page
 
-  if (error) {
-    console.error('Error fetching room messages:', error);
-    return [];
-  }
+// Removed unused session management functions
 
-  return messages || [];
-}
-
+// Simplified: Save message directly to thread
 async function saveRoomMessage(
   roomId: string,
+  threadId: string,
   senderName: string,
   content: string,
-  isAiResponse: boolean = false,
+  isAiResponse = false,
   sources?: any,
   reasoning?: string
-) {
-  const { error } = await supabase
-    .from('room_messages')
-    .insert({
-      room_id: roomId,
-      sender_name: senderName,
-      content,
-      is_ai_response: isAiResponse,
-      sources,
-      reasoning
-    });
+): Promise<boolean> {
+  const messageId = Math.random().toString(36).substring(7);
+  console.log(`💾 [${messageId}] SAVING MESSAGE:`, {
+    sender: senderName,
+    isAI: isAiResponse,
+    contentPreview: content.substring(0, 30),
+    threadId: threadId.substring(0, 8) + '...'
+  });
 
-  if (error) {
-    console.error('Error saving room message:', error);
-  }
-}
-
-async function getUserTier(userId: string): Promise<'free' | 'pro'> {
-  const { data, error } = await supabase
-    .from('user_tiers')
-    .select('tier')
-    .eq('user_id', userId)
-    .single();
-  
-  if (error || !data) {
-    return 'free';
-  }
-  
-  return data.tier as 'free' | 'pro';
-}
-
-async function checkDailyUsage(userId: string, roomId: string): Promise<{ canSend: boolean; usage: number; limit: number }> {
-  const today = new Date().toISOString().split('T')[0];
-  
-  // Get current usage
-  const { data: usage, error } = await supabase
-    .from('daily_message_usage')
-    .select('message_count')
-    .eq('user_id', userId)
-    .eq('room_id', roomId)
-    .eq('date', today)
-    .single();
-
-  const currentUsage = usage?.message_count || 0;
-  
-  // Get user tier to determine limit
-  const tier = await getUserTier(userId);
-  const limit = tier === 'pro' ? 100 : 30;
-  
-  return {
-    canSend: currentUsage < limit,
-    usage: currentUsage,
-    limit
-  };
-}
-
-async function incrementDailyUsage(userId: string, roomId: string) {
-  const today = new Date().toISOString().split('T')[0];
-  
-  // First try to get existing record
-  const { data: existing } = await supabase
-    .from('daily_message_usage')
-    .select('message_count')
-    .eq('user_id', userId)
-    .eq('room_id', roomId)
-    .eq('date', today)
-    .single();
-
-  if (existing) {
-    // Update existing record
-    const { error } = await supabase
-      .from('daily_message_usage')
-      .update({ message_count: existing.message_count + 1 })
-      .eq('user_id', userId)
-      .eq('room_id', roomId)
-      .eq('date', today);
-
-    if (error) {
-      console.error('Error updating daily usage:', error);
-    }
-  } else {
-    // Insert new record
-    const { error } = await supabase
-      .from('daily_message_usage')
+  try {
+    const { error, data } = await supabase
+      .from('room_messages')
       .insert({
-        user_id: userId,
         room_id: roomId,
-        date: today,
-        message_count: 1
-      });
+        thread_id: threadId, // Direct thread reference
+        sender_name: senderName,
+        content,
+        is_ai_response: isAiResponse,
+        sources,
+        reasoning
+      })
+      .select();
 
     if (error) {
-      console.error('Error inserting daily usage:', error);
+      console.error(`❌ [${messageId}] Error saving message:`, error);
+      return false;
     }
+
+    console.log(`✅ [${messageId}] Message saved successfully:`, {
+      dbId: data?.[0]?.id,
+      sender: senderName,
+      isAI: isAiResponse
+    });
+    return true;
+  } catch (error) {
+    console.error(`💥 [${messageId}] Exception saving message:`, error);
+    return false;
   }
 }
+
+// Removed unused daily usage functions - can be re-added later if needed
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ shareCode: string }> }
 ) {
+  const requestId = Math.random().toString(36).substring(7);
+  console.log(`🚀 [${requestId}] API CALL START - Room chat request received`);
+
   try {
     const { shareCode } = await params;
-    const session = await getSession();
+    console.log(`📝 [${requestId}] Share code: ${shareCode}`);
 
-    if (!session) {
-      return new NextResponse('Unauthorized', {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    // Try to get session but don't fail if user is anonymous
+    let session = null;
+    try {
+      session = await getSession();
+    } catch (_error) {
+      // Anonymous users don't have sessions, this is expected
+      console.log('No authenticated session (anonymous user)');
     }
 
+    // Note: Allow both authenticated and anonymous users for room chats
+    // Anonymous users are identified by sessionId
+
     const body = await req.json();
-    const { messages, displayName, sessionId, option } = body;
-    
+    const { messages, displayName, option, threadId } = body;
+
+    console.log(`📨 [${requestId}] Room chat API received:`, {
+      shareCode,
+      displayName,
+      threadId,
+      option,
+      messagesCount: messages?.length,
+      lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50),
+      fullBody: JSON.stringify(body, null, 2)
+    });
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new NextResponse('No messages provided', {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Extract the last message (current user message)
     const lastMessage = messages[messages.length - 1];
     const message = lastMessage?.content;
     const selectedModel = option || 'gpt-4.1';
 
-    if (!message || !displayName || !sessionId) {
+    if (!message || !displayName || !threadId) {
       return new NextResponse('Missing required fields', {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -258,21 +209,14 @@ export async function POST(
       });
     }
 
-    // Check daily usage limits
-    const { canSend, usage, limit } = await checkDailyUsage(session.id, room.id);
-    if (!canSend) {
-      return new NextResponse(`Daily message limit reached (${usage}/${limit})`, {
-        status: 429,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    // Simplified: Skip daily usage limits for now (can be re-added later if needed)
 
-    // Verify participant is in the room
+    // Simplified: Just check if display name is in the room
     const { data: participant } = await supabase
       .from('room_participants')
       .select('display_name')
       .eq('room_id', room.id)
-      .eq('session_id', sessionId)
+      .eq('display_name', displayName)
       .single();
 
     if (!participant) {
@@ -282,15 +226,29 @@ export async function POST(
       });
     }
 
-    // Save user message
-    await saveRoomMessage(room.id, displayName, message, false);
-    
-    // Increment daily usage
-    await incrementDailyUsage(session.id, room.id);
+    // Simplified: Save message directly to thread
+    console.log(`💾 [${requestId}] Saving user message: "${message.substring(0, 50)}"`);
+    const messageSaved = await saveRoomMessage(room.id, threadId, displayName, message, false);
+    if (!messageSaved) {
+      console.log(`❌ [${requestId}] Failed to save user message`);
+      return new NextResponse('Failed to save message', {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    console.log(`✅ [${requestId}] User message saved successfully`);
 
-    // Get recent room messages for context (last 30 messages)
-    const recentMessages = await getRoomMessages(room.id, 30);
-    
+    // Simplified: Skip daily usage tracking for now
+
+    // Get recent messages from this thread for AI context
+    const { data: recentMessages } = await supabase
+      .from('room_messages')
+      .select('*')
+      .eq('room_id', room.id)
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: true })
+      .limit(30);
+
     // Get current participants for system prompt
     const { data: participants } = await supabase
       .from('room_participants')
@@ -300,7 +258,7 @@ export async function POST(
     const participantNames = participants?.map(p => p.display_name) || [];
 
     // Format messages for AI context
-    const contextMessages: Message[] = recentMessages.map(msg => ({
+    const contextMessages: Message[] = (recentMessages || []).map(msg => ({
       id: msg.id,
       role: msg.is_ai_response ? 'assistant' : 'user',
       content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
@@ -347,31 +305,28 @@ export async function POST(
       },
       experimental_activeTools: ['websiteSearchTool'],
       maxSteps: 3,
-      experimental_telemetry: {
-        isEnabled: true,
-        functionId: 'api_room_chat',
-        metadata: {
-          userId: session.id,
-          roomId: room.id,
-          shareCode
-        },
-        recordInputs: true,
-        recordOutputs: true
-      },
+      // Removed telemetry for simplicity
       onFinish: async (event) => {
         const { text, reasoning, sources } = event;
-        
-        // Save AI response to room messages
-        await saveRoomMessage(
+
+        console.log(`🤖 [${requestId}] AI response generated, saving: "${text.substring(0, 50)}..."`);
+
+        // Save AI response to thread
+        const aiSaved = await saveRoomMessage(
           room.id,
+          threadId,
           'AI Assistant',
           text,
           true,
           sources,
           reasoning
         );
-        
-        console.log('Room message saved:', room.id);
+
+        if (aiSaved) {
+          console.log(`✅ [${requestId}] AI response saved successfully`);
+        } else {
+          console.log(`❌ [${requestId}] Failed to save AI response`);
+        }
       },
       onError: async (error) => {
         console.error('Error processing room chat:', error);
@@ -380,6 +335,7 @@ export async function POST(
 
     result.consumeStream();
 
+    console.log(`🎯 [${requestId}] Returning streaming response`);
     return result.toDataStreamResponse({
       sendReasoning: false,
       sendSources: true,
@@ -387,7 +343,8 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('Error in room chat:', error);
+    console.error(`💥 [${requestId}] Error in room chat:`, error);
+
     return new NextResponse('Internal server error', {
       status: 500,
       headers: { 'Content-Type': 'application/json' }

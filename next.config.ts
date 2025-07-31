@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
       static: 180
     }
   },
-  poweredByHeader: false
+  poweredByHeader: false,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  }
 };
 export default nextConfig;

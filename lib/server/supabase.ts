@@ -10,12 +10,12 @@ export const getSession = cache(async () => {
   try {
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) {
-      console.error('Auth Error:', error);
+      // Silently handle auth errors for anonymous users
       return null;
     }
     return user;
   } catch (error) {
-    console.error('Error:', error);
+    // Suppress auth errors for anonymous users
     return null;
   }
 });

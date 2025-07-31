@@ -12,6 +12,10 @@ export interface ChatPreview {
   id: string;
   firstMessage: string;
   created_at: string;
+  type?: 'regular' | 'room';
+  roomName?: string;
+  shareCode?: string;
+  chatSessionId?: string;
 }
 
 export async function fetchMoreChatPreviews(offset: number) {
@@ -24,7 +28,8 @@ export async function fetchMoreChatPreviews(offset: number) {
   const limit = 30;
 
   try {
-    const { data, error } = await supabase
+    // Get regular chat sessions
+    const { data: chatData, error: chatError } = await supabase
       .from('chat_sessions')
       .select(
         `
@@ -38,18 +43,89 @@ export async function fetchMoreChatPreviews(offset: number) {
       .limit(1, { foreignTable: 'chat_messages' })
       .range(offset, offset + limit - 1);
 
-    if (error) throw error;
+    if (chatError) throw chatError;
 
-    const chatPreviews: ChatPreview[] = data.map((session) => ({
+    // Get ALL room messages and threads (simplified approach)
+    let roomChatPreviews: any[] = [];
+    
+    try {
+      // Get all room messages with room info
+      const { data: roomMessages } = await supabase
+        .from('room_messages')
+        .select(`
+          id, 
+          created_at, 
+          content, 
+          sender_name, 
+          is_ai_response, 
+          room_id, 
+          thread_id,
+          rooms!inner(id, name, share_code)
+        `)
+        .order('created_at', { ascending: true });
+
+      // Group by thread and get first user message for each thread
+      const threadFirstMessages = new Map();
+      const threadLatestTimes = new Map();
+      
+      (roomMessages || []).forEach((msg: any) => {
+        if (msg.thread_id && !msg.is_ai_response && msg.content) {
+          if (!threadFirstMessages.has(msg.thread_id)) {
+            threadFirstMessages.set(msg.thread_id, msg);
+          }
+        }
+        // Track latest message time for each thread
+        if (msg.thread_id) {
+          const currentLatest = threadLatestTimes.get(msg.thread_id);
+          if (!currentLatest || new Date(msg.created_at) > new Date(currentLatest)) {
+            threadLatestTimes.set(msg.thread_id, msg.created_at);
+          }
+        }
+      });
+      
+      // Create chat previews for each thread
+      threadFirstMessages.forEach((firstMsg, threadId) => {
+        const room = firstMsg.rooms;
+        if (room) {
+          let title = 'New Chat';
+          if (firstMsg.content) {
+            const words = firstMsg.content.trim().split(/\s+/);
+            title = words.slice(0, 4).join(' ');
+            if (words.length > 4) title += '...';
+          }
+          
+          roomChatPreviews.push({
+            id: `room_session_${threadId}`,
+            firstMessage: title,
+            created_at: threadLatestTimes.get(threadId) || firstMsg.created_at,
+            type: 'room',
+            roomName: room.name,
+            shareCode: room.share_code,
+            chatSessionId: threadId
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching room messages:', error);
+    }
+
+    // Combine regular chats and room chats
+    const regularChatPreviews: ChatPreview[] = (chatData || []).map((session) => ({
       id: session.id,
       firstMessage:
         session.chat_title ??
         session.first_message[0]?.content ??
         'No messages yet',
-      created_at: session.created_at
+      created_at: session.created_at,
+      type: 'regular'
     }));
 
-    return chatPreviews;
+    // Combine and sort all chats by date
+    const allChats = [...regularChatPreviews, ...roomChatPreviews].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    return allChats.slice(offset, offset + limit);
   } catch (error) {
     console.error('Error fetching chat previews:', error);
     return [];

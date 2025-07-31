@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from 'react';
-import React, { useState, useRef } from 'react';
-import { useChat, type Message } from '@ai-sdk/react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { type Message } from '@ai-sdk/react';
 import { useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
 import { useUpload } from '../context/uploadContext';
@@ -115,6 +115,17 @@ const modelTypes = [
   { value: 'website', label: 'Website' }
 ];
 
+interface RoomContext {
+  shareCode: string;
+  roomName: string;
+  displayName: string;
+  sessionId: string;
+  participants: Array<{ displayName: string; joinedAt: string }>;
+  maxParticipants: number;
+  tier: 'free' | 'pro';
+  chatSessionId?: string;
+}
+
 const MessageInput = ({
   chatId,
   apiEndpoint,
@@ -124,7 +135,13 @@ const MessageInput = ({
   modelType,
   selectedOption,
   handleModelTypeChange,
-  handleOptionChange
+  handleOptionChange,
+  roomContext,
+  onTyping,
+  onSubmit,
+  isLoading,
+  input,
+  setInput
 }: {
   chatId: string;
   apiEndpoint: string;
@@ -135,38 +152,135 @@ const MessageInput = ({
   selectedOption: string;
   handleModelTypeChange: (value: string) => void;
   handleOptionChange: (value: string) => void;
+  roomContext?: RoomContext;
+  onTyping?: (isTyping: boolean) => void;
+  onSubmit: (message: string, attachments?: File[]) => void;
+  isLoading: boolean;
+  input: string;
+  setInput: (value: string) => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const onTypingRef = useRef(onTyping);
 
-  const { input, handleInputChange, handleSubmit, status, stop } = useChat({
-    id: 'chat', // Use the same ID to share state
-    api: apiEndpoint,
-    initialMessages: currentChat,
-    body: {
-      chatId: chatId,
-      option: option,
-      selectedBlobs: selectedBlobs
-    },
-    onFinish: async () => {
-      await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-      router.refresh();
-    },
-    onError: (error) => {
-      toast.error(error.message || 'An error occurred'); // This could lead to sensitive information exposure. A general error message is safer.
+  // Update the ref when onTyping changes
+  useEffect(() => {
+    onTypingRef.current = onTyping;
+  }, [onTyping]);
+
+  // Create a safe typing handler using ref
+  const safeOnTyping = useCallback((isTyping: boolean) => {
+    console.log('🔧 safeOnTyping called:', isTyping);
+    try {
+      const currentOnTyping = onTypingRef.current;
+      console.log('🔧 currentOnTyping exists:', !!currentOnTyping);
+      if (currentOnTyping && typeof currentOnTyping === 'function') {
+        console.log('🔧 Calling onTyping function');
+        currentOnTyping(isTyping);
+      } else {
+        console.log('🔧 No onTyping function available');
+      }
+    } catch (error) {
+      console.warn('❌ Error calling onTyping:', error);
     }
-  });
+  }, []); // No dependencies needed since we use ref
+
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Removed unused chatSessionIdForRoom calculation
+
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`📝 MESSAGE INPUT: Component initialized as controlled component`);
+  }
+  
+  // Handle input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    
+    // Handle typing indicator
+    if (onTypingRef.current) {
+      onTypingRef.current(true);
+      
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Set new timeout to stop typing
+      typingTimeoutRef.current = setTimeout(() => {
+        if (onTypingRef.current) {
+          onTypingRef.current(false);
+        }
+      }, 1000);
+    }
+  };
+
+  // Handle typing indicators for room chats
+  const handleTyping = useCallback(() => {
+    if (!roomContext) return;
+
+    console.log('🎯 handleTyping called for room:', roomContext.shareCode);
+    
+    // Start typing
+    safeOnTyping(true);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Stop typing after 1 second of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      console.log('⏰ Typing timeout - stopping typing');
+      safeOnTyping(false);
+    }, 1000);
+  }, [roomContext, safeOnTyping]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle typing indicators
+    if (roomContext) {
+      handleTyping();
+    }
+
     if (event.key === 'Enter' && event.shiftKey) {
       // Allow newline on Shift + Enter
     } else if (event.key === 'Enter') {
       // Prevent default behavior and submit form on Enter only
       event.preventDefault();
+      // Stop typing when sending message
+      if (roomContext) {
+        safeOnTyping(false);
+      }
       handleFormSubmit(event);
+    }
+  };
+
+  // Handle input change with typing indicators
+  const handleInputChangeWithTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleInputChange(e);
+    
+    // Handle typing indicators for room chats
+    if (roomContext) {
+      console.log('📝 Input changed, value length:', e.target.value.length);
+      if (e.target.value.length > 0) {
+        console.log('📝 Starting typing indicator');
+        handleTyping();
+      } else {
+        console.log('📝 Stopping typing indicator (empty input)');
+        safeOnTyping(false);
+      }
     }
   };
 
@@ -210,8 +324,10 @@ const MessageInput = ({
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && attachedFiles.length === 0) return;
+    if (isLoading) return; // Prevent double submission
 
-    if (chatId !== currentChatId) {
+    // Only navigate for regular chats, not room chats
+    if (chatId !== currentChatId && !chatId.startsWith('room_')) {
       const currentSearchParams = new URLSearchParams(window.location.search);
       let newUrl = `/chat/${chatId}`;
 
@@ -221,19 +337,21 @@ const MessageInput = ({
 
       router.push(newUrl, { scroll: false });
     }
-    // Handle the submission with experimental attachments
-    if (attachedFiles.length > 0) {
-      handleSubmit(e, {
-        experimental_attachments: createFileList(attachedFiles)
-      });
-
-      setAttachedFiles([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } else {
-      handleSubmit(e);
+    
+    // Submit through parent component
+    const submissionId = Math.random().toString(36).substring(7);
+    console.log(`🚀 [${submissionId}] CONTROLLED SUBMIT: "${input.substring(0, 50)}"`);
+    
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined);
+    
+    // Clear form
+    setInput('');
+    setAttachedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+    
+    console.log(`✅ [${submissionId}] CONTROLLED SUBMIT: Completed`);
   };
 
   return (
@@ -252,10 +370,10 @@ const MessageInput = ({
 
         <Textarea
           value={input}
-          onChange={handleInputChange}
+          onChange={handleInputChangeWithTyping}
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
-          disabled={status !== 'ready'}
+          disabled={isLoading}
           className="w-full pt-3 pb-1.5 min-h-0 max-h-40 resize-none border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none bg-transparent focus:bg-transparent dark:bg-transparent dark:focus:bg-transparent"
           rows={1}
         />
@@ -270,7 +388,7 @@ const MessageInput = ({
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 className="h-8 cursor-pointer text-xs rounded-md flex items-center gap-1.5 hover:bg-primary/5 dark:hover:bg-primary/10"
-                disabled={status !== 'ready'}
+                disabled={isLoading}
               >
                 <Paperclip className="h-3.5 w-3.5" />
                 <span>Attach file</span>
@@ -350,19 +468,11 @@ const MessageInput = ({
           </div>
 
           {/* Send button or spinner with matched sizing */}
-          {status !== 'ready' && status !== 'error' ? (
-            <div
-              className="h-8 w-8 sm:h-10 sm:w-10 mr-2 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background"
-              onClick={stop}
-            >
-              {/* Loading indicator (visible by default, hidden on hover) */}
-              <div className="flex items-center justify-center transition-opacity group-hover:opacity-0">
+          {isLoading ? (
+            <div className="h-8 w-8 sm:h-10 sm:w-10 mr-2 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background">
+              {/* Loading indicator */}
+              <div className="flex items-center justify-center">
                 <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary animate-spin" />
-              </div>
-
-              {/* Stop button (hidden by default, visible on hover) */}
-              <div className="absolute inset-0 hidden group-hover:flex items-center justify-center">
-                <Square size={14} className="text-red-500 sm:h-4 sm:w-4" />
               </div>
             </div>
           ) : (

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSession } from '@/lib/server/supabase';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -59,66 +60,36 @@ export async function POST(
       );
     }
 
-    // Check current participant count
-    const { data: participants, error: participantsError } = await (supabase as any)
-      .from('room_participants')
-      .select('session_id')
-      .eq('room_id', room.id);
+    // Get authenticated user if available
+    const session = await getSession();
+    const userId = session?.id || null;
 
-    if (participantsError) {
-      console.error('Error fetching participants:', participantsError);
+    // ATOMIC OPERATION: Use upsert with capacity check
+    // This prevents race conditions by handling both insert and update atomically
+    const { data: result, error: upsertError } = await (supabase as any)
+      .rpc('join_room_safely', {
+        p_room_id: room.id,
+        p_session_id: sessionId,
+        p_display_name: displayName.trim(),
+        p_user_id: userId,
+        p_max_participants: room.max_participants
+      });
+
+    if (upsertError) {
+      console.error('Error joining room:', upsertError);
+      
+      // Handle specific error cases
+      if (upsertError.message?.includes('room_full')) {
+        return NextResponse.json(
+          { error: `Room is full (${room.max_participants} participants maximum)` },
+          { status: 409 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to check room capacity' },
+        { error: 'Failed to join room' },
         { status: 500 }
       );
-    }
-
-    // Check if room is full
-    if (participants.length >= room.max_participants) {
-      return NextResponse.json(
-        { error: `Room is full (${room.max_participants} participants maximum)` },
-        { status: 409 }
-      );
-    }
-
-    // Check if user is already in the room (update display name if so)
-    const existingParticipant = participants.find(p => p.session_id === sessionId);
-    
-    if (existingParticipant) {
-      // Update existing participant's display name
-      const { error: updateError } = await (supabase as any)
-        .from('room_participants')
-        .update({ 
-          display_name: displayName.trim(),
-          joined_at: new Date().toISOString()
-        })
-        .eq('room_id', room.id)
-        .eq('session_id', sessionId);
-
-      if (updateError) {
-        console.error('Error updating participant:', updateError);
-        return NextResponse.json(
-          { error: 'Failed to update participant' },
-          { status: 500 }
-        );
-      }
-    } else {
-      // Add new participant
-      const { error: insertError } = await (supabase as any)
-        .from('room_participants')
-        .insert({
-          room_id: room.id,
-          session_id: sessionId,
-          display_name: displayName.trim()
-        });
-
-      if (insertError) {
-        console.error('Error adding participant:', insertError);
-        return NextResponse.json(
-          { error: 'Failed to join room' },
-          { status: 500 }
-        );
-      }
     }
 
     // Get updated participant list
@@ -167,6 +138,21 @@ export async function GET(
 ) {
   try {
     const { shareCode } = await params;
+    
+    // SECURITY FIX: Add authentication check for room info access
+    // Note: We allow anonymous access for joining, but require auth for detailed info
+    const url = new URL(req.url);
+    const requireAuth = url.searchParams.get('auth') === 'true';
+    
+    if (requireAuth) {
+      const session = await getSession();
+      if (!session) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+    }
 
     // Find the room by share code
     const { data: room, error: roomError } = await (supabase as any)

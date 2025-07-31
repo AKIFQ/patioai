@@ -44,31 +44,57 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasJoined, setHasJoined] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
 
   // Generate a session ID for this browser session
   const [sessionId] = useState(() => getOrCreateSessionId());
 
+  // Check if user is authenticated and get their info
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch('/api/auth/user');
+        if (response.ok) {
+          const userData = await response.json();
+          if (userData.user) {
+            setIsAuthenticated(true);
+            const authDisplayName = userData.user.user_metadata?.full_name || 
+                                  userData.user.email?.split('@')[0] || 
+                                  'User';
+            setDisplayName(authDisplayName);
+          }
+        }
+      } catch (error) {
+        console.log('User not authenticated');
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
+
   // Fetch room info on component mount and load stored display name
   useEffect(() => {
     fetchRoomInfo();
     
-    // Load stored display name if available
-    const storedName = getStoredDisplayName(shareCode);
-    if (storedName) {
-      setDisplayName(storedName);
-      
-      // If user has a stored session, try to auto-join them
-      const storedSessionId = getOrCreateSessionId();
-      if (storedSessionId) {
-        // Auto-redirect to chat if they have a stored session (with a small delay to avoid UI jumping)
-        setTimeout(() => {
-          router.push(`/chat/room/${shareCode}?displayName=${encodeURIComponent(storedName)}&sessionId=${encodeURIComponent(storedSessionId)}`);
-        }, 100);
-        return;
+    // Only check stored display name if user is not authenticated
+    if (!isAuthenticated) {
+      const storedName = getStoredDisplayName(shareCode);
+      if (storedName) {
+        setDisplayName(storedName);
+        
+        // If user has a stored session, try to auto-join them
+        const storedSessionId = getOrCreateSessionId();
+        if (storedSessionId) {
+          // Auto-redirect to chat if they have a stored session (with a small delay to avoid UI jumping)
+          setTimeout(() => {
+            router.push(`/chat/room/${shareCode}?displayName=${encodeURIComponent(storedName)}&sessionId=${encodeURIComponent(storedSessionId)}`);
+          }, 100);
+          return;
+        }
       }
     }
-  }, [shareCode, router]);
+  }, [shareCode, router, isAuthenticated]);
 
   const fetchRoomInfo = async () => {
     try {
@@ -106,6 +132,9 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
     setIsJoining(true);
     
     try {
+      // Use authenticated session ID if user is authenticated
+      const finalSessionId = isAuthenticated ? `auth_${sessionId}` : sessionId;
+      
       const response = await fetch(`/api/rooms/${shareCode}/join`, {
         method: 'POST',
         headers: {
@@ -113,7 +142,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
         },
         body: JSON.stringify({ 
           displayName: displayName.trim(),
-          sessionId
+          sessionId: finalSessionId
         }),
       });
 
@@ -127,11 +156,13 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
       setHasJoined(true);
       toast.success('Successfully joined the room!');
       
-      // Store display name for this session
-      storeDisplayName(shareCode, displayName.trim());
+      // Store display name for this session (only for non-authenticated users)
+      if (!isAuthenticated) {
+        storeDisplayName(shareCode, displayName.trim());
+      }
       
       // Redirect to chat interface with room context
-      router.push(`/chat/room/${shareCode}?displayName=${encodeURIComponent(displayName.trim())}&sessionId=${encodeURIComponent(sessionId)}`);
+      router.push(`/chat/room/${shareCode}?displayName=${encodeURIComponent(displayName.trim())}&sessionId=${encodeURIComponent(finalSessionId)}`);
       
     } catch (error) {
       console.error('Error joining room:', error);
@@ -259,9 +290,13 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
                     }
                   }}
                   maxLength={50}
+                  disabled={isAuthenticated}
                 />
                 <p className="text-xs text-muted-foreground">
-                  This is how others will see you in the chat
+                  {isAuthenticated 
+                    ? "Using your account name" 
+                    : "This is how others will see you in the chat"
+                  }
                 </p>
               </div>
               

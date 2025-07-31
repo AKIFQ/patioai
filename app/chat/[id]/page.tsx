@@ -50,6 +50,7 @@ export default async function ChatPage(props: {
     <div className="flex w-full h-full overflow-hidden">
       <div className="flex-1">
         <ChatComponent
+          key={id}
           currentChat={formattedMessages}
           chatId={id}
           initialModelType={modelType}

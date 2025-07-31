@@ -234,6 +234,113 @@ export type Database = {
         };
         Relationships: [];
       };
+      rooms: {
+        Row: {
+          id: string;
+          name: string;
+          share_code: string;
+          created_at: string;
+          expires_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          share_code: string;
+          created_at?: string;
+          expires_at: string;
+          created_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          share_code?: string;
+          created_at?: string;
+          expires_at?: string;
+          created_by?: string | null;
+        };
+        Relationships: [];
+      };
+      room_participants: {
+        Row: {
+          id: string;
+          room_id: string;
+          user_id: string | null;
+          session_id: string | null;
+          display_name: string;
+          joined_at: string;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          user_id?: string | null;
+          session_id?: string | null;
+          display_name: string;
+          joined_at?: string;
+        };
+        Update: {
+          id?: string;
+          room_id?: string;
+          user_id?: string | null;
+          session_id?: string | null;
+          display_name?: string;
+          joined_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'room_participants_room_id_fkey';
+            columns: ['room_id'];
+            isOneToOne: false;
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      room_messages: {
+        Row: {
+          id: string;
+          room_id: string;
+          thread_id: string;
+          sender_name: string;
+          content: string | null;
+          is_ai_response: boolean;
+          sources: Json | null;
+          reasoning: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          thread_id: string;
+          sender_name: string;
+          content?: string | null;
+          is_ai_response?: boolean;
+          sources?: Json | null;
+          reasoning?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          room_id?: string;
+          thread_id?: string;
+          sender_name?: string;
+          content?: string | null;
+          is_ai_response?: boolean;
+          sources?: Json | null;
+          reasoning?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'room_messages_room_id_fkey';
+            columns: ['room_id'];
+            isOneToOne: false;
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
     };
     Views: {
       [_ in never]: never;

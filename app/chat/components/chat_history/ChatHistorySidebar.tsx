@@ -3,8 +3,10 @@ import React, { type FC, useState, useCallback } from 'react';
 import { fetchMoreChatPreviews } from '../../actions';
 import { useParams, useSearchParams } from 'next/navigation';
 import useSWRInfinite from 'swr/infinite';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import Image from 'next/image';
 import {
   Tooltip,
   TooltipContent,
@@ -39,6 +41,7 @@ import FilesSection from './FilesSection';
 import RoomsSection from './RoomsSection';
 import UploadPage from './FileUpload';
 import CreateRoomModal from '../CreateRoomModal';
+import JoinRoomModal from '../JoinRoomModal';
 import ChatSidebarFooter from './SidebarFooter';
 
 type UserInfo = Pick<Tables<'users'>, 'full_name' | 'email' | 'id'>;
@@ -84,19 +87,41 @@ interface CombinedDrawerProps {
   categorizedChats: CategorizedChats;
   documents: UserDocument[];
   rooms?: RoomPreview[];
+  roomChatsData?: any[];
 }
+
+// Function to fetch rooms
+const fetchRooms = async (): Promise<RoomPreview[]> => {
+  const response = await fetch('/api/rooms');
+  if (!response.ok) {
+    throw new Error('Failed to fetch rooms');
+  }
+  const data = await response.json();
+  return data.rooms || [];
+};
 
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
   userInfo,
   initialChatPreviews,
   categorizedChats,
   documents,
-  rooms = []
+  rooms = [],
+  roomChatsData = []
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
-  const [roomChatHistory, setRoomChatHistory] = useState<any[]>([]);
-  const [isLoadingRoomHistory, setIsLoadingRoomHistory] = useState(false);
+  const [isJoinRoomModalOpen, setIsJoinRoomModalOpen] = useState(false);
+
+  // Use SWR to manage room data with fallback to initial rooms
+  const { data: currentRooms, mutate: mutateRooms, isLoading: isLoadingRooms } = useSWR(
+    userInfo.email ? 'rooms' : null,
+    fetchRooms,
+    {
+      fallbackData: rooms,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false
+    }
+  );
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -143,36 +168,124 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     }
   }, [setOpenMobile]);
 
-  // Fetch room chat history when room is selected
-  const fetchRoomChatHistory = useCallback(async (shareCode: string) => {
-    setIsLoadingRoomHistory(true);
-    try {
-      const response = await fetch(`/api/rooms/${shareCode}/messages`);
-      if (response.ok) {
-        const messages = await response.json();
-        setRoomChatHistory(messages);
-      } else {
-        setRoomChatHistory([]);
-      }
-    } catch (error) {
-      console.error('Error fetching room chat history:', error);
-      setRoomChatHistory([]);
-    } finally {
-      setIsLoadingRoomHistory(false);
-    }
-  }, []);
+  // Process room threads based on current context
+  const processedThreads = React.useMemo(() => {
+    if (!currentRoomShareCode) {
+      // Home context: Show all room threads grouped by room
+      const roomsLookup = new Map();
+      (currentRooms || []).forEach((room: any) => {
+        roomsLookup.set(room.id, room);
+      });
 
-  // Fetch room history when room changes
-  React.useEffect(() => {
-    if (currentRoomShareCode) {
-      fetchRoomChatHistory(currentRoomShareCode);
+      const threadFirstMessages = new Map();
+      const threadLatestTimes = new Map();
+      
+      // Group room messages by thread_id and find the first user message for each thread
+      (roomChatsData || []).forEach((msg: any) => {
+        if (msg.thread_id && !msg.is_ai_response) {
+          if (!threadFirstMessages.has(msg.thread_id)) {
+            threadFirstMessages.set(msg.thread_id, msg);
+          }
+        }
+        // Track latest message time for each thread
+        if (msg.thread_id) {
+          const currentLatest = threadLatestTimes.get(msg.thread_id);
+          if (!currentLatest || new Date(msg.created_at) > new Date(currentLatest)) {
+            threadLatestTimes.set(msg.thread_id, msg.created_at);
+          }
+        }
+      });
+      
+      // Create sidebar entries for each thread
+      const allRoomThreads: any[] = [];
+      threadFirstMessages.forEach((firstMsg, threadId) => {
+        const roomData = roomsLookup.get(firstMsg.room_id);
+        
+        if (roomData && roomData.shareCode) {
+          // Use the first few words of the first user message as the title
+          let title = 'New Chat';
+          if (firstMsg.content) {
+            const words = firstMsg.content.trim().split(/\s+/);
+            title = words.slice(0, 4).join(' ');
+            if (words.length > 4) title += '...';
+          }
+          
+          allRoomThreads.push({
+            id: `room_thread_${threadId}`,
+            title,
+            created_at: threadLatestTimes.get(threadId) || firstMsg.created_at,
+            roomName: roomData.name,
+            shareCode: roomData.shareCode,
+            threadId: threadId
+          });
+        }
+      });
+
+      return allRoomThreads.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     } else {
-      setRoomChatHistory([]);
+      // Room context: Show only threads for current room
+      const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
+      
+      if (!currentRoom) {
+        return [];
+      }
+
+      const threadFirstMessages = new Map();
+      const threadLatestTimes = new Map();
+      
+      // Filter messages for current room only
+      (roomChatsData || [])
+        .filter((msg: any) => msg.room_id === currentRoom.id)
+        .forEach((msg: any) => {
+          if (msg.thread_id && !msg.is_ai_response) {
+            if (!threadFirstMessages.has(msg.thread_id)) {
+              threadFirstMessages.set(msg.thread_id, msg);
+            }
+          }
+          // Track latest message time for each thread
+          if (msg.thread_id) {
+            const currentLatest = threadLatestTimes.get(msg.thread_id);
+            if (!currentLatest || new Date(msg.created_at) > new Date(currentLatest)) {
+              threadLatestTimes.set(msg.thread_id, msg.created_at);
+            }
+          }
+        });
+      
+      // Create sidebar entries for current room's threads
+      const roomThreads: any[] = [];
+      threadFirstMessages.forEach((firstMsg, threadId) => {
+        // Use the first few words of the first user message as the title
+        let title = 'New Chat';
+        if (firstMsg.content) {
+          const words = firstMsg.content.trim().split(/\s+/);
+          title = words.slice(0, 4).join(' ');
+          if (words.length > 4) title += '...';
+        }
+        
+        roomThreads.push({
+          id: `room_thread_${threadId}`,
+          title,
+          created_at: threadLatestTimes.get(threadId) || firstMsg.created_at,
+          threadId: threadId,
+          senderName: firstMsg.sender_name
+        });
+      });
+
+      return roomThreads.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }
-  }, [currentRoomShareCode, fetchRoomChatHistory]);
+  }, [currentRoomShareCode, roomChatsData, currentRooms]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
+  };
+
+  const handleRoomSelect = () => {
+    // Room selection is handled by navigation
+    handleChatSelect();
   };
 
   // Minimized sidebar when closed
@@ -254,23 +367,50 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     );
   }
 
-  const handleRoomSelect = () => {
-    // Room selection is handled by navigation
-    handleChatSelect();
-  };
+  const handleRoomCreated = useCallback(() => {
+    // Refresh the rooms list when a new room is created
+    mutateRooms();
+  }, [mutateRooms]);
 
   return (
     <>
       <CreateRoomModal 
         isOpen={isCreateGroupModalOpen}
         onClose={() => setIsCreateGroupModalOpen(false)}
+        onRoomCreated={handleRoomCreated}
+      />
+      
+      <JoinRoomModal 
+        isOpen={isJoinRoomModalOpen}
+        onClose={() => setIsJoinRoomModalOpen(false)}
       />
       <Sidebar
         collapsible="none"
         className="h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col"
       >
-        <SidebarHeader className="p-4 border-b">
-          {/* Home Chat Button - At the very top */}
+        <SidebarHeader className="px-3 !py-0 !gap-0 border-b">
+          {/* PatioAI Logo - At the very top */}
+          <div className="flex items-center justify-between ">
+            <Image
+              src="/logos/logo-horizontal.png"
+              alt="PatioAI"
+              width={90}
+              height={40}
+              priority
+              className="rounded-lg"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Close sidebar"
+            >
+              <PanelLeftIcon size={16} />
+            </Button>
+          </div>
+          
+          {/* Home Chat Button - Below logo */}
           <Button 
             asChild
             variant="outline"
@@ -286,26 +426,28 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           {/* ROOMS Header with close button */}
           <div className="flex items-center justify-between w-full mb-2">
             <h2 className="text-sm font-semibold">ROOMS</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="text-muted-foreground hover:text-foreground hidden sm:block"
-              aria-label="Close sidebar"
-            >
-              <PanelLeftIcon size={16} />
-            </Button>
           </div>
           
-          {/* New Room Button - Below ROOMS header */}
-          <Button 
-            onClick={() => setIsCreateGroupModalOpen(true)}
-            className="w-full"
-            size="sm"
-          >
-            <Users size={16} className="mr-2" />
-            New Room
-          </Button>
+          {/* Room Action Buttons - Below ROOMS header */}
+          <div className="flex items-center space-x-2 px-3 mb-2">
+            <Button
+              onClick={() => setIsCreateGroupModalOpen(true)}
+              className="flex-1"
+              size="sm"
+            >
+              <Users size={16} className="mr-1" />
+              New
+            </Button>
+            <Button
+              onClick={() => setIsJoinRoomModalOpen(true)}
+              className="flex-1"
+              size="sm"
+              variant="outline"
+            >
+              <Users size={16} className="mr-1" />
+              Join
+            </Button>
+          </div>
         </SidebarHeader>
 
         {/* Rooms List - Top Section (Scrollable) */}
@@ -318,17 +460,22 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   <Link href="/signin">Sign in</Link>
                 </Button>
               </div>
-            ) : rooms.length === 0 ? (
+            ) : isLoadingRooms ? (
+              <div className="text-center p-4">
+                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Loading rooms...</p>
+              </div>
+            ) : currentRooms.length === 0 ? (
               <div className="text-center p-4">
                 <p className="text-sm text-muted-foreground">No rooms yet</p>
                 <p className="text-xs text-muted-foreground mt-1">Create your first room above</p>
               </div>
             ) : (
               <div className="space-y-1">
-                {rooms.map((room) => (
+                {currentRooms.map((room) => (
                   <Link
                     key={room.id}
-                    href={`/room/${room.shareCode}`}
+                    href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}`}
                     onClick={handleRoomSelect}
                     className={`block w-full text-left p-3 rounded-lg border transition-colors ${
                       currentRoomShareCode === room.shareCode
@@ -355,63 +502,46 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         </div>
 
         {/* Chat History - Bottom Section (Scrollable) */}
-        <div className="h-1/2 flex flex-col">
+        <div className="h-[40%] flex flex-col">
           <div className="p-2 border-b bg-muted/30">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {currentRoomShareCode ? 'ROOM CHATS' : 'CHATS'}
+              {currentRoomShareCode ? 'ROOM THREADS' : 'CHATS & THREADS'}
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto">
             {currentRoomShareCode ? (
               <div className="p-2">
-                {isLoadingRoomHistory ? (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span className="text-sm text-muted-foreground">Loading messages...</span>
-                  </div>
-                ) : roomChatHistory.length === 0 ? (
+                {processedThreads.length === 0 ? (
                   <div className="text-center p-4">
-                    <p className="text-sm text-muted-foreground">No messages yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">Start chatting in the room!</p>
+                    <p className="text-sm text-muted-foreground">No chat threads yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Start a new conversation!</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {roomChatHistory.slice(-10).map((message: any) => (
-                      <div
-                        key={message.id}
-                        className="p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                  <div className="space-y-1">
+                    {processedThreads.map((thread: any) => (
+                      <Link
+                        key={thread.id}
+                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.threadId}`}
+                        onClick={handleChatSelect}
+                        className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                       >
                         <div className="text-xs text-muted-foreground mb-1">
-                          {new Date(message.created_at).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
+                          {new Date(thread.created_at).toLocaleDateString([], { 
+                            month: 'short',
+                            day: 'numeric'
+                          })} {thread.senderName && `• ${thread.senderName}`}
                         </div>
-                        <div className="text-sm">
-                          {message.isAI ? (
-                            <div className="text-blue-600 dark:text-blue-400">
-                              <span className="font-medium">AI:</span> {message.content.substring(0, 100)}
-                              {message.content.length > 100 && '...'}
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="font-medium text-green-600 dark:text-green-400">
-                                {message.senderName}:
-                              </span>{' '}
-                              <span className="text-muted-foreground">
-                                {message.content.replace(`${message.senderName}: `, '').substring(0, 80)}
-                                {message.content.length > 80 && '...'}
-                              </span>
-                            </div>
-                          )}
+                        <div className="text-sm text-foreground">
+                          {thread.title}
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}
               </div>
             ) : (
               <div className="p-2">
+                {/* Personal Chats */}
                 <ChatHistorySection
                   initialChatPreviews={initialChatPreviews}
                   categorizedChats={categorizedChats}
@@ -420,6 +550,37 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   onChatSelect={handleChatSelect}
                   mutateChatPreviews={mutateChatPreviews}
                 />
+                
+                {/* Room Threads */}
+                {processedThreads.length > 0 && (
+                  <>
+                    <div className="mt-4 mb-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        ROOM THREADS
+                      </h4>
+                    </div>
+                    <div className="space-y-1">
+                      {processedThreads.map((thread: any) => (
+                        <Link
+                          key={thread.id}
+                          href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.threadId}`}
+                          onClick={handleChatSelect}
+                          className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="text-xs text-muted-foreground mb-1">
+                            {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], { 
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </div>
+                          <div className="text-sm text-foreground">
+                            {thread.title}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
