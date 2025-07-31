@@ -57,4 +57,7 @@ Desktop.ini
 
 # typescript
 *.tsbuildinfo
-dist/ 
+dist/
+
+# kiro
+.kiro/ 
