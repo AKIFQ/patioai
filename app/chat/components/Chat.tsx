@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useOptimistic, startTransition, useEffect, useCallback } from 'react';
+import React, { useState, useOptimistic, startTransition, useEffect, useCallback, useMemo } from 'react';
 import { useChat, type Message } from '@ai-sdk/react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
@@ -134,8 +134,20 @@ const ChatComponent: React.FC<ChatProps> = ({
   const apiEndpoint = getApiEndpoint();
 
   // Get messages from chat
-  const { messages, status, append, setMessages } = useChat({
-    id: roomContext ? `room_${roomContext.shareCode}` : chatId,
+  const chatId_debug = roomContext ? `room_${roomContext.shareCode}` : chatId;
+  
+  // Track component lifecycle (only in development)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🎬 CHAT COMPONENT: Component mounted for ${chatId_debug}`);
+      return () => {
+        console.log(`🎬 CHAT COMPONENT: Component unmounting for ${chatId_debug}`);
+      };
+    }
+  }, [chatId_debug]);
+  
+  const { messages, status, append, setMessages, input, handleInputChange } = useChat({
+    id: chatId_debug,
     api: apiEndpoint,
     experimental_throttle: 50,
     initialMessages: currentChat,
@@ -148,18 +160,42 @@ const ChatComponent: React.FC<ChatProps> = ({
       option: optimisticOption
     },
     onFinish: async () => {
+      console.log(`✅ CHAT: onFinish called for ${chatId_debug}`);
       // Always refresh chat previews to update sidebar
       await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
     },
 
     onError: (error) => {
+      console.log(`❌ CHAT: onError called for ${chatId_debug}:`, error.message);
       toast.error(error.message || 'An error occurred'); // This could lead to sensitive information exposure. A general error message is safer.
     }
   });
 
+  // Handle message submission from MessageInput
+  const handleSubmit = useCallback(async (message: string, attachments?: File[]) => {
+    console.log(`🚀 CHAT: Handling submission: "${message.substring(0, 50)}"`);
+    
+    if (attachments && attachments.length > 0) {
+      // Handle attachments
+      const fileList = new DataTransfer();
+      attachments.forEach(file => fileList.items.add(file));
+      
+      await append({
+        role: 'user',
+        content: message,
+        experimental_attachments: fileList.files
+      });
+    } else {
+      await append({
+        role: 'user',
+        content: message
+      });
+    }
+  }, [append]);
+
   const { mutate } = useSWRConfig();
 
-  // Real-time functionality for room chats
+  // Real-time functionality for room chats - memoized to prevent re-renders
   const handleNewMessage = useCallback((newMessage: Message) => {
     console.log('🏠 Chat received RT message:', newMessage.role, 'from', newMessage.content?.substring(0, 30));
     // Only add if it's not already in the messages (avoid duplicates)
@@ -176,24 +212,27 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   const handleTypingUpdate = useCallback((users: string[]) => {
     console.log('👥 Typing users updated in Chat:', users);
-    console.log('Current user:', roomContext?.displayName);
     setTypingUsers(users);
-  }, [roomContext?.displayName]);
+  }, []);
+
+  // Memoize realtime hook props to prevent unnecessary re-initializations
+  const realtimeProps = useMemo(() => {
+    if (!roomContext) return null;
+    return {
+      shareCode: roomContext.shareCode,
+      displayName: roomContext.displayName,
+      chatSessionId: roomContext.chatSessionId,
+      onNewMessage: handleNewMessage,
+      onTypingUpdate: handleTypingUpdate
+    };
+  }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate]);
 
   // Initialize real-time hook with safe fallbacks
-  const realtimeHook = roomContext ? useRoomRealtime({
-    shareCode: roomContext.shareCode,
-    displayName: roomContext.displayName,
-    chatSessionId: roomContext.chatSessionId,
-    onNewMessage: handleNewMessage,
-    onTypingUpdate: handleTypingUpdate
-  }) : null;
+  const realtimeHook = realtimeProps ? useRoomRealtime(realtimeProps) : null;
 
   const { 
     isConnected = false, 
-    connectionStatus = 'DISCONNECTED', 
-    broadcastTyping = undefined, 
-    stopTyping = undefined 
+    broadcastTyping = undefined
   } = realtimeHook || {};
 
   // Initialize realtime messages with current chat messages
@@ -628,6 +667,10 @@ const ChatComponent: React.FC<ChatProps> = ({
           handleOptionChange={handleOptionChange}
           roomContext={roomContext}
           onTyping={roomContext && typeof broadcastTyping === 'function' ? broadcastTyping : undefined}
+          onSubmit={handleSubmit}
+          isLoading={status === 'streaming' || status === 'submitted'}
+          input={input}
+          setInput={(value: string) => handleInputChange({ target: { value } } as any)}
         />
       </div>
     </div>

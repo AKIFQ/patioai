@@ -89,8 +89,16 @@ async function saveRoomMessage(
   sources?: any,
   reasoning?: string
 ): Promise<boolean> {
+  const messageId = Math.random().toString(36).substring(7);
+  console.log(`💾 [${messageId}] SAVING MESSAGE:`, {
+    sender: senderName,
+    isAI: isAiResponse,
+    contentPreview: content.substring(0, 30),
+    threadId: threadId.substring(0, 8) + '...'
+  });
+
   try {
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from('room_messages')
       .insert({
         room_id: roomId,
@@ -104,14 +112,18 @@ async function saveRoomMessage(
       .select();
 
     if (error) {
-      console.error('Error saving message to thread:', error);
+      console.error(`❌ [${messageId}] Error saving message:`, error);
       return false;
     }
 
-    console.log('Message saved to thread:', threadId);
+    console.log(`✅ [${messageId}] Message saved successfully:`, {
+      dbId: data?.[0]?.id,
+      sender: senderName,
+      isAI: isAiResponse
+    });
     return true;
   } catch (error) {
-    console.error('Exception saving room message:', error);
+    console.error(`💥 [${messageId}] Exception saving message:`, error);
     return false;
   }
 }
@@ -122,9 +134,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ shareCode: string }> }
 ) {
+  const requestId = Math.random().toString(36).substring(7);
+  console.log(`🚀 [${requestId}] API CALL START - Room chat request received`);
+
   try {
     const { shareCode } = await params;
-    
+    console.log(`📝 [${requestId}] Share code: ${shareCode}`);
+
     // Try to get session but don't fail if user is anonymous
     let session = null;
     try {
@@ -140,11 +156,14 @@ export async function POST(
     const body = await req.json();
     const { messages, displayName, option, threadId } = body;
 
-    console.log('Room chat API received:', {
+    console.log(`📨 [${requestId}] Room chat API received:`, {
       shareCode,
       displayName,
       threadId,
-      messagesCount: messages?.length
+      option,
+      messagesCount: messages?.length,
+      lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50),
+      fullBody: JSON.stringify(body, null, 2)
     });
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -208,13 +227,16 @@ export async function POST(
     }
 
     // Simplified: Save message directly to thread
+    console.log(`💾 [${requestId}] Saving user message: "${message.substring(0, 50)}"`);
     const messageSaved = await saveRoomMessage(room.id, threadId, displayName, message, false);
     if (!messageSaved) {
+      console.log(`❌ [${requestId}] Failed to save user message`);
       return new NextResponse('Failed to save message', {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    console.log(`✅ [${requestId}] User message saved successfully`);
 
     // Simplified: Skip daily usage tracking for now
 
@@ -287,8 +309,10 @@ export async function POST(
       onFinish: async (event) => {
         const { text, reasoning, sources } = event;
 
+        console.log(`🤖 [${requestId}] AI response generated, saving: "${text.substring(0, 50)}..."`);
+
         // Save AI response to thread
-        await saveRoomMessage(
+        const aiSaved = await saveRoomMessage(
           room.id,
           threadId,
           'AI Assistant',
@@ -298,7 +322,11 @@ export async function POST(
           reasoning
         );
 
-        console.log('Room message saved:', room.id);
+        if (aiSaved) {
+          console.log(`✅ [${requestId}] AI response saved successfully`);
+        } else {
+          console.log(`❌ [${requestId}] Failed to save AI response`);
+        }
       },
       onError: async (error) => {
         console.error('Error processing room chat:', error);
@@ -307,6 +335,7 @@ export async function POST(
 
     result.consumeStream();
 
+    console.log(`🎯 [${requestId}] Returning streaming response`);
     return result.toDataStreamResponse({
       sendReasoning: false,
       sendSources: true,
@@ -314,10 +343,7 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('Error in room chat:', error);
-
-    // Simplified error logging
-    console.error('Room chat error:', error);
+    console.error(`💥 [${requestId}] Error in room chat:`, error);
 
     return new NextResponse('Internal server error', {
       status: 500,

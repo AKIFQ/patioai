@@ -60,6 +60,7 @@ export function useRoomRealtime({
     if (!shareCode || !displayName) return;
 
     let roomUuid: string | null = null;
+    let mounted = true; // Track if component is still mounted
 
     // First get the room UUID from share code
     const initializeRealtime = async () => {
@@ -74,6 +75,8 @@ export function useRoomRealtime({
           console.error('Room not found for share code:', shareCode, roomError);
           return;
         }
+
+        if (!mounted) return; // Don't continue if component unmounted
 
         roomUuid = room.id;
 
@@ -270,8 +273,11 @@ export function useRoomRealtime({
 
     initializeRealtime();
 
-    return cleanup;
-  }, [shareCode, displayName, onNewMessage, onTypingUpdate, onParticipantChange, cleanup, chatSessionId]);
+    return () => {
+      mounted = false;
+      cleanup();
+    };
+  }, [shareCode, displayName, chatSessionId, cleanup]);
 
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {

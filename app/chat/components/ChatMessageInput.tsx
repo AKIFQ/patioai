@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from 'react';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useChat, type Message } from '@ai-sdk/react';
+import { type Message } from '@ai-sdk/react';
 import { useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
 import { useUpload } from '../context/uploadContext';
@@ -137,7 +137,11 @@ const MessageInput = ({
   handleModelTypeChange,
   handleOptionChange,
   roomContext,
-  onTyping
+  onTyping,
+  onSubmit,
+  isLoading,
+  input,
+  setInput
 }: {
   chatId: string;
   apiEndpoint: string;
@@ -150,6 +154,10 @@ const MessageInput = ({
   handleOptionChange: (value: string) => void;
   roomContext?: RoomContext;
   onTyping?: (isTyping: boolean) => void;
+  onSubmit: (message: string, attachments?: File[]) => void;
+  isLoading: boolean;
+  input: string;
+  setInput: (value: string) => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
@@ -192,39 +200,32 @@ const MessageInput = ({
 
   // Removed unused chatSessionIdForRoom calculation
 
-  const { input, handleInputChange, handleSubmit, status, stop } = useChat({
-    id: roomContext ? `room_${roomContext.shareCode}` : chatId, // Match the Chat component's ID
-    api: apiEndpoint,
-    initialMessages: currentChat,
-    body: roomContext ? {
-      displayName: roomContext.displayName,
-      option: option,
-      threadId: roomContext.chatSessionId
-    } : {
-      chatId: chatId,
-      option: option,
-      selectedBlobs: selectedBlobs
-    },
-    onFinish: async () => {
-      // Always refresh chat previews to update sidebar with new threads
-      await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`📝 MESSAGE INPUT: Component initialized as controlled component`);
+  }
+  
+  // Handle input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    
+    // Handle typing indicator
+    if (onTypingRef.current) {
+      onTypingRef.current(true);
       
-      // Only refresh page for regular chats, not room chats
-      if (!roomContext) {
-        router.refresh();
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
       }
-    },
-    onError: (error) => {
-      console.error('Chat error:', error);
-      if (error.message.includes('quota')) {
-        toast.error('OpenAI quota exceeded. Please check your billing.');
-      } else if (error.message.includes('rate limit')) {
-        toast.error('Rate limit exceeded. Please wait a moment.');
-      } else {
-        toast.error(error.message || 'An error occurred');
-      }
+      
+      // Set new timeout to stop typing
+      typingTimeoutRef.current = setTimeout(() => {
+        if (onTypingRef.current) {
+          onTypingRef.current(false);
+        }
+      }, 1000);
     }
-  });
+  };
 
   // Handle typing indicators for room chats
   const handleTyping = useCallback(() => {
@@ -323,6 +324,7 @@ const MessageInput = ({
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && attachedFiles.length === 0) return;
+    if (isLoading) return; // Prevent double submission
 
     // Only navigate for regular chats, not room chats
     if (chatId !== currentChatId && !chatId.startsWith('room_')) {
@@ -335,19 +337,21 @@ const MessageInput = ({
 
       router.push(newUrl, { scroll: false });
     }
-    // Handle the submission with experimental attachments
-    if (attachedFiles.length > 0) {
-      handleSubmit(e, {
-        experimental_attachments: createFileList(attachedFiles)
-      });
-
-      setAttachedFiles([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } else {
-      handleSubmit(e);
+    
+    // Submit through parent component
+    const submissionId = Math.random().toString(36).substring(7);
+    console.log(`🚀 [${submissionId}] CONTROLLED SUBMIT: "${input.substring(0, 50)}"`);
+    
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined);
+    
+    // Clear form
+    setInput('');
+    setAttachedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+    
+    console.log(`✅ [${submissionId}] CONTROLLED SUBMIT: Completed`);
   };
 
   return (
@@ -369,7 +373,7 @@ const MessageInput = ({
           onChange={handleInputChangeWithTyping}
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
-          disabled={status !== 'ready'}
+          disabled={isLoading}
           className="w-full pt-3 pb-1.5 min-h-0 max-h-40 resize-none border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none bg-transparent focus:bg-transparent dark:bg-transparent dark:focus:bg-transparent"
           rows={1}
         />
@@ -384,7 +388,7 @@ const MessageInput = ({
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 className="h-8 cursor-pointer text-xs rounded-md flex items-center gap-1.5 hover:bg-primary/5 dark:hover:bg-primary/10"
-                disabled={status !== 'ready'}
+                disabled={isLoading}
               >
                 <Paperclip className="h-3.5 w-3.5" />
                 <span>Attach file</span>
@@ -464,19 +468,11 @@ const MessageInput = ({
           </div>
 
           {/* Send button or spinner with matched sizing */}
-          {status !== 'ready' && status !== 'error' ? (
-            <div
-              className="h-8 w-8 sm:h-10 sm:w-10 mr-2 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background"
-              onClick={stop}
-            >
-              {/* Loading indicator (visible by default, hidden on hover) */}
-              <div className="flex items-center justify-center transition-opacity group-hover:opacity-0">
+          {isLoading ? (
+            <div className="h-8 w-8 sm:h-10 sm:w-10 mr-2 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background">
+              {/* Loading indicator */}
+              <div className="flex items-center justify-center">
                 <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary animate-spin" />
-              </div>
-
-              {/* Stop button (hidden by default, visible on hover) */}
-              <div className="absolute inset-0 hidden group-hover:flex items-center justify-center">
-                <Square size={14} className="text-red-500 sm:h-4 sm:w-4" />
               </div>
             </div>
           ) : (

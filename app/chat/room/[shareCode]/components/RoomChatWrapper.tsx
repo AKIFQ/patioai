@@ -74,8 +74,8 @@ export default function RoomChatWrapper({
       window.history.replaceState({}, '', newUrl);
     }
 
-    // Create simplified room context
-    const context: RoomContext = {
+    // Only update context if it's actually different to prevent re-renders
+    const newContext: RoomContext = {
       shareCode,
       roomName: roomInfo.room.name,
       displayName,
@@ -88,14 +88,23 @@ export default function RoomChatWrapper({
       chatSessionId: finalThreadId
     };
 
-    setRoomContext(context);
-    setIsInitialized(true);
-
-    console.log('🎯 Room initialized:', {
-      shareCode,
-      threadId: finalThreadId,
-      displayName
+    // Only update if context has actually changed
+    setRoomContext(prevContext => {
+      if (!prevContext || 
+          prevContext.shareCode !== newContext.shareCode ||
+          prevContext.displayName !== newContext.displayName ||
+          prevContext.chatSessionId !== newContext.chatSessionId) {
+        console.log('🎯 Room context updated:', {
+          shareCode,
+          threadId: finalThreadId,
+          displayName
+        });
+        return newContext;
+      }
+      return prevContext;
     });
+    
+    setIsInitialized(true);
 
   }, [shareCode, searchParams, router, roomInfo]);
 
@@ -115,7 +124,7 @@ export default function RoomChatWrapper({
     <div className="flex w-full h-full overflow-hidden">
       <div className="flex-1">
         <ChatComponent
-          key={`room_${shareCode}_${roomContext.sessionId}_${roomContext.chatSessionId}`}
+          key={`room_${shareCode}_${roomContext.chatSessionId}`}
           currentChat={initialMessages}
           chatId={`room_session_${roomContext.chatSessionId}`}
           initialModelType={initialModelType}

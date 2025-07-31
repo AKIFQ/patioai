@@ -1,5 +1,0 @@
--- Step 1: Disable RLS temporarily to avoid recursion
-ALTER TABLE room_participants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE room_messages DISABLE ROW LEVEL SECURITY;
-ALTER TABLE room_chat_sessions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE rooms DISABLE ROW LEVEL SECURITY;
