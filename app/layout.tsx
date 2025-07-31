@@ -28,7 +28,9 @@ export const metadata: Metadata = {
   publisher: 'PatioAI',
   icons: {
     icon: [
-      { url: '/icon.png', sizes: '96x96', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
+      { url: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' }
     ],
@@ -36,7 +38,7 @@ export const metadata: Metadata = {
       { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
     ],
     shortcut: [
-      { url: '/icon.png', type: 'image/png' }
+      { url: '/favicon.ico', type: 'image/x-icon' }
     ]
   },
   manifest: '/site.webmanifest',

@@ -227,7 +227,10 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     } else {
       // Room context: Show only threads for current room
       const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
-      if (!currentRoom) return [];
+      
+      if (!currentRoom) {
+        return [];
+      }
 
       const threadFirstMessages = new Map();
       const threadLatestTimes = new Map();
@@ -278,6 +281,11 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
+  };
+
+  const handleRoomSelect = () => {
+    // Room selection is handled by navigation
+    handleChatSelect();
   };
 
   // Minimized sidebar when closed
@@ -359,11 +367,6 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     );
   }
 
-  const handleRoomSelect = () => {
-    // Room selection is handled by navigation
-    handleChatSelect();
-  };
-
   const handleRoomCreated = useCallback(() => {
     // Refresh the rooms list when a new room is created
     mutateRooms();
@@ -387,12 +390,12 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       >
         <SidebarHeader className="px-3 !py-0 !gap-0 border-b">
           {/* PatioAI Logo - At the very top */}
-          <div className="flex items-center justify-between px-3 py-0 mb-0">
+          <div className="flex items-center justify-between ">
             <Image
-              src="/logos/transparent-logo.png"
+              src="/logos/logo-horizontal.png"
               alt="PatioAI"
-              width={144}
-              height={44}
+              width={90}
+              height={40}
               priority
               className="rounded-lg"
             />
