@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get rooms with accurate participant counts using database function
-    let roomsData = [];
+    let roomsData: any[] = [];
 
     try {
       const { data, error } = await (supabase as any)

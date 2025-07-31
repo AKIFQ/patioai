@@ -66,7 +66,7 @@ const fetchUserData = async () => {
       .order('created_at', { ascending: false });
 
     // IMPROVED: Get rooms with accurate participant counts using database function
-    let roomsData = [];
+    let roomsData: any[] = [];
 
     try {
       const { data, error } = await (supabase as any)
@@ -99,6 +99,7 @@ const fetchUserData = async () => {
     // Note: We don't combine room errors since they're handled gracefully above
 
     // PERFORMANCE FIX: Fetch room chats with single optimized query
+    // Note: This will be filtered by context in the sidebar component
     let roomChatsData = [];
     let roomChatsError = null;
 
@@ -106,7 +107,7 @@ const fetchUserData = async () => {
       const userRoomIds = roomsData.map((room: any) => room.id);
 
       try {
-        // Single query to get the most recent message per room
+        // Get all room messages to properly group by thread
         const { data, error } = await (supabase as any)
           .from('room_messages')
           .select(`
@@ -115,11 +116,11 @@ const fetchUserData = async () => {
             content,
             sender_name,
             is_ai_response,
-            room_id
+            room_id,
+            thread_id
           `)
           .in('room_id', userRoomIds)
-          .order('created_at', { ascending: false })
-          .limit(50); // Get more messages to ensure we have recent ones per room
+          .order('created_at', { ascending: true }); // Order by oldest first to get first message per thread
 
         roomChatsData = data || [];
         roomChatsError = error;
@@ -151,44 +152,9 @@ const fetchUserData = async () => {
       type: 'regular' as const
     }));
 
-    // Transform room chat data and group by chat session
-    const roomChatPreviews = [];
-    const roomChatsGrouped = new Map();
-
-    // Create a lookup map for room data
-    const roomsLookup = new Map();
-    (roomsData || []).forEach((room: any) => {
-      roomsLookup.set(room.id, room);
-    });
-
-    // Group room messages by chat session
-    (roomChatsData || []).forEach((msg: any) => {
-      const roomData = roomsLookup.get(msg.room_id);
-      
-      if (roomData && roomData.share_code) {
-        const sessionKey = msg.room_chat_session_id || `room_${msg.room_id}_default`;
-        
-        if (!roomChatsGrouped.has(sessionKey)) {
-          // Use the first user message as the title, not AI responses
-          const title = msg.is_ai_response ? 'Room Chat' : msg.content.substring(0, 50);
-          
-          roomChatsGrouped.set(sessionKey, {
-            id: `room_session_${sessionKey}`,
-            firstMessage: `${roomData.name}: ${title}`,
-            created_at: msg.created_at,
-            type: 'room' as const,
-            roomName: roomData.name,
-            shareCode: roomData.share_code,
-            chatSessionId: msg.room_chat_session_id
-          });
-        }
-      }
-    });
-
-    roomChatPreviews.push(...Array.from(roomChatsGrouped.values()));
-
-    // Combine and sort all chats by date
-    const allChatPreviews = [...chatPreviews, ...roomChatPreviews].sort(
+    // Pass raw room chat data to sidebar for context-aware filtering
+    // The sidebar will handle grouping by thread based on current context
+    const allChatPreviews = [...chatPreviews].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
@@ -223,7 +189,8 @@ const fetchUserData = async () => {
       chatPreviews,
       allChatPreviews,
       documents,
-      rooms
+      rooms,
+      roomChatsData
     };
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -289,6 +256,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
           categorizedChats={categorizeChats(userData?.allChatPreviews || [])}
           documents={userData?.documents || []}
           rooms={userData?.rooms || []}
+          roomChatsData={userData?.roomChatsData || []}
         />
         <main className="flex-1 overflow-hidden">
           <UploadProvider userId={userData?.id || ''}>

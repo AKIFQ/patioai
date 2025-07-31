@@ -41,7 +41,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  // Allow anonymous access to room chats, but require auth for regular chats
   if (currentRoute.startsWith('/chat') && !user) {
+    // Allow room chats for anonymous users
+    if (currentRoute.startsWith('/chat/room/')) {
+      return response;
+    }
+    
+    // Redirect regular chats to signin
     const redirectUrl = new URL(request.url);
     redirectUrl.pathname = '/signin';
     return NextResponse.redirect(redirectUrl);

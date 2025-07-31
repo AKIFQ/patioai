@@ -166,13 +166,18 @@ const MessageInput = ({
 
   // Create a safe typing handler using ref
   const safeOnTyping = useCallback((isTyping: boolean) => {
+    console.log('🔧 safeOnTyping called:', isTyping);
     try {
       const currentOnTyping = onTypingRef.current;
+      console.log('🔧 currentOnTyping exists:', !!currentOnTyping);
       if (currentOnTyping && typeof currentOnTyping === 'function') {
+        console.log('🔧 Calling onTyping function');
         currentOnTyping(isTyping);
+      } else {
+        console.log('🔧 No onTyping function available');
       }
     } catch (error) {
-      console.warn('Error calling onTyping:', error);
+      console.warn('❌ Error calling onTyping:', error);
     }
   }, []); // No dependencies needed since we use ref
 
@@ -185,12 +190,7 @@ const MessageInput = ({
     };
   }, []);
 
-  const chatSessionIdForRoom = roomContext ? (roomContext.chatSessionId || (chatId.startsWith('room_session_') ? chatId.replace('room_session_', '') : undefined)) : undefined;
-  
-  // Debug logging (reduced to prevent spam)
-  // console.log('MessageInput - chatId:', chatId);
-  // console.log('MessageInput - roomContext.chatSessionId:', roomContext?.chatSessionId);
-  // console.log('MessageInput - final chatSessionId:', chatSessionIdForRoom);
+  // Removed unused chatSessionIdForRoom calculation
 
   const { input, handleInputChange, handleSubmit, status, stop } = useChat({
     id: roomContext ? `room_${roomContext.shareCode}` : chatId, // Match the Chat component's ID
@@ -198,17 +198,18 @@ const MessageInput = ({
     initialMessages: currentChat,
     body: roomContext ? {
       displayName: roomContext.displayName,
-      sessionId: roomContext.sessionId,
       option: option,
-      chatSessionId: chatSessionIdForRoom
+      threadId: roomContext.chatSessionId
     } : {
       chatId: chatId,
       option: option,
       selectedBlobs: selectedBlobs
     },
     onFinish: async () => {
+      // Always refresh chat previews to update sidebar with new threads
       await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-      // Don't refresh for room chats as it causes chatSessionId regeneration
+      
+      // Only refresh page for regular chats, not room chats
       if (!roomContext) {
         router.refresh();
       }
@@ -229,6 +230,8 @@ const MessageInput = ({
   const handleTyping = useCallback(() => {
     if (!roomContext) return;
 
+    console.log('🎯 handleTyping called for room:', roomContext.shareCode);
+    
     // Start typing
     safeOnTyping(true);
 
@@ -239,6 +242,7 @@ const MessageInput = ({
 
     // Stop typing after 1 second of inactivity
     typingTimeoutRef.current = setTimeout(() => {
+      console.log('⏰ Typing timeout - stopping typing');
       safeOnTyping(false);
     }, 1000);
   }, [roomContext, safeOnTyping]);
@@ -268,9 +272,12 @@ const MessageInput = ({
     
     // Handle typing indicators for room chats
     if (roomContext) {
+      console.log('📝 Input changed, value length:', e.target.value.length);
       if (e.target.value.length > 0) {
+        console.log('📝 Starting typing indicator');
         handleTyping();
       } else {
+        console.log('📝 Stopping typing indicator (empty input)');
         safeOnTyping(false);
       }
     }

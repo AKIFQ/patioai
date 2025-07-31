@@ -19,10 +19,19 @@ export function createClient() {
     return supabaseClient;
   }
 
-  // Create new client only if it doesn't exist
+  // Create new client with proper realtime configuration
   supabaseClient = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        },
+        heartbeatIntervalMs: 30000,
+        reconnectAfterMs: (tries: number) => Math.min(tries * 1000, 10000)
+      }
+    }
   );
 
   return supabaseClient;

@@ -2,52 +2,58 @@ import ChatComponent from '../../components/Chat';
 import { cookies } from 'next/headers';
 import { fetchRoomMessages, getRoomInfo } from './fetch';
 import { getUserInfo } from '@/lib/server/supabase';
-import { v4 as uuidv4 } from 'uuid';
+// Removed unused UUID import
 import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import RoomChatWrapper from './components/RoomChatWrapper';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-async function ensureUserInRoom(shareCode: string, displayName: string, sessionId: string) {
+// Ensure user is properly added to room with correct user_id
+async function ensureUserInRoom(shareCode: string, displayName: string, userId?: string) {
     try {
         const roomInfo = await getRoomInfo(shareCode);
         if (!roomInfo) return;
 
-        // Get authenticated user info if available
-        const userInfo = await getUserInfo();
+        // Check if user is already a participant (by user_id if authenticated, or display_name if anonymous)
+        let existingParticipant;
+        if (userId) {
+            // For authenticated users, check by user_id
+            const { data } = await (supabase as any)
+                .from('room_participants')
+                .select('*')
+                .eq('room_id', roomInfo.room.id)
+                .eq('user_id', userId)
+                .single();
+            existingParticipant = data;
+        } else {
+            // For anonymous users, check by display_name
+            const { data } = await (supabase as any)
+                .from('room_participants')
+                .select('*')
+                .eq('room_id', roomInfo.room.id)
+                .eq('display_name', displayName)
+                .single();
+            existingParticipant = data;
+        }
 
-        // Check if this session is already in the participants
-        const { data: existingParticipant } = await (supabase as any)
-            .from('room_participants')
-            .select('session_id, user_id')
-            .eq('room_id', roomInfo.room.id)
-            .eq('session_id', sessionId)
-            .single();
-
-        // If not already a participant, add them
         if (!existingParticipant) {
+            // Add new participant with proper user linking
             await (supabase as any)
                 .from('room_participants')
                 .insert({
                     room_id: roomInfo.room.id,
-                    session_id: sessionId,
+                    session_id: userId ? `auth_${userId}` : displayName,
                     display_name: displayName,
-                    user_id: userInfo?.id || null // Link to authenticated user
+                    user_id: userId || null // Link to authenticated user if available
                 });
+            
+            console.log('Added user to room:', { userId, displayName, roomId: roomInfo.room.id });
         } else {
-            // Update display name, last seen, and user_id if participant exists
-            await (supabase as any)
-                .from('room_participants')
-                .update({
-                    display_name: displayName,
-                    user_id: userInfo?.id || existingParticipant.user_id, // Preserve or set user_id
-                    joined_at: new Date().toISOString() // Update last seen
-                })
-                .eq('room_id', roomInfo.room.id)
-                .eq('session_id', sessionId);
+            console.log('User already in room:', { userId, displayName });
         }
     } catch (error) {
         console.error('Error ensuring user in room:', error);
@@ -56,34 +62,35 @@ async function ensureUserInRoom(shareCode: string, displayName: string, sessionI
 
 export default async function RoomChatPage(props: {
     params: Promise<{ shareCode: string }>;
-    searchParams: Promise<{ displayName?: string; sessionId?: string; loadHistory?: string; chatSession?: string }>;
+    searchParams: Promise<{ displayName?: string; sessionId?: string; threadId?: string; loadHistory?: string; chatSession?: string }>;
 }) {
     const params = await props.params;
     const searchParams = await props.searchParams;
     const { shareCode } = params;
 
     // Check if user has joined the room
-    if (!searchParams.displayName || !searchParams.sessionId) {
+    if (!searchParams.displayName) {
         redirect(`/room/${shareCode}`);
     }
 
-    // If no chatSession is provided, generate a new one for a fresh chat
-    let chatSessionId = searchParams.chatSession;
-    
-    // Always ensure we have a chatSessionId for proper session isolation
-    if (!chatSessionId && searchParams.loadHistory !== 'true') {
-        chatSessionId = uuidv4();
-        console.log('Generated new chatSessionId:', chatSessionId);
-        // Note: Client-side redirect will be handled in the component
+    // Get thread ID from URL (prioritize threadId over legacy chatSession)
+    let chatSessionId = searchParams.threadId || searchParams.chatSession;
+    if (!chatSessionId) {
+        // Create deterministic main thread using a simple but valid UUID
+        // Convert share code to a deterministic UUID
+        const shareCodeHash = shareCode.split('').reduce((a, b) => {
+            a = ((a << 5) - a) + b.charCodeAt(0);
+            return a & a;
+        }, 0);
+        const hashStr = Math.abs(shareCodeHash).toString(16).padStart(8, '0');
+        chatSessionId = `${hashStr.substring(0, 8)}-0000-4000-8000-${hashStr.padEnd(12, '0').substring(0, 12)}`;
     }
-    
-    console.log('Final chatSessionId being used:', chatSessionId);
-
-    // Ensure the user is added to the room participants
-    await ensureUserInRoom(shareCode, searchParams.displayName, searchParams.sessionId);
 
     // Get current user info to check if they're the creator
     const userInfo = await getUserInfo();
+    
+    // Ensure the user is added to the room participants
+    await ensureUserInRoom(shareCode, searchParams.displayName, userInfo?.id);
     
     const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
     if (!roomInfo) {
@@ -91,69 +98,34 @@ export default async function RoomChatPage(props: {
         redirect(`/chat`);
     }
 
-    // Load messages based on context:
-    // 1. If chatSession is specified, load that specific session
-    // 2. If loadHistory is true, load all room messages (legacy)
-    // 3. Otherwise start with empty messages (fresh chat)
+    // For group chat: Show all messages from all threads (like WhatsApp group)
+    // This ensures new users see the complete chat history
     let roomMessages: any[] = [];
-    if (chatSessionId) {
-        // Check if this is a legacy session (virtual session for old messages)
-        if (chatSessionId.startsWith('legacy_')) {
-            // Extract sender name from legacy session ID
-            const parts = chatSessionId.split('_');
-            const encodedSenderName = parts.slice(2).join('_'); // Handle names with underscores
-            const senderName = decodeURIComponent(encodedSenderName); // Decode URL encoding
+    
+    try {
+        // Load ALL messages from the room, regardless of thread
+        // This gives new users the complete chat history
+        const { data: allMessages } = await (supabase as any)
+            .from('room_messages')
+            .select('*')
+            .eq('room_id', roomInfo.room.id)
+            .order('created_at', { ascending: true });
+        
+        if (allMessages && allMessages.length > 0) {
+            // Convert to Message format
+            roomMessages = allMessages.map((msg: any) => ({
+                id: msg.id,
+                role: msg.is_ai_response ? 'assistant' : 'user',
+                content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+                createdAt: new Date(msg.created_at)
+            }));
             
-            // Load legacy messages for this sender
-            try {
-                const { data: legacyMessages } = await (supabase as any)
-                    .from('room_messages')
-                    .select('*')
-                    .eq('room_id', roomInfo.room.id)
-                    .eq('sender_name', senderName)
-                    .is('room_chat_session_id', null)
-                    .order('created_at', { ascending: true });
-                
-                if (legacyMessages) {
-                    // Convert to Message format
-                    roomMessages = legacyMessages.map((msg: any) => ({
-                        id: msg.id,
-                        role: msg.is_ai_response ? 'assistant' : 'user',
-                        content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
-                        createdAt: new Date(msg.created_at)
-                    }));
-                }
-            } catch (error) {
-                console.error('Error loading legacy messages:', error);
-            }
+            console.log('Loaded ALL room messages:', roomMessages.length);
         } else {
-            // Load specific chat session messages (new format)
-            try {
-                const { data: sessionMessages } = await (supabase as any)
-                    .from('room_messages')
-                    .select('*')
-                    .eq('room_chat_session_id', chatSessionId)
-                    .order('created_at', { ascending: true });
-                
-                if (sessionMessages) {
-                    // Convert to Message format
-                    roomMessages = sessionMessages.map((msg: any) => ({
-                        id: msg.id,
-                        role: msg.is_ai_response ? 'assistant' : 'user',
-                        content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
-                        createdAt: new Date(msg.created_at)
-                    }));
-                }
-            } catch (error) {
-                console.error('Error loading chat session:', error);
-            }
+            console.log('No messages found in room');
         }
-    } else if (searchParams.loadHistory === 'true') {
-        // Load all room messages (legacy behavior)
-        const fetchedMessages = await fetchRoomMessages(shareCode, chatSessionId);
-        roomMessages = fetchedMessages || [];
-    } else {
-        // Default: Start with empty messages (fresh chat)
+    } catch (error) {
+        console.error('Error loading room messages:', error);
         roomMessages = [];
     }
 
@@ -166,28 +138,12 @@ export default async function RoomChatPage(props: {
     console.log('Room messages count:', roomMessages.length);
 
     return (
-        <div className="flex w-full h-full overflow-hidden">
-            <div className="flex-1">
-                <ChatComponent
-                    key={`room_${shareCode}_${searchParams.sessionId}_${chatSessionId || 'generated'}`}
-                    currentChat={roomMessages}
-                    chatId={`room_session_${chatSessionId}`}
-                    initialModelType={modelType}
-                    initialSelectedOption={selectedOption}
-                    roomContext={{
-                        shareCode,
-                        roomName: roomInfo.room.name,
-                        displayName: searchParams.displayName,
-                        sessionId: searchParams.sessionId,
-                        participants: roomInfo.participants,
-                        maxParticipants: roomInfo.room.maxParticipants,
-                        tier: roomInfo.room.tier,
-                        createdBy: roomInfo.room.createdBy,
-                        expiresAt: roomInfo.room.expiresAt,
-                        chatSessionId: chatSessionId
-                    }}
-                />
-            </div>
-        </div>
+        <RoomChatWrapper
+            shareCode={shareCode}
+            roomInfo={roomInfo}
+            initialMessages={roomMessages}
+            initialModelType={modelType}
+            initialSelectedOption={selectedOption}
+        />
     );
 }

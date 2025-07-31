@@ -141,16 +141,14 @@ const ChatComponent: React.FC<ChatProps> = ({
     initialMessages: currentChat,
     body: roomContext ? {
       displayName: roomContext.displayName,
-      sessionId: roomContext.sessionId,
       option: optimisticOption,
-      chatSessionId: roomContext.chatSessionId || (chatId.startsWith('room_session_') ? chatId.replace('room_session_', '') : undefined)
+      threadId: roomContext.chatSessionId
     } : {
       chatId: chatId,
       option: optimisticOption
     },
     onFinish: async () => {
-      if (chatId === currentChatId) return;
-
+      // Always refresh chat previews to update sidebar
       await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
     },
 

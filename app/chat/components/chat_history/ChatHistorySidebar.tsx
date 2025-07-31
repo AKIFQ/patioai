@@ -87,6 +87,7 @@ interface CombinedDrawerProps {
   categorizedChats: CategorizedChats;
   documents: UserDocument[];
   rooms?: RoomPreview[];
+  roomChatsData?: any[];
 }
 
 // Function to fetch rooms
@@ -104,13 +105,12 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   initialChatPreviews,
   categorizedChats,
   documents,
-  rooms = []
+  rooms = [],
+  roomChatsData = []
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
   const [isJoinRoomModalOpen, setIsJoinRoomModalOpen] = useState(false);
-  const [roomChatHistory, setRoomChatHistory] = useState<any[]>([]);
-  const [isLoadingRoomHistory, setIsLoadingRoomHistory] = useState(false);
 
   // Use SWR to manage room data with fallback to initial rooms
   const { data: currentRooms, mutate: mutateRooms, isLoading: isLoadingRooms } = useSWR(
@@ -168,35 +168,113 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     }
   }, [setOpenMobile]);
 
-  // Fetch room chat sessions when room is selected
-  const fetchRoomChatHistory = useCallback(async (shareCode: string) => {
-    setIsLoadingRoomHistory(true);
-    try {
-      const response = await fetch(`/api/rooms/${shareCode}/sessions`);
-      if (response.ok) {
-        const data = await response.json();
-        // Extract sessions from the response object
-        const sessions = data.sessions || [];
-        setRoomChatHistory(Array.isArray(sessions) ? sessions : []);
-      } else {
-        setRoomChatHistory([]);
-      }
-    } catch (error) {
-      console.error('Error fetching room chat sessions:', error);
-      setRoomChatHistory([]);
-    } finally {
-      setIsLoadingRoomHistory(false);
-    }
-  }, []);
+  // Process room threads based on current context
+  const processedThreads = React.useMemo(() => {
+    if (!currentRoomShareCode) {
+      // Home context: Show all room threads grouped by room
+      const roomsLookup = new Map();
+      (currentRooms || []).forEach((room: any) => {
+        roomsLookup.set(room.id, room);
+      });
 
-  // Fetch room history when room changes
-  React.useEffect(() => {
-    if (currentRoomShareCode) {
-      fetchRoomChatHistory(currentRoomShareCode);
+      const threadFirstMessages = new Map();
+      const threadLatestTimes = new Map();
+      
+      // Group room messages by thread_id and find the first user message for each thread
+      (roomChatsData || []).forEach((msg: any) => {
+        if (msg.thread_id && !msg.is_ai_response) {
+          if (!threadFirstMessages.has(msg.thread_id)) {
+            threadFirstMessages.set(msg.thread_id, msg);
+          }
+        }
+        // Track latest message time for each thread
+        if (msg.thread_id) {
+          const currentLatest = threadLatestTimes.get(msg.thread_id);
+          if (!currentLatest || new Date(msg.created_at) > new Date(currentLatest)) {
+            threadLatestTimes.set(msg.thread_id, msg.created_at);
+          }
+        }
+      });
+      
+      // Create sidebar entries for each thread
+      const allRoomThreads: any[] = [];
+      threadFirstMessages.forEach((firstMsg, threadId) => {
+        const roomData = roomsLookup.get(firstMsg.room_id);
+        
+        if (roomData && roomData.shareCode) {
+          // Use the first few words of the first user message as the title
+          let title = 'New Chat';
+          if (firstMsg.content) {
+            const words = firstMsg.content.trim().split(/\s+/);
+            title = words.slice(0, 4).join(' ');
+            if (words.length > 4) title += '...';
+          }
+          
+          allRoomThreads.push({
+            id: `room_thread_${threadId}`,
+            title,
+            created_at: threadLatestTimes.get(threadId) || firstMsg.created_at,
+            roomName: roomData.name,
+            shareCode: roomData.shareCode,
+            threadId: threadId
+          });
+        }
+      });
+
+      return allRoomThreads.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     } else {
-      setRoomChatHistory([]);
+      // Room context: Show only threads for current room
+      const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
+      if (!currentRoom) return [];
+
+      const threadFirstMessages = new Map();
+      const threadLatestTimes = new Map();
+      
+      // Filter messages for current room only
+      (roomChatsData || [])
+        .filter((msg: any) => msg.room_id === currentRoom.id)
+        .forEach((msg: any) => {
+          if (msg.thread_id && !msg.is_ai_response) {
+            if (!threadFirstMessages.has(msg.thread_id)) {
+              threadFirstMessages.set(msg.thread_id, msg);
+            }
+          }
+          // Track latest message time for each thread
+          if (msg.thread_id) {
+            const currentLatest = threadLatestTimes.get(msg.thread_id);
+            if (!currentLatest || new Date(msg.created_at) > new Date(currentLatest)) {
+              threadLatestTimes.set(msg.thread_id, msg.created_at);
+            }
+          }
+        });
+      
+      // Create sidebar entries for current room's threads
+      const roomThreads: any[] = [];
+      threadFirstMessages.forEach((firstMsg, threadId) => {
+        // Use the first few words of the first user message as the title
+        let title = 'New Chat';
+        if (firstMsg.content) {
+          const words = firstMsg.content.trim().split(/\s+/);
+          title = words.slice(0, 4).join(' ');
+          if (words.length > 4) title += '...';
+        }
+        
+        roomThreads.push({
+          id: `room_thread_${threadId}`,
+          title,
+          created_at: threadLatestTimes.get(threadId) || firstMsg.created_at,
+          threadId: threadId,
+          senderName: firstMsg.sender_name
+        });
+      });
+
+      return roomThreads.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }
-  }, [currentRoomShareCode, fetchRoomChatHistory]);
+  }, [currentRoomShareCode, roomChatsData, currentRooms]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -424,39 +502,34 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         <div className="h-[40%] flex flex-col">
           <div className="p-2 border-b bg-muted/30">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {currentRoomShareCode ? 'ROOM CHATS' : 'CHATS'}
+              {currentRoomShareCode ? 'ROOM THREADS' : 'CHATS & THREADS'}
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto">
             {currentRoomShareCode ? (
               <div className="p-2">
-                {isLoadingRoomHistory ? (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span className="text-sm text-muted-foreground">Loading messages...</span>
-                  </div>
-                ) : !Array.isArray(roomChatHistory) || roomChatHistory.length === 0 ? (
+                {processedThreads.length === 0 ? (
                   <div className="text-center p-4">
-                    <p className="text-sm text-muted-foreground">No chat sessions yet</p>
+                    <p className="text-sm text-muted-foreground">No chat threads yet</p>
                     <p className="text-xs text-muted-foreground mt-1">Start a new conversation!</p>
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {roomChatHistory.map((session: any) => (
+                    {processedThreads.map((thread: any) => (
                       <Link
-                        key={session.id}
-                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&loadHistory=true&chatSession=${session.id}`}
+                        key={thread.id}
+                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.threadId}`}
                         onClick={handleChatSelect}
                         className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                       >
                         <div className="text-xs text-muted-foreground mb-1">
-                          {new Date(session.created_at).toLocaleDateString([], { 
+                          {new Date(thread.created_at).toLocaleDateString([], { 
                             month: 'short',
                             day: 'numeric'
-                          })} • {session.display_name}
+                          })} {thread.senderName && `• ${thread.senderName}`}
                         </div>
                         <div className="text-sm text-foreground">
-                          {session.title}
+                          {thread.title}
                         </div>
                       </Link>
                     ))}
@@ -465,6 +538,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               </div>
             ) : (
               <div className="p-2">
+                {/* Personal Chats */}
                 <ChatHistorySection
                   initialChatPreviews={initialChatPreviews}
                   categorizedChats={categorizedChats}
@@ -473,6 +547,37 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   onChatSelect={handleChatSelect}
                   mutateChatPreviews={mutateChatPreviews}
                 />
+                
+                {/* Room Threads */}
+                {processedThreads.length > 0 && (
+                  <>
+                    <div className="mt-4 mb-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        ROOM THREADS
+                      </h4>
+                    </div>
+                    <div className="space-y-1">
+                      {processedThreads.map((thread: any) => (
+                        <Link
+                          key={thread.id}
+                          href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.threadId}`}
+                          onClick={handleChatSelect}
+                          className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="text-xs text-muted-foreground mb-1">
+                            {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], { 
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </div>
+                          <div className="text-sm text-foreground">
+                            {thread.title}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

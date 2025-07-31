@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/client/client';
 import type { Message } from 'ai';
 
+// Create client with proper error handling
 const supabase = createClient();
 
 interface RoomRealtimeHookProps {
@@ -30,21 +31,28 @@ export function useRoomRealtime({
 
   // Cleanup function
   const cleanup = useCallback(() => {
-    if (messageChannelRef.current) {
-      supabase.removeChannel(messageChannelRef.current);
-      messageChannelRef.current = null;
-    }
-    if (typingChannelRef.current) {
-      supabase.removeChannel(typingChannelRef.current);
-      typingChannelRef.current = null;
-    }
-    if (participantChannelRef.current) {
-      supabase.removeChannel(participantChannelRef.current);
-      participantChannelRef.current = null;
-    }
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
+    try {
+      if (messageChannelRef.current) {
+        console.log('🧹 Cleaning up message channel');
+        supabase.removeChannel(messageChannelRef.current);
+        messageChannelRef.current = null;
+      }
+      if (typingChannelRef.current) {
+        console.log('🧹 Cleaning up typing channel');
+        supabase.removeChannel(typingChannelRef.current);
+        typingChannelRef.current = null;
+      }
+      if (participantChannelRef.current) {
+        console.log('🧹 Cleaning up participant channel');
+        supabase.removeChannel(participantChannelRef.current);
+        participantChannelRef.current = null;
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+    } catch (error) {
+      console.warn('Error during cleanup:', error);
     }
   }, []);
 
@@ -56,14 +64,14 @@ export function useRoomRealtime({
     // First get the room UUID from share code
     const initializeRealtime = async () => {
       try {
-        const { data: room } = await supabase
+        const { data: room, error: roomError } = await supabase
           .from('rooms')
           .select('id')
           .eq('share_code', shareCode)
           .single();
 
-        if (!room) {
-          console.error('Room not found for share code:', shareCode);
+        if (roomError || !room) {
+          console.error('Room not found for share code:', shareCode, roomError);
           return;
         }
 
@@ -72,8 +80,12 @@ export function useRoomRealtime({
         cleanup(); // Clean up any existing connections
 
         // Subscribe to new messages for this specific room
+        // Use a unique channel name to avoid conflicts
+        const channelName = `room_messages_${roomUuid}_${Date.now()}`;
+        console.log('🔌 Creating message channel:', channelName);
+
         messageChannelRef.current = supabase
-          .channel(`room_messages_${roomUuid}`, {
+          .channel(channelName, {
             config: {
               broadcast: { self: false },
               presence: { key: displayName }
@@ -88,6 +100,10 @@ export function useRoomRealtime({
               filter: `room_id=eq.${roomUuid}`
             },
             (payload) => {
+              console.log('🚨 RAW POSTGRES EVENT RECEIVED:', payload);
+              console.log('🚨 EVENT TYPE:', payload.eventType);
+              console.log('🚨 TABLE:', payload.table);
+              console.log('🚨 SCHEMA:', payload.schema);
               const newMessage = payload.new as any;
 
               console.log('🔔 RT MSG received:', {
@@ -95,15 +111,37 @@ export function useRoomRealtime({
                 isAI: newMessage.is_ai_response,
                 content: newMessage.content?.substring(0, 50) + '...',
                 roomId: newMessage.room_id,
-                currentUser: displayName
+                threadId: newMessage.thread_id,
+                currentUser: displayName,
+                currentThread: chatSessionId
+              });
+
+              // Filter by thread ID if specified
+              if (chatSessionId && newMessage.thread_id !== chatSessionId) {
+                console.log('⏭️ SKIPPING: Message from different thread');
+                return;
+              }
+
+              // Debug: Log all message details
+              console.log('🔍 DETAILED MESSAGE DEBUG:', {
+                messageId: newMessage.id,
+                sender: newMessage.sender_name,
+                currentUser: displayName,
+                isAI: newMessage.is_ai_response,
+                content: newMessage.content,
+                threadId: newMessage.thread_id,
+                currentThread: chatSessionId
               });
 
               // Skip own user messages to avoid duplicates with optimistic updates
+              // This prevents the sender from seeing their own message twice
               if (newMessage.sender_name === displayName && !newMessage.is_ai_response) {
-                console.log('⏭️ SKIPPING: Own user message to avoid duplicate');
+                console.log('⏭️ SKIPPING: Own user message to avoid duplicate for sender:', displayName);
                 return;
               }
-              
+
+              console.log('✅ PROCESSING RT MSG from:', newMessage.sender_name, 'for user:', displayName);
+
               console.log('✅ ACCEPTING RT MSG from:', newMessage.sender_name);
 
               // Convert to Message format
@@ -124,20 +162,41 @@ export function useRoomRealtime({
             setConnectionStatus(status);
             setIsConnected(status === 'SUBSCRIBED');
 
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Message subscription ready - should receive INSERT events');
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('❌ Channel error - will retry automatically');
+              setIsConnected(false);
+            } else if (status === 'TIMED_OUT') {
+              console.error('⏰ Subscription timed out - will retry automatically');
+              setIsConnected(false);
+            } else if (status === 'CLOSED') {
+              console.log('🔒 Channel closed');
+              setIsConnected(false);
+            }
+
             if (err) {
               console.error('❌ Real-time subscription error:', err);
+              // Don't throw the error, just log it
             }
           });
 
         // Subscribe to typing indicators using presence
+        // Use a simpler channel name for typing
+        const typingChannelName = `typing_${roomUuid}`;
+        console.log('💬 Creating typing channel:', typingChannelName);
+
         typingChannelRef.current = supabase
-          .channel(`room_typing_${roomUuid}`, {
+          .channel(typingChannelName, {
             config: {
-              presence: { key: displayName }
+              presence: { key: displayName },
+              broadcast: { self: false }
             }
           })
           .on('presence', { event: 'sync' }, () => {
             const state = typingChannelRef.current?.presenceState() || {};
+            console.log('💬 Raw presence state:', state);
+            
             const typingUsers = Object.values(state)
               .flat()
               .map((user: any) => user.displayName)
@@ -148,12 +207,38 @@ export function useRoomRealtime({
           })
           .on('presence', { event: 'join' }, ({ key, newPresences }: any) => {
             console.log('👋 User joined typing:', key, newPresences);
+            const state = typingChannelRef.current?.presenceState() || {};
+            const typingUsers = Object.values(state)
+              .flat()
+              .map((user: any) => user.displayName)
+              .filter((name: string) => name && name !== displayName);
+            onTypingUpdate(typingUsers);
           })
           .on('presence', { event: 'leave' }, ({ key, leftPresences }: any) => {
             console.log('👋 User left typing:', key, leftPresences);
+            const state = typingChannelRef.current?.presenceState() || {};
+            const typingUsers = Object.values(state)
+              .flat()
+              .map((user: any) => user.displayName)
+              .filter((name: string) => name && name !== displayName);
+            onTypingUpdate(typingUsers);
           })
-          .subscribe((status) => {
+          .subscribe((status, err) => {
             console.log('💬 Typing channel status:', status, 'for room:', roomUuid);
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Typing channel ready');
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('❌ Typing channel error - will retry automatically');
+            } else if (status === 'TIMED_OUT') {
+              console.error('⏰ Typing channel timed out - will retry automatically');
+            } else if (status === 'CLOSED') {
+              console.log('🔒 Typing channel closed');
+            }
+
+            if (err) {
+              console.error('❌ Typing channel error:', err);
+              // Don't throw the error, just log it
+            }
           });
 
         // Subscribe to participant changes (optional)
@@ -190,44 +275,58 @@ export function useRoomRealtime({
 
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {
-    console.log('broadcastTyping called:', isTyping, 'displayName:', displayName);
+    console.log('🔥 broadcastTyping called:', isTyping, 'displayName:', displayName);
+    console.log('🔥 typingChannelRef.current:', !!typingChannelRef.current);
+    
     if (!typingChannelRef.current || !displayName) {
-      console.log('No typing channel or displayName, skipping broadcast');
+      console.log('❌ No typing channel or displayName, skipping broadcast');
       return;
     }
 
-    if (isTyping) {
-      // Clear existing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+    try {
+      if (isTyping) {
+        // Clear existing timeout
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
 
-      // Track typing
-      console.log('Broadcasting typing start for:', displayName);
-      typingChannelRef.current.track({
-        displayName,
-        isTyping: true,
-        timestamp: Date.now()
-      });
+        // Track typing with presence
+        console.log('🚀 Broadcasting typing START for:', displayName);
+        const trackResult = typingChannelRef.current.track({
+          displayName,
+          isTyping: true,
+          timestamp: Date.now()
+        });
+        console.log('🚀 Track result:', trackResult);
 
-      // Auto-stop typing after 3 seconds
-      typingTimeoutRef.current = setTimeout(() => {
-        console.log('Auto-stopping typing for:', displayName);
+        // Auto-stop typing after 3 seconds
+        typingTimeoutRef.current = setTimeout(() => {
+          console.log('⏰ Auto-stopping typing for:', displayName);
+          stopTyping();
+        }, 3000);
+      } else {
+        console.log('🛑 Broadcasting typing STOP for:', displayName);
         stopTyping();
-      }, 3000);
-    } else {
-      console.log('Broadcasting typing stop for:', displayName);
-      stopTyping();
+      }
+    } catch (error) {
+      console.error('❌ Error broadcasting typing status:', error);
     }
   }, [displayName]);
 
   const stopTyping = useCallback(() => {
-    if (typingChannelRef.current) {
-      typingChannelRef.current.untrack();
-    }
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
+    console.log('🛑 stopTyping called');
+    try {
+      if (typingChannelRef.current) {
+        console.log('🛑 Untracking from typing channel');
+        const untrackResult = typingChannelRef.current.untrack();
+        console.log('🛑 Untrack result:', untrackResult);
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+    } catch (error) {
+      console.error('❌ Error stopping typing:', error);
     }
   }, []);
 
