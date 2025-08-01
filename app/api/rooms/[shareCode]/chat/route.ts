@@ -133,42 +133,11 @@ async function saveRoomMessage(
       isFirstMessage
     });
 
-    // If this is the first message in the thread, trigger sidebar update
+    // Mark if this is the first message for potential sidebar updates
     if (isFirstMessage && !isAiResponse) {
-      console.log(`🎉 [${messageId}] First message in thread - triggering sidebar update`);
-      
-      // Broadcast thread creation event for sidebar updates
-      try {
-        // Get room info to find the share code for the broadcast
-        const { data: roomData } = await supabase
-          .from('rooms')
-          .select('share_code')
-          .eq('id', roomId)
-          .single();
-
-        if (roomData) {
-          // Broadcast to a room-specific channel that all participants can listen to
-          await supabase
-            .channel(`room_sidebar_${roomData.share_code}`)
-            .send({
-              type: 'broadcast',
-              event: 'thread_created',
-              payload: {
-                threadId,
-                roomId,
-                shareCode: roomData.share_code,
-                senderName,
-                firstMessage: content,
-                createdAt: new Date().toISOString()
-              }
-            });
-          
-          console.log(`📡 [${messageId}] Sidebar update broadcast sent to room_sidebar_${roomData.share_code}`);
-        }
-      } catch (broadcastError) {
-        console.error(`❌ [${messageId}] Error broadcasting sidebar update:`, broadcastError);
-        // Don't fail the message save if broadcast fails
-      }
+      console.log(`🎉 [${messageId}] First message in thread - will trigger sidebar update via realtime`);
+      // The sidebar update will be handled by the realtime message listener
+      // which will detect new threads and refresh the sidebar accordingly
     }
 
     return true;
