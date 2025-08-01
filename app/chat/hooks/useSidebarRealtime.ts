@@ -19,11 +19,8 @@ export function useSidebarRealtime({ userId, userRooms, onThreadCreated }: Sideb
     // Show a subtle notification that a new thread was created
     console.log(`📝 New thread "${payload.firstMessage?.substring(0, 30)}..." created in room`);
     
-    // Refresh the page to get updated sidebar data
-    // This is the most reliable way to ensure the sidebar shows the new thread
-    setTimeout(() => {
-      window.location.reload();
-    }, 500); // Small delay to ensure the message is saved
+    // Try to refresh cache instead of full page reload
+    mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
     
     // Call custom handler if provided
     if (onThreadCreated) {

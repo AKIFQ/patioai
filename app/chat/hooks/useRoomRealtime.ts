@@ -82,14 +82,15 @@ export function useRoomRealtime({
     // Add visibility change listener
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Periodic connection health check
+    // Periodic connection health check - DISABLED to prevent re-render loops
     const startHealthCheck = () => {
-      reconnectInterval = setInterval(() => {
-        if (mounted && connectionStatus !== 'SUBSCRIBED') {
-          console.log('🏥 Health check: Connection not healthy, attempting reconnect');
-          initializeRealtime();
-        }
-      }, 30000); // Check every 30 seconds
+      // Temporarily disabled to fix re-rendering loop
+      // reconnectInterval = setInterval(() => {
+      //   if (mounted && connectionStatus !== 'SUBSCRIBED') {
+      //     console.log('🏥 Health check: Connection not healthy, attempting reconnect');
+      //     initializeRealtime();
+      //   }
+      // }, 30000); // Check every 30 seconds
     };
 
     // First get the room UUID from share code
@@ -169,12 +170,9 @@ export function useRoomRealtime({
               // Track that this thread has messages
               hasMessages = true;
 
-              // Skip own user messages to avoid duplicates with optimistic updates
-              // This prevents the sender from seeing their own message twice
-              if (newMessage.sender_name === displayName && !newMessage.is_ai_response) {
-                console.log('⏭️ SKIPPING: Own user message to avoid duplicate for sender:', displayName);
-                return;
-              }
+              // NOTE: We no longer skip own user messages because room chats 
+              // don't use optimistic updates - real-time is the single source of truth
+              // All users (including sender) should see messages via real-time only
 
               console.log('✅ PROCESSING RT MSG from:', newMessage.sender_name, 'for user:', displayName);
 
@@ -201,35 +199,35 @@ export function useRoomRealtime({
             if (status === 'SUBSCRIBED') {
               console.log('✅ Message subscription ready - should receive INSERT events');
             } else if (status === 'CHANNEL_ERROR') {
-              console.error('❌ Channel error - will retry in 5 seconds');
+              console.error('❌ Channel error - will retry in 10 seconds');
               setIsConnected(false);
-              // Retry after 5 seconds
+              // Retry after 10 seconds (increased delay)
               setTimeout(() => {
                 if (mounted) {
                   console.log('🔄 Retrying connection after channel error');
                   initializeRealtime();
                 }
-              }, 5000);
+              }, 10000);
             } else if (status === 'TIMED_OUT') {
-              console.error('⏰ Subscription timed out - will retry in 3 seconds');
+              console.error('⏰ Subscription timed out - will retry in 8 seconds');
               setIsConnected(false);
-              // Retry after 3 seconds
+              // Retry after 8 seconds (increased delay)
               setTimeout(() => {
                 if (mounted) {
                   console.log('🔄 Retrying connection after timeout');
                   initializeRealtime();
                 }
-              }, 3000);
+              }, 8000);
             } else if (status === 'CLOSED') {
-              console.log('🔒 Channel closed - will retry in 2 seconds');
+              console.log('🔒 Channel closed - will retry in 5 seconds');
               setIsConnected(false);
-              // Retry after 2 seconds
+              // Retry after 5 seconds (increased delay)
               setTimeout(() => {
                 if (mounted) {
                   console.log('🔄 Retrying connection after close');
                   initializeRealtime();
                 }
-              }, 2000);
+              }, 5000);
             }
 
             if (err) {
@@ -355,7 +353,7 @@ export function useRoomRealtime({
       
       cleanup();
     };
-  }, [shareCode, displayName, chatSessionId, cleanup]);
+  }, [shareCode, displayName, chatSessionId]);
 
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {

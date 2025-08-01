@@ -53,16 +53,22 @@ export default function RoomChatWrapper({
       return;
     }
 
-    // Use thread ID from URL - server always provides one now
-    const finalThreadId = threadId;
+    // Use thread ID from URL, or generate a new one if missing
+    let finalThreadId = threadId;
     
     if (!finalThreadId) {
-      console.error('❌ No thread ID provided - this should not happen with new system');
-      router.push(`/room/${shareCode}`);
-      return;
+      // Generate a new thread ID for new room entries (like when joining from join page)
+      finalThreadId = crypto.randomUUID();
+      console.log('🆕 Generated new thread ID for room entry:', finalThreadId);
+      
+      // Update URL to include the new thread ID
+      const currentParams = new URLSearchParams(searchParams.toString());
+      currentParams.set('threadId', finalThreadId);
+      const newUrl = `/chat/room/${shareCode}?${currentParams.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    } else {
+      console.log('🆕 Using existing thread ID:', finalThreadId);
     }
-    
-    console.log('🆕 Using thread ID:', finalThreadId);
 
     // Only update context if it's actually different to prevent re-renders
     const newContext: RoomContext = {

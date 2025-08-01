@@ -180,6 +180,10 @@ async function saveRoomMessage(
 
 // Removed unused daily usage functions - can be re-added later if needed
 
+// Simple in-memory cache to prevent duplicate requests
+const recentRequests = new Map<string, number>();
+const REQUEST_DEBOUNCE_MS = 2000; // 2 second debounce
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ shareCode: string }> }
@@ -212,9 +216,35 @@ export async function POST(
       threadId,
       option,
       messagesCount: messages?.length,
-      lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50),
-      fullBody: JSON.stringify(body, null, 2)
+      lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50)
     });
+
+    // Create a unique request key for deduplication
+    const lastUserMessage = messages?.[messages.length - 1];
+    const requestKey = `${shareCode}-${threadId}-${displayName}-${lastUserMessage?.content?.substring(0, 100)}`;
+    const now = Date.now();
+    
+    // Check if we've seen this exact request recently
+    if (recentRequests.has(requestKey)) {
+      const lastRequestTime = recentRequests.get(requestKey)!;
+      if (now - lastRequestTime < REQUEST_DEBOUNCE_MS) {
+        console.log(`🚫 [${requestId}] Duplicate request detected, ignoring:`, requestKey);
+        return new NextResponse('Duplicate request ignored', { status: 429 });
+      }
+    }
+    
+    // Record this request
+    recentRequests.set(requestKey, now);
+    
+    // Clean up old entries (keep only last 100)
+    if (recentRequests.size > 100) {
+      const entries = Array.from(recentRequests.entries());
+      entries.sort((a, b) => b[1] - a[1]); // Sort by timestamp, newest first
+      recentRequests.clear();
+      entries.slice(0, 50).forEach(([key, time]) => {
+        recentRequests.set(key, time);
+      });
+    }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new NextResponse('No messages provided', {
@@ -250,9 +280,9 @@ export async function POST(
     }
 
     // Check if room has expired
-    const now = new Date();
+    const currentTime = new Date();
     const expiresAt = new Date(room.expires_at);
-    if (now > expiresAt) {
+    if (currentTime > expiresAt) {
       return new NextResponse('Room has expired', {
         status: 410,
         headers: { 'Content-Type': 'application/json' }

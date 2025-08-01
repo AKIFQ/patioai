@@ -78,6 +78,10 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [realtimeMessages, setRealtimeMessages] = useState<Message[]>(currentChat || []);
   const [isClient, setIsClient] = useState(false);
+  
+  // Message deduplication
+  const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
@@ -153,69 +157,139 @@ const ChatComponent: React.FC<ChatProps> = ({
     }
   }, [chatId_debug, roomContext, currentChat]);
   
+  // Create a stable chat ID to prevent re-initialization
+  const stableChatId = useMemo(() => {
+    return roomContext ? `room_${roomContext.shareCode}_${roomContext.chatSessionId}` : chatId;
+  }, [roomContext?.shareCode, roomContext?.chatSessionId, chatId]);
+
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
-    id: chatId_debug,
-    api: apiEndpoint,
+    id: stableChatId,
+    api: roomContext ? '/api/dummy' : apiEndpoint, // Use dummy endpoint for room chats
     experimental_throttle: 50,
-    initialMessages: currentChat || [], // Ensure we always have an array
+    initialMessages: roomContext ? [] : (currentChat || []), // Empty for room chats
     body: roomContext ? {
-      displayName: roomContext.displayName,
-      option: optimisticOption,
-      threadId: roomContext.chatSessionId
+      // Dummy body for room chats (won't be used)
+      dummy: true
     } : {
       chatId: chatId,
       option: optimisticOption
     },
     onFinish: async () => {
-      console.log(`✅ CHAT: onFinish called for ${chatId_debug}`);
-      // Always refresh chat previews to update sidebar
-      await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+      if (!roomContext) {
+        console.log(`✅ CHAT: onFinish called for ${stableChatId}`);
+        // Always refresh chat previews to update sidebar
+        await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+      }
     },
 
     onError: (error) => {
-      console.log(`❌ CHAT: onError called for ${chatId_debug}:`, error.message);
-      toast.error(error.message || 'An error occurred'); // This could lead to sensitive information exposure. A general error message is safer.
+      if (!roomContext) {
+        console.log(`❌ CHAT: onError called for ${stableChatId}:`, error.message);
+        toast.error(error.message || 'An error occurred'); // This could lead to sensitive information exposure. A general error message is safer.
+      }
     }
   });
 
   // Handle message submission from MessageInput
   const handleSubmit = useCallback(async (message: string, attachments?: File[]) => {
+    // Prevent duplicate submissions
+    if (isSubmitting) {
+      console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
+      return;
+    }
+    
+    setIsSubmitting(true);
     console.log(`🚀 CHAT: Handling submission: "${message.substring(0, 50)}"`);
     
-    if (attachments && attachments.length > 0) {
-      // Handle attachments
-      const fileList = new DataTransfer();
-      attachments.forEach(file => fileList.items.add(file));
-      
-      await append({
-        role: 'user',
-        content: message,
-        experimental_attachments: fileList.files
-      });
-    } else {
-      await append({
-        role: 'user',
-        content: message
-      });
+    try {
+      if (roomContext) {
+        // For room chats: Direct API call, no optimistic updates
+        console.log('🏠 Room chat: Making direct API call (no optimistic updates)');
+        
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [
+              ...realtimeMessages,
+              {
+                role: 'user',
+                content: message,
+                id: crypto.randomUUID(),
+                createdAt: new Date()
+              }
+            ],
+            displayName: roomContext.displayName,
+            option: optimisticOption,
+            threadId: roomContext.chatSessionId
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API call failed: ${response.status}`);
+        }
+
+        console.log('✅ Room chat: Direct API call successful');
+        // Real-time will handle showing the messages
+        
+      } else {
+        // For individual chats: Use optimistic updates
+        if (attachments && attachments.length > 0) {
+          // Handle attachments
+          const fileList = new DataTransfer();
+          attachments.forEach(file => fileList.items.add(file));
+          
+          await append({
+            role: 'user',
+            content: message,
+            experimental_attachments: fileList.files
+          });
+        } else {
+          await append({
+            role: 'user',
+            content: message
+          });
+        }
+      }
+    } finally {
+      // Reset submission flag after a delay to prevent rapid-fire submissions
+      setTimeout(() => {
+        setIsSubmitting(false);
+      }, 1000);
     }
-  }, [append]);
+  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting]);
 
   const { mutate } = useSWRConfig();
 
   // Real-time functionality for room chats - memoized to prevent re-renders
   const handleNewMessage = useCallback((newMessage: Message) => {
     console.log('🏠 Chat received RT message:', newMessage.role, 'from', newMessage.content?.substring(0, 30));
-    // Only add if it's not already in the messages (avoid duplicates)
-    setRealtimeMessages(prev => {
-      const exists = prev.find(msg => msg.id === newMessage.id);
-      if (exists) {
-        console.log('⚠️ Message already exists, skipping:', newMessage.id);
-        return prev;
+    
+    // Use functional updates to avoid dependency on processedMessageIds
+    setProcessedMessageIds(prevProcessed => {
+      // Check if we've already processed this message
+      if (prevProcessed.has(newMessage.id)) {
+        console.log('⚠️ Message already processed, skipping:', newMessage.id);
+        return prevProcessed; // Return same reference to avoid re-render
       }
-      console.log('✅ Adding new RT message to chat UI:', newMessage.id);
-      return [...prev, newMessage];
+      
+      // Mark message as processed and update UI
+      setRealtimeMessages(prevMessages => {
+        const exists = prevMessages.find(msg => msg.id === newMessage.id);
+        if (exists) {
+          console.log('⚠️ Message already exists in UI, skipping:', newMessage.id);
+          return prevMessages;
+        }
+        console.log('✅ Adding new RT message to chat UI:', newMessage.id);
+        return [...prevMessages, newMessage];
+      });
+      
+      // Return new Set with the processed message ID
+      return new Set(prevProcessed).add(newMessage.id);
     });
-  }, []);
+  }, []); // Empty dependency array - stable function
 
   const handleTypingUpdate = useCallback((users: string[]) => {
     console.log('👥 Typing users updated in Chat:', users);
@@ -256,31 +330,16 @@ const ChatComponent: React.FC<ChatProps> = ({
     }
   }, [roomContext, currentChat]);
 
-    // For room chats, combine useChat (streaming) with real-time (other users)
+  // For room chats, ONLY use real-time messages (no optimistic updates)
+  // This prevents duplicates for the sender
   useEffect(() => {
     if (roomContext) {
-      // Always sync useChat messages (includes live streaming)
-      setRealtimeMessages(prevRealtime => {
-        // Start fresh with useChat messages (preserves streaming)
-        const merged = [...messages] as any[];
-        
-        // Add real-time messages that aren't in useChat (from other users)
-        prevRealtime.forEach(rtMessage => {
-          const existsInUseChat = messages.find(msg => msg.id === rtMessage.id);
-          if (!existsInUseChat) {
-            merged.push(rtMessage);
-          }
-        });
-        
-        // Sort by timestamp
-        merged.sort((a, b) => {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeA - timeB;
-        });
-        
-        return merged;
-      });
+      // For room chats, ignore useChat messages completely
+      // Only use real-time messages to ensure consistency across all users
+      console.log('🏠 Room chat: Using only real-time messages, ignoring useChat optimistic updates');
+      
+      // Don't merge - real-time messages are the single source of truth
+      // This ensures User A and User B see exactly the same messages
     }
   }, [roomContext, messages]);
 
