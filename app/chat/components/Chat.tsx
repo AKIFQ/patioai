@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ChatScrollAnchor } from '../hooks/chat-scroll-anchor';
 import { setModelSettings } from '../actions';
 import Link from 'next/link';
+import Image from 'next/image';
 // Shadcn UI components
 import { Button } from '@/components/ui/button';
 import {
@@ -29,7 +30,7 @@ import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import TypingIndicator from './TypingIndicator';
 
 // Icons from Lucide React
-import { User, Bot, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
+import { User, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
 
 interface RoomContext {
   shareCode: string;
@@ -181,6 +182,11 @@ const ChatComponent: React.FC<ChatProps> = ({
     return roomContext ? `room_${roomContext.shareCode}_${roomContext.chatSessionId}` : chatId;
   }, [roomContext?.shareCode, roomContext?.chatSessionId, chatId]);
 
+  // Debug: Log chat ID changes
+  useEffect(() => {
+    console.log('🆔 CHAT ID CHANGED:', { chatId, stableChatId, currentChatId });
+  }, [chatId, stableChatId, currentChatId]);
+
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
     id: stableChatId,
     api: roomContext ? '/api/dummy' : apiEndpoint, // Use dummy endpoint for room chats
@@ -196,8 +202,24 @@ const ChatComponent: React.FC<ChatProps> = ({
     onFinish: async () => {
       if (!roomContext) {
         console.log(`✅ CHAT: onFinish called for ${stableChatId}`);
-        // Always refresh chat previews to update sidebar
-        await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+        console.log(`🔍 CHAT: Current URL: ${window.location.href}`);
+        console.log(`🔍 CHAT: Current pathname: ${window.location.pathname}`);
+
+        // If we're on the generic /chat page, update URL to the specific chat ID
+        // This prevents the page reload that causes the empty state
+        if (window.location.pathname === '/chat' && stableChatId) {
+          const newUrl = `/chat/${stableChatId}${window.location.search}`;
+          window.history.replaceState({}, '', newUrl);
+          console.log(`🔄 Updated URL to: ${newUrl}`);
+        }
+
+        // Only refresh chat previews to update sidebar, don't cause page re-render
+        try {
+          await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+          console.log('🔄 Sidebar data refreshed successfully');
+        } catch (error) {
+          console.warn('Failed to refresh sidebar data:', error);
+        }
       }
     },
 
@@ -257,6 +279,13 @@ const ChatComponent: React.FC<ChatProps> = ({
         // Real-time will handle showing the messages
 
       } else {
+        // For individual chats: Update URL immediately to prevent re-renders
+        if (window.location.pathname === '/chat' && stableChatId) {
+          const newUrl = `/chat/${stableChatId}${window.location.search}`;
+          window.history.replaceState({}, '', newUrl);
+          console.log(`🔄 Pre-emptively updated URL to: ${newUrl}`);
+        }
+        
         // For individual chats: Use optimistic updates
         if (attachments && attachments.length > 0) {
           // Handle attachments
@@ -582,8 +611,14 @@ const ChatComponent: React.FC<ChatProps> = ({
                               <User className="h-4 w-4 text-primary-foreground" />
                             </div>
                           ) : (
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Bot className="h-4 w-4 text-primary" />
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                              <Image 
+                                src="/icons/icon-512x512.png" 
+                                alt="AI Assistant" 
+                                width={20} 
+                                height={20}
+                                className="rounded-full"
+                              />
                             </div>
                           )}
                           <div className="flex-1">
@@ -712,7 +747,13 @@ const ChatComponent: React.FC<ChatProps> = ({
                               >
                                 <AccordionTrigger className="px-4 py-3 font-medium hover:no-underline">
                                   <div className="flex items-center gap-2">
-                                    <Bot className="h-4 w-4" />
+                                    <Image 
+                                      src="/icons/icon-512x512.png" 
+                                      alt="AI Assistant" 
+                                      width={16} 
+                                      height={16}
+                                      className="rounded-full"
+                                    />
                                     <span>AI Tools Used</span>
                                   </div>
                                 </AccordionTrigger>
@@ -765,8 +806,14 @@ const ChatComponent: React.FC<ChatProps> = ({
                   <Card className="relative gap-2 py-2 bg-card dark:bg-card/90 border-border/50">
                     <CardHeader className="pb-2 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Bot className="h-4 w-4 text-primary" />
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                          <Image 
+                            src="/icons/icon-512x512.png" 
+                            alt="AI Assistant" 
+                            width={20} 
+                            height={20}
+                            className="rounded-full"
+                          />
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold text-sm">AI Assistant</h3>
