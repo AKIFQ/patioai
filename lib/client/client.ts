@@ -19,7 +19,7 @@ export function createClient() {
     return supabaseClient;
   }
 
-  // Create new client with proper realtime configuration
+  // Create new client with optimized realtime configuration for background tabs
   supabaseClient = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -28,8 +28,14 @@ export function createClient() {
         params: {
           eventsPerSecond: 10
         },
-        heartbeatIntervalMs: 30000,
-        reconnectAfterMs: (tries: number) => Math.min(tries * 1000, 10000)
+        // Shorter heartbeat for better background detection
+        heartbeatIntervalMs: 15000,
+        // More aggressive reconnection for background tabs
+        reconnectAfterMs: (tries: number) => Math.min(tries * 500, 5000),
+        // Enable background sync
+        enableBackgroundSync: true,
+        // Longer timeout before giving up
+        timeout: 20000
       }
     }
   );

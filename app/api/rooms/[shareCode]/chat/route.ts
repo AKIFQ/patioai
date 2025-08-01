@@ -98,6 +98,16 @@ async function saveRoomMessage(
   });
 
   try {
+    // First, check if this thread already has messages (to detect first message)
+    const { data: existingMessages } = await supabase
+      .from('room_messages')
+      .select('id')
+      .eq('thread_id', threadId)
+      .limit(1);
+
+    const isFirstMessage = !existingMessages || existingMessages.length === 0;
+
+    // Save the message
     const { error, data } = await supabase
       .from('room_messages')
       .insert({
@@ -119,8 +129,48 @@ async function saveRoomMessage(
     console.log(`✅ [${messageId}] Message saved successfully:`, {
       dbId: data?.[0]?.id,
       sender: senderName,
-      isAI: isAiResponse
+      isAI: isAiResponse,
+      isFirstMessage
     });
+
+    // If this is the first message in the thread, trigger sidebar update
+    if (isFirstMessage && !isAiResponse) {
+      console.log(`🎉 [${messageId}] First message in thread - triggering sidebar update`);
+      
+      // Broadcast thread creation event for sidebar updates
+      try {
+        // Get room info to find the share code for the broadcast
+        const { data: roomData } = await supabase
+          .from('rooms')
+          .select('share_code')
+          .eq('id', roomId)
+          .single();
+
+        if (roomData) {
+          // Broadcast to a room-specific channel that all participants can listen to
+          await supabase
+            .channel(`room_sidebar_${roomData.share_code}`)
+            .send({
+              type: 'broadcast',
+              event: 'thread_created',
+              payload: {
+                threadId,
+                roomId,
+                shareCode: roomData.share_code,
+                senderName,
+                firstMessage: content,
+                createdAt: new Date().toISOString()
+              }
+            });
+          
+          console.log(`📡 [${messageId}] Sidebar update broadcast sent to room_sidebar_${roomData.share_code}`);
+        }
+      } catch (broadcastError) {
+        console.error(`❌ [${messageId}] Error broadcasting sidebar update:`, broadcastError);
+        // Don't fail the message save if broadcast fails
+      }
+    }
+
     return true;
   } catch (error) {
     console.error(`💥 [${messageId}] Exception saving message:`, error);

@@ -475,7 +475,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 {currentRooms.map((room) => (
                   <Link
                     key={room.id}
-                    href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}`}
+                    href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
                     onClick={handleRoomSelect}
                     className={`block w-full text-left p-3 rounded-lg border transition-colors ${
                       currentRoomShareCode === room.shareCode

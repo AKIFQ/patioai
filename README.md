@@ -636,6 +636,31 @@ Make sure to set all required environment variables in your deployment platform:
 - OAuth credentials (if using)
 - Optional services (Redis, Langfuse, etc.)
 
+### Scaling Realtime for 1000+ Users
+
+Supabase Realtime has limitations for high-scale applications:
+- **Connection limit**: ~200-500 concurrent connections
+- **Message rate**: ~100 messages/second
+- **Cost**: $25/month for 500k realtime messages
+
+For applications expecting 1000+ concurrent users, consider these alternatives:
+
+#### Option 1: Custom WebSocket Server
+```env
+NEXT_PUBLIC_REALTIME_PROVIDER=websocket
+NEXT_PUBLIC_WEBSOCKET_URL=ws://your-websocket-server.com
+```
+
+#### Option 2: Pusher (Medium Scale)
+```env
+NEXT_PUBLIC_REALTIME_PROVIDER=pusher
+NEXT_PUBLIC_PUSHER_KEY=your_pusher_key
+NEXT_PUBLIC_PUSHER_CLUSTER=us2
+```
+
+#### Option 3: Socket.IO with Redis
+For enterprise scale, implement Socket.IO with Redis clustering for horizontal scaling.
+
 
 ## License
 

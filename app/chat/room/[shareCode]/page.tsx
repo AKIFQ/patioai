@@ -76,14 +76,10 @@ export default async function RoomChatPage(props: {
     // Get thread ID from URL (prioritize threadId over legacy chatSession)
     let chatSessionId = searchParams.threadId || searchParams.chatSession;
     if (!chatSessionId) {
-        // Create deterministic main thread using a simple but valid UUID
-        // Convert share code to a deterministic UUID
-        const shareCodeHash = shareCode.split('').reduce((a, b) => {
-            a = ((a << 5) - a) + b.charCodeAt(0);
-            return a & a;
-        }, 0);
-        const hashStr = Math.abs(shareCodeHash).toString(16).padStart(8, '0');
-        chatSessionId = `${hashStr.substring(0, 8)}-0000-4000-8000-${hashStr.padEnd(12, '0').substring(0, 12)}`;
+        // Always generate a new thread ID - no persistent main thread
+        // This ensures every room entry starts a fresh conversation
+        chatSessionId = crypto.randomUUID();
+        console.log('🆕 Generated new thread for room entry:', chatSessionId);
     }
 
     // Get current user info to check if they're the creator
@@ -98,31 +94,30 @@ export default async function RoomChatPage(props: {
         redirect(`/chat`);
     }
 
-    // For group chat: Show all messages from all threads (like WhatsApp group)
-    // This ensures new users see the complete chat history
+    // Load messages for the specific thread only
     let roomMessages: any[] = [];
     
     try {
-        // Load ALL messages from the room, regardless of thread
-        // This gives new users the complete chat history
-        const { data: allMessages } = await (supabase as any)
+        // Load messages for this specific thread only
+        const { data: threadMessages } = await (supabase as any)
             .from('room_messages')
             .select('*')
             .eq('room_id', roomInfo.room.id)
+            .eq('thread_id', chatSessionId) // Filter by specific thread
             .order('created_at', { ascending: true });
         
-        if (allMessages && allMessages.length > 0) {
+        if (threadMessages && threadMessages.length > 0) {
             // Convert to Message format
-            roomMessages = allMessages.map((msg: any) => ({
+            roomMessages = threadMessages.map((msg: any) => ({
                 id: msg.id,
                 role: msg.is_ai_response ? 'assistant' : 'user',
                 content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
                 createdAt: new Date(msg.created_at)
             }));
             
-            console.log('Loaded ALL room messages:', roomMessages.length);
+            console.log(`Loaded messages for thread ${chatSessionId}:`, roomMessages.length);
         } else {
-            console.log('No messages found in room');
+            console.log(`No messages found for thread ${chatSessionId}`);
         }
     } catch (error) {
         console.error('Error loading room messages:', error);
