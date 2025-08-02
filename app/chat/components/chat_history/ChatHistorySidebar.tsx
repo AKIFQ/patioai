@@ -114,8 +114,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   // Use SWR to manage room data with fallback to initial rooms
   const { data: currentRooms, mutate: mutateRooms, isLoading: isLoadingRooms } = useSWR(
-    userInfo.email ? 'rooms' : null,
-    fetchRooms,
+    'rooms', // Always use consistent key
+    userInfo.email ? fetchRooms : () => Promise.resolve([]), // Conditional function instead of conditional key
     {
       fallbackData: rooms,
       revalidateOnFocus: false,
@@ -168,6 +168,20 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     }
   }, [setOpenMobile]);
 
+  const handleRoomCreated = useCallback(() => {
+    // Refresh the rooms list when a new room is created
+    mutateRooms();
+  }, [mutateRooms]);
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const handleRoomSelect = () => {
+    // Room selection is handled by navigation
+    handleChatSelect();
+  };
+
   // Process room threads based on current context
   const processedThreads = React.useMemo(() => {
     if (!currentRoomShareCode) {
@@ -207,86 +221,89 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           if (firstMsg.content) {
             const words = firstMsg.content.trim().split(/\s+/);
             title = words.slice(0, 4).join(' ');
-            if (words.length > 4) title += '...';
+            if (title.length > 30) {
+              title = title.substring(0, 30) + '...';
+            }
           }
-          
+
           allRoomThreads.push({
-            id: `room_thread_${threadId}`,
-            title,
-            created_at: threadLatestTimes.get(threadId) || firstMsg.created_at,
+            id: threadId,
+            firstMessage: title,
+            created_at: firstMsg.created_at,
+            type: 'room' as const,
             roomName: roomData.name,
-            shareCode: roomData.shareCode,
-            threadId: threadId
+            shareCode: roomData.shareCode
           });
         }
       });
 
-      return allRoomThreads.sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-    } else {
-      // Room context: Show only threads for current room
-      const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
-      
-      if (!currentRoom) {
-        return [];
-      }
+      // Sort by latest message time
+      allRoomThreads.sort((a, b) => {
+        const timeA = threadLatestTimes.get(a.id) || a.created_at;
+        const timeB = threadLatestTimes.get(b.id) || b.created_at;
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
+      });
 
+      return allRoomThreads;
+    } else {
+      // Room context: Show only threads for the current room
+      const roomThreads: any[] = [];
       const threadFirstMessages = new Map();
       const threadLatestTimes = new Map();
       
-      // Filter messages for current room only
-      (roomChatsData || [])
-        .filter((msg: any) => msg.room_id === currentRoom.id)
-        .forEach((msg: any) => {
-          if (msg.thread_id && !msg.is_ai_response) {
+      // Find the current room
+      const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
+      
+      if (currentRoom) {
+        // Group room messages by thread_id for the current room
+        (roomChatsData || []).forEach((msg: any) => {
+          if (msg.room_id === currentRoom.id && msg.thread_id && !msg.is_ai_response) {
             if (!threadFirstMessages.has(msg.thread_id)) {
               threadFirstMessages.set(msg.thread_id, msg);
             }
           }
           // Track latest message time for each thread
-          if (msg.thread_id) {
+          if (msg.room_id === currentRoom.id && msg.thread_id) {
             const currentLatest = threadLatestTimes.get(msg.thread_id);
             if (!currentLatest || new Date(msg.created_at) > new Date(currentLatest)) {
               threadLatestTimes.set(msg.thread_id, msg.created_at);
             }
           }
         });
-      
-      // Create sidebar entries for current room's threads
-      const roomThreads: any[] = [];
-      threadFirstMessages.forEach((firstMsg, threadId) => {
-        // Use the first few words of the first user message as the title
-        let title = 'New Chat';
-        if (firstMsg.content) {
-          const words = firstMsg.content.trim().split(/\s+/);
-          title = words.slice(0, 4).join(' ');
-          if (words.length > 4) title += '...';
-        }
         
-        roomThreads.push({
-          id: `room_thread_${threadId}`,
-          title,
-          created_at: threadLatestTimes.get(threadId) || firstMsg.created_at,
-          threadId: threadId,
-          senderName: firstMsg.sender_name
-        });
-      });
+        // Create sidebar entries for each thread in the current room
+        threadFirstMessages.forEach((firstMsg, threadId) => {
+          // Use the first few words of the first user message as the title
+          let title = 'New Chat';
+          if (firstMsg.content) {
+            const words = firstMsg.content.trim().split(/\s+/);
+            title = words.slice(0, 4).join(' ');
+            if (title.length > 30) {
+              title = title.substring(0, 30) + '...';
+            }
+          }
 
-      return roomThreads.sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+          roomThreads.push({
+            id: threadId,
+            firstMessage: title,
+            created_at: firstMsg.created_at,
+            type: 'room' as const,
+            roomName: currentRoom.name,
+            shareCode: currentRoom.shareCode
+          });
+        });
+
+        // Sort by latest message time
+        roomThreads.sort((a, b) => {
+          const timeA = threadLatestTimes.get(a.id) || a.created_at;
+          const timeB = threadLatestTimes.get(b.id) || b.created_at;
+          return new Date(timeB).getTime() - new Date(timeA).getTime();
+        });
+      }
+
+      return roomThreads;
     }
   }, [currentRoomShareCode, roomChatsData, currentRooms]);
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  const handleRoomSelect = () => {
-    // Room selection is handled by navigation
-    handleChatSelect();
-  };
 
   // Minimized sidebar when closed
   if (!sidebarOpen) {
@@ -366,11 +383,6 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       </div>
     );
   }
-
-  const handleRoomCreated = useCallback(() => {
-    // Refresh the rooms list when a new room is created
-    mutateRooms();
-  }, [mutateRooms]);
 
   return (
     <>
@@ -521,7 +533,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                     {processedThreads.map((thread: any) => (
                       <Link
                         key={thread.id}
-                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.threadId}`}
+                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
                         onClick={handleChatSelect}
                         className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                       >
@@ -529,10 +541,10 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                           {new Date(thread.created_at).toLocaleDateString([], { 
                             month: 'short',
                             day: 'numeric'
-                          })} {thread.senderName && `• ${thread.senderName}`}
+                          })} {thread.roomName && `• ${thread.roomName}`}
                         </div>
                         <div className="text-sm text-foreground">
-                          {thread.title}
+                          {thread.firstMessage}
                         </div>
                       </Link>
                     ))}
@@ -563,7 +575,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                       {processedThreads.map((thread: any) => (
                         <Link
                           key={thread.id}
-                          href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.threadId}`}
+                          href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
                           onClick={handleChatSelect}
                           className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                         >
@@ -574,7 +586,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                             })}
                           </div>
                           <div className="text-sm text-foreground">
-                            {thread.title}
+                            {thread.firstMessage}
                           </div>
                         </Link>
                       ))}

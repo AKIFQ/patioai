@@ -1,11 +1,20 @@
 import 'server-only';
 import React from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { getSession } from '@/lib/server/supabase';
+import { getSession, hasExistingContent } from '@/lib/server/supabase';
 
 export default async function LandingPage() {
   const session = await getSession();
+  
+  // If user is authenticated and has existing content, redirect to chat
+  if (session) {
+    const hasContent = await hasExistingContent();
+    if (hasContent) {
+      redirect('/chat');
+    }
+  }
   
   return (
     <div className="min-h-screen flex items-center justify-center">

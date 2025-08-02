@@ -49,3 +49,59 @@ export const getUserInfo = cache(async () => {
     return null;
   }
 });
+
+// Check if user has existing chats or rooms
+export const hasExistingContent = cache(async () => {
+  const supabase = await createServerSupabaseClient();
+  try {
+    // First check if user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return false;
+    }
+
+    // Check for existing chat sessions
+    const { data: chatSessions, error: chatError } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    if (chatError) {
+      console.error('Error checking chat sessions:', chatError);
+    } else if (chatSessions && chatSessions.length > 0) {
+      return true;
+    }
+
+    // Check for existing rooms (as creator)
+    const { data: rooms, error: roomsError } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('created_by', user.id)
+      .limit(1);
+
+    if (roomsError) {
+      console.error('Error checking rooms:', roomsError);
+    } else if (rooms && rooms.length > 0) {
+      return true;
+    }
+
+    // Check for rooms where user is a participant
+    const { data: participantRooms, error: participantError } = await supabase
+      .from('room_participants')
+      .select('room_id')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    if (participantError) {
+      console.error('Error checking participant rooms:', participantError);
+    } else if (participantRooms && participantRooms.length > 0) {
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Error checking existing content:', error);
+    return false;
+  }
+});
