@@ -77,6 +77,7 @@ const VirtualizedMessageList = memo(({
       <List
         ref={listRef}
         height={height}
+        width="100%"
         itemCount={messages.length}
         itemSize={itemHeight}
         itemData={itemData}

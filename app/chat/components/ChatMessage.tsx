@@ -24,9 +24,8 @@ const ChatMessage = memo(({ message, index, isUserMessage }: ChatMessageProps) =
 
   // Separate text and reasoning parts for better rendering
   const textParts = message.content ? [{ type: 'text' as const, text: message.content }] : [];
-  const reasoningParts = message.experimental_providerMetadata?.reasoning 
-    ? [{ type: 'reasoning' as const, text: message.experimental_providerMetadata.reasoning }] 
-    : [];
+  // Note: reasoning parts removed for now due to type issues
+  const reasoningParts: any[] = [];
 
   return (
     <li key={message.id} className="mb-6 last:mb-0">
@@ -89,10 +88,10 @@ const ChatMessage = memo(({ message, index, isUserMessage }: ChatMessageProps) =
             </div>
           </div>
 
-          {/* Sources (only for assistant messages) */}
-          {!isUserMessage && message.experimental_providerMetadata?.sources && (
+          {/* Sources (only for assistant messages) - temporarily disabled due to type issues */}
+          {false && !isUserMessage && (
             <div className="mt-2">
-              <SourceView sources={message.experimental_providerMetadata.sources} />
+              {/* <SourceView sources={message.experimental_providerMetadata.sources} /> */}
             </div>
           )}
         </div>

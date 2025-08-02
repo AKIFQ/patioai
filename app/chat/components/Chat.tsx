@@ -86,12 +86,11 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Performance monitoring
   const { startMeasurement, endMeasurement } = usePerformanceMonitor('ChatComponent');
 
-  // Measure render performance
-  useEffect(() => {
+  // Measure render performance - moved after messages are defined
+  const measurePerformance = useCallback(() => {
     startMeasurement();
-    const messageCount = roomContext ? realtimeMessages.length : messages.length;
-    endMeasurement(messageCount);
-  }, [startMeasurement, endMeasurement, roomContext, realtimeMessages.length, messages.length]);
+    // Will be called after messages are available
+  }, [startMeasurement]);
 
   // Message deduplication and loading state for room chats
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());

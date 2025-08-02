@@ -3,20 +3,20 @@
 // Lazy load heavy markdown processing
 export const loadMarkdownProcessor = () => import('marked').then(mod => mod.marked);
 
-// Lazy load PDF processing (if used)
-export const loadPDFProcessor = () => import('pdfjs-dist').then(mod => mod.default);
+// Lazy load PDF processing (if used) - commented out until dependency is added
+// export const loadPDFProcessor = () => import('pdfjs-dist').then(mod => mod.default);
 
-// Lazy load chart libraries (if used)
-export const loadChartLibrary = () => import('chart.js').then(mod => mod.default);
+// Lazy load chart libraries (if used) - commented out until dependency is added
+// export const loadChartLibrary = () => import('chart.js').then(mod => mod.default);
 
-// Lazy load Three.js (if used)
-export const loadThreeJS = () => import('three').then(mod => mod.default);
+// Lazy load Three.js (if used) - commented out until dependency is added
+// export const loadThreeJS = () => import('three').then(mod => mod.default);
 
-// Lazy load D3 (if used)
-export const loadD3 = () => import('d3').then(mod => mod.default);
+// Lazy load D3 (if used) - commented out until dependency is added
+// export const loadD3 = () => import('d3').then(mod => mod.default);
 
-// Lazy load syntax highlighting
-export const loadPrismJS = () => import('prismjs').then(mod => mod.default);
+// Lazy load syntax highlighting - commented out until dependency is added
+// export const loadPrismJS = () => import('prismjs').then(mod => mod.default);
 
 // Lazy load date utilities
 export const loadDateFns = () => import('date-fns').then(mod => mod);
