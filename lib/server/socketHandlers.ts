@@ -33,40 +33,41 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   };
 
   const handleRoomEvents = (socket: AuthenticatedSocket) => {
-    socket.on('join-room', (roomId: string) => {
+    socket.on('join-room', (shareCode: string) => {
       try {
-        socket.join(`room:${roomId}`);
-        console.log(`User ${socket.userId} joined room ${roomId}`);
+        // Join room by share code (this matches the hook expectation)
+        socket.join(`room:${shareCode}`);
+        console.log(`User ${socket.userId} joined room ${shareCode}`);
+        
+        // Confirm join to user first
+        socket.emit('room-joined', { shareCode });
         
         // Notify other room members
-        socket.to(`room:${roomId}`).emit('user-joined-room', {
+        socket.to(`room:${shareCode}`).emit('user-joined-room', {
           userId: socket.userId,
-          roomId,
+          shareCode,
           timestamp: new Date().toISOString()
         });
-        
-        // Confirm join to user
-        socket.emit('room-joined', { roomId });
       } catch (error) {
         console.error('Error joining room:', error);
         socket.emit('room-error', { error: 'Failed to join room' });
       }
     });
 
-    socket.on('leave-room', (roomId: string) => {
+    socket.on('leave-room', (shareCode: string) => {
       try {
-        socket.leave(`room:${roomId}`);
-        console.log(`User ${socket.userId} left room ${roomId}`);
+        socket.leave(`room:${shareCode}`);
+        console.log(`User ${socket.userId} left room ${shareCode}`);
+        
+        // Confirm leave to user first
+        socket.emit('room-left', { shareCode });
         
         // Notify other room members
-        socket.to(`room:${roomId}`).emit('user-left-room', {
+        socket.to(`room:${shareCode}`).emit('user-left-room', {
           userId: socket.userId,
-          roomId,
+          shareCode,
           timestamp: new Date().toISOString()
         });
-        
-        // Confirm leave to user
-        socket.emit('room-left', { roomId });
       } catch (error) {
         console.error('Error leaving room:', error);
         socket.emit('room-error', { error: 'Failed to leave room' });
@@ -75,22 +76,43 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   };
 
   const handleChatEvents = (socket: AuthenticatedSocket) => {
+    // These handlers will be called by API routes when database changes occur
+    // For now, we'll set up the basic structure
+    
     socket.on('send-message', (data: { roomId?: string; message: string; threadId?: string }) => {
       try {
         const { roomId, message, threadId } = data;
         
         if (roomId) {
-          // Room message
-          socket.to(`room:${roomId}`).emit('new-room-message', {
-            message,
-            userId: socket.userId,
-            roomId,
-            threadId,
-            timestamp: new Date().toISOString()
+          // Room message - emit to all room participants
+          socket.to(`room:${roomId}`).emit('room-message-created', {
+            new: {
+              id: `temp-${Date.now()}`,
+              room_id: roomId,
+              thread_id: threadId,
+              sender_name: socket.userId, // Will be replaced with actual display name
+              content: message,
+              is_ai_response: false,
+              created_at: new Date().toISOString()
+            },
+            eventType: 'INSERT',
+            table: 'room_messages',
+            schema: 'public'
           });
         } else {
-          // Regular chat message - will be handled in later slices
-          console.log('Regular chat message received');
+          // Regular chat message - emit to user's personal channel
+          socket.to(`user:${socket.userId}`).emit('chat-message-created', {
+            new: {
+              id: `temp-${Date.now()}`,
+              chat_session_id: threadId,
+              content: message,
+              is_user_message: true,
+              created_at: new Date().toISOString()
+            },
+            eventType: 'INSERT',
+            table: 'chat_messages',
+            schema: 'public'
+          });
         }
       } catch (error) {
         console.error('Error sending message:', error);
@@ -98,15 +120,16 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       }
     });
 
-    socket.on('typing-start', (data: { roomId?: string }) => {
+    socket.on('typing-start', (data: { roomId?: string; displayName?: string }) => {
       try {
-        const { roomId } = data;
+        const { roomId, displayName } = data;
         
-        if (roomId) {
+        if (roomId && displayName) {
+          // Emit to all room members with current typing users (roomId is actually shareCode)
           socket.to(`room:${roomId}`).emit('user-typing', {
-            userId: socket.userId,
+            users: [displayName], // Simple array of typing users
             roomId,
-            isTyping: true
+            timestamp: new Date().toISOString()
           });
         }
       } catch (error) {
@@ -114,15 +137,16 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       }
     });
 
-    socket.on('typing-stop', (data: { roomId?: string }) => {
+    socket.on('typing-stop', (data: { roomId?: string; displayName?: string }) => {
       try {
-        const { roomId } = data;
+        const { roomId, displayName } = data;
         
         if (roomId) {
+          // Emit empty typing users array when user stops typing (roomId is actually shareCode)
           socket.to(`room:${roomId}`).emit('user-typing', {
-            userId: socket.userId,
+            users: [], // Empty array when user stops typing
             roomId,
-            isTyping: false
+            timestamp: new Date().toISOString()
           });
         }
       } catch (error) {

@@ -26,7 +26,7 @@ import WebsiteSearchTool from './tools/WebsiteChatTool';
 import MessageInput from './ChatMessageInput';
 import { toast } from 'sonner';
 import RoomSettingsModal from './RoomSettingsModal';
-import { useRoomRealtime } from '../hooks/useRoomRealtime';
+import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
 
 // Icons from Lucide React
@@ -371,7 +371,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate]);
 
   // Initialize real-time hook with safe fallbacks
-  const realtimeHook = realtimeProps ? useRoomRealtime(realtimeProps) : null;
+  const realtimeHook = realtimeProps ? useRoomSocket(realtimeProps) : null;
 
   const {
     isConnected = false,

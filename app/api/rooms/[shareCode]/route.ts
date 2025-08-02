@@ -48,6 +48,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Failed to delete room' }, { status: 500 });
     }
 
+    // Emit Socket.IO event for room deletion
+    try {
+      const { getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+      const io = getSocketIOInstance();
+      if (io) {
+        io.to(`room:${shareCode}`).emit('room-deleted', {
+          shareCode,
+          roomName: room.name,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to emit room deletion event:', error);
+    }
+
     return NextResponse.json({ 
       success: true, 
       message: `Room "${room.name}" has been deleted successfully` 

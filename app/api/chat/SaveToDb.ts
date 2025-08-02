@@ -66,11 +66,27 @@ export const saveChatToSupbabase = async (
     ];
 
     // Insert both messages in a single query
-    const { error: messagesError } = await supabase
+    const { error: messagesError, data: insertedMessages } = await supabase
       .from('chat_messages')
-      .insert(messagesData);
+      .insert(messagesData)
+      .select();
 
     if (messagesError) throw messagesError;
+
+    // Emit Socket.IO events for both messages
+    try {
+      const { emitChatMessageCreated } = await import('@/lib/server/socketEmitter');
+      
+      if (insertedMessages && insertedMessages.length >= 2) {
+        // Emit user message event
+        emitChatMessageCreated(userId, insertedMessages[0]);
+        
+        // Emit AI message event
+        emitChatMessageCreated(userId, insertedMessages[1]);
+      }
+    } catch (socketError) {
+      console.warn('Failed to emit Socket.IO events for chat messages:', socketError);
+    }
   } catch (error) {
     console.error('Error saving chat to Supabase:', error);
   }

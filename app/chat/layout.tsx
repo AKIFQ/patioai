@@ -8,7 +8,7 @@ import { UploadProvider } from './context/uploadContext';
 import { isToday, isYesterday, subDays } from 'date-fns';
 import { TZDate } from '@date-fns/tz';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import SidebarRealtimeWrapper from './components/SidebarRealtimeWrapper';
+import SidebarSocketWrapper from './components/SidebarSocketWrapper';
 
 export const maxDuration = 60;
 
@@ -247,7 +247,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
   return (
     <div className="h-screen bg-background" data-chat-page>
       <SidebarProvider className="h-full flex">
-        <SidebarRealtimeWrapper
+        <SidebarSocketWrapper
           userId={userData?.id || ''}
           userRooms={(userData?.rooms || []).map(room => ({
             shareCode: room.shareCode,
@@ -271,7 +271,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
               {props.children}
             </UploadProvider>
           </main>
-        </SidebarRealtimeWrapper>
+        </SidebarSocketWrapper>
       </SidebarProvider>
     </div>
   );

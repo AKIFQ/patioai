@@ -103,6 +103,22 @@ export async function POST(
       console.error('Error fetching updated participants:', updatedParticipantsError);
     }
 
+    // Emit Socket.IO event for participant join
+    try {
+      const { getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+      const io = getSocketIOInstance();
+      if (io) {
+        io.to(`room:${shareCode}`).emit('user-joined-room', {
+          displayName: displayName.trim(),
+          sessionId,
+          shareCode,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to emit participant join event:', error);
+    }
+
     // Return room access and info
     return NextResponse.json({
       room: {

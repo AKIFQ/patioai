@@ -133,11 +133,21 @@ async function saveRoomMessage(
       isFirstMessage
     });
 
+    // Emit Socket.IO event for room message (use share code for room identification)
+    const { emitRoomMessageCreated } = await import('@/lib/server/socketEmitter');
+    emitRoomMessageCreated(shareCode, {
+      id: data?.[0]?.id || `msg-${Date.now()}`,
+      room_id: roomId,
+      thread_id: threadId,
+      sender_name: senderName,
+      content,
+      is_ai_response: isAiResponse,
+      created_at: new Date().toISOString()
+    });
+
     // Mark if this is the first message for potential sidebar updates
     if (isFirstMessage && !isAiResponse) {
-      console.log(`🎉 [${messageId}] First message in thread - will trigger sidebar update via realtime`);
-      // The sidebar update will be handled by the realtime message listener
-      // which will detect new threads and refresh the sidebar accordingly
+      console.log(`🎉 [${messageId}] First message in thread - will trigger sidebar update via Socket.IO`);
     }
 
     return true;
@@ -373,6 +383,18 @@ export async function POST(
 
         if (aiSaved) {
           console.log(`✅ [${requestId}] AI response saved successfully`);
+          
+          // Emit Socket.IO event for room message (use share code for room identification)
+          const { emitRoomMessageCreated } = await import('@/lib/server/socketEmitter');
+          emitRoomMessageCreated(shareCode, {
+            id: `ai-${Date.now()}`,
+            room_id: room.id,
+            thread_id: threadId,
+            sender_name: 'AI Assistant',
+            content: text,
+            is_ai_response: true,
+            created_at: new Date().toISOString()
+          });
         } else {
           console.log(`❌ [${requestId}] Failed to save AI response`);
         }

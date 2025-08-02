@@ -4,6 +4,7 @@ import next from 'next';
 import { Server as SocketIOServer } from 'socket.io';
 import { config } from './lib/config/endpoints';
 import { createSocketHandlers } from './lib/server/socketHandlers';
+import { setSocketIOInstance } from './lib/server/socketEmitter';
 import { AuthenticatedSocket } from './types/socket';
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -61,6 +62,9 @@ app.prepare().then(() => {
       next(new Error('Authentication failed'));
     }
   });
+
+  // Set the global Socket.IO instance for API routes to use
+  setSocketIOInstance(io);
 
   // Initialize socket handlers
   const socketHandlers = createSocketHandlers(io);
