@@ -61,6 +61,37 @@ export function useRoomRealtime({
 
     let roomUuid: string | null = null;
     let mounted = true; // Track if component is still mounted
+    let reconnectInterval: NodeJS.Timeout | null = null;
+    let hasMessages = false; // Track if any messages were sent in this thread
+
+    // Handle visibility changes to maintain connection in background
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('🌙 Tab went to background - maintaining connection');
+        // Don't disconnect, just log the state change
+      } else {
+        console.log('☀️ Tab became visible - ensuring connection');
+        // Force reconnection check when tab becomes visible
+        if (messageChannelRef.current && connectionStatus !== 'SUBSCRIBED') {
+          console.log('🔄 Forcing reconnection on tab focus');
+          initializeRealtime();
+        }
+      }
+    };
+
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Periodic connection health check - DISABLED to prevent re-render loops
+    const startHealthCheck = () => {
+      // Temporarily disabled to fix re-rendering loop
+      // reconnectInterval = setInterval(() => {
+      //   if (mounted && connectionStatus !== 'SUBSCRIBED') {
+      //     console.log('🏥 Health check: Connection not healthy, attempting reconnect');
+      //     initializeRealtime();
+      //   }
+      // }, 30000); // Check every 30 seconds
+    };
 
     // First get the room UUID from share code
     const initializeRealtime = async () => {
@@ -136,12 +167,12 @@ export function useRoomRealtime({
                 currentThread: chatSessionId
               });
 
-              // Skip own user messages to avoid duplicates with optimistic updates
-              // This prevents the sender from seeing their own message twice
-              if (newMessage.sender_name === displayName && !newMessage.is_ai_response) {
-                console.log('⏭️ SKIPPING: Own user message to avoid duplicate for sender:', displayName);
-                return;
-              }
+              // Track that this thread has messages
+              hasMessages = true;
+
+              // NOTE: We no longer skip own user messages because room chats 
+              // don't use optimistic updates - real-time is the single source of truth
+              // All users (including sender) should see messages via real-time only
 
               console.log('✅ PROCESSING RT MSG from:', newMessage.sender_name, 'for user:', displayName);
 
@@ -168,14 +199,35 @@ export function useRoomRealtime({
             if (status === 'SUBSCRIBED') {
               console.log('✅ Message subscription ready - should receive INSERT events');
             } else if (status === 'CHANNEL_ERROR') {
-              console.error('❌ Channel error - will retry automatically');
+              console.error('❌ Channel error - will retry in 10 seconds');
               setIsConnected(false);
+              // Retry after 10 seconds (increased delay)
+              setTimeout(() => {
+                if (mounted) {
+                  console.log('🔄 Retrying connection after channel error');
+                  initializeRealtime();
+                }
+              }, 10000);
             } else if (status === 'TIMED_OUT') {
-              console.error('⏰ Subscription timed out - will retry automatically');
+              console.error('⏰ Subscription timed out - will retry in 8 seconds');
               setIsConnected(false);
+              // Retry after 8 seconds (increased delay)
+              setTimeout(() => {
+                if (mounted) {
+                  console.log('🔄 Retrying connection after timeout');
+                  initializeRealtime();
+                }
+              }, 8000);
             } else if (status === 'CLOSED') {
-              console.log('🔒 Channel closed');
+              console.log('🔒 Channel closed - will retry in 5 seconds');
               setIsConnected(false);
+              // Retry after 5 seconds (increased delay)
+              setTimeout(() => {
+                if (mounted) {
+                  console.log('🔄 Retrying connection after close');
+                  initializeRealtime();
+                }
+              }, 5000);
             }
 
             if (err) {
@@ -271,13 +323,37 @@ export function useRoomRealtime({
       }
     };
 
-    initializeRealtime();
+    // Start initialization and health check
+    initializeRealtime().then(() => {
+      if (mounted) {
+        startHealthCheck();
+      }
+    });
 
     return () => {
       mounted = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (reconnectInterval) {
+        clearInterval(reconnectInterval);
+      }
+      
+      // Clean up empty thread if no messages were sent
+      if (!hasMessages && chatSessionId) {
+        console.log('🧹 Cleaning up empty thread on unmount:', chatSessionId);
+        // Note: In a real implementation, you might want to call an API endpoint
+        // to clean up the empty thread from the database
+        fetch('/api/cleanup/empty-threads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ threadId: chatSessionId })
+        }).catch(error => {
+          console.warn('Failed to cleanup empty thread:', error);
+        });
+      }
+      
       cleanup();
     };
-  }, [shareCode, displayName, chatSessionId, cleanup]);
+  }, [shareCode, displayName, chatSessionId]);
 
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {

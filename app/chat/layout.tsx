@@ -8,6 +8,7 @@ import { UploadProvider } from './context/uploadContext';
 import { isToday, isYesterday, subDays } from 'date-fns';
 import { TZDate } from '@date-fns/tz';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import SidebarRealtimeWrapper from './components/SidebarRealtimeWrapper';
 
 export const maxDuration = 60;
 
@@ -246,23 +247,31 @@ export default async function Layout(props: { children: React.ReactNode }) {
   return (
     <div className="h-screen bg-background" data-chat-page>
       <SidebarProvider className="h-full flex">
-        <ChatHistoryDrawer
-          userInfo={{
-            id: userData?.id || '',
-            full_name: userData?.full_name || '',
-            email: userData?.email || ''
-          }}
-          initialChatPreviews={userData?.allChatPreviews || []}
-          categorizedChats={categorizeChats(userData?.allChatPreviews || [])}
-          documents={userData?.documents || []}
-          rooms={userData?.rooms || []}
-          roomChatsData={userData?.roomChatsData || []}
-        />
-        <main className="flex-1 overflow-hidden">
-          <UploadProvider userId={userData?.id || ''}>
-            {props.children}
-          </UploadProvider>
-        </main>
+        <SidebarRealtimeWrapper
+          userId={userData?.id || ''}
+          userRooms={(userData?.rooms || []).map(room => ({
+            shareCode: room.shareCode,
+            name: room.name
+          }))}
+        >
+          <ChatHistoryDrawer
+            userInfo={{
+              id: userData?.id || '',
+              full_name: userData?.full_name || '',
+              email: userData?.email || ''
+            }}
+            initialChatPreviews={userData?.allChatPreviews || []}
+            categorizedChats={categorizeChats(userData?.allChatPreviews || [])}
+            documents={userData?.documents || []}
+            rooms={userData?.rooms || []}
+            roomChatsData={userData?.roomChatsData || []}
+          />
+          <main className="flex-1 overflow-hidden">
+            <UploadProvider userId={userData?.id || ''}>
+              {props.children}
+            </UploadProvider>
+          </main>
+        </SidebarRealtimeWrapper>
       </SidebarProvider>
     </div>
   );

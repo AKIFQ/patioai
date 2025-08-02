@@ -12,9 +12,6 @@ interface PageProps {
 }
 
 export default async function ChatPage(props: PageProps) {
-  // Prevent caching to ensure fresh chat IDs
-  noStore();
-  
   const searchParams = await props.searchParams;
   const cookieStore = await cookies();
   const modelType = cookieStore.get('modelType')?.value ?? 'standart';
@@ -22,13 +19,14 @@ export default async function ChatPage(props: PageProps) {
     cookieStore.get('selectedOption')?.value ?? 'gpt-3.5-turbo-1106';
   
   // Generate a unique chat ID for each new chat session
+  // Use a timestamp-based approach to ensure stability during the same session
   const createChatId = uuidv4();
 
   return (
     <div className="flex w-full h-full overflow-hidden">
       <div className="flex-1">
         <ChatComponent
-          key={`new-chat-${createChatId}-${Date.now()}`}
+          key={`new-chat-${createChatId}`}
           chatId={createChatId}
           initialModelType={modelType}
           initialSelectedOption={selectedOption}

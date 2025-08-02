@@ -53,35 +53,21 @@ export default function RoomChatWrapper({
       return;
     }
 
-    // Use thread ID from URL, or create main thread if none specified
+    // Use thread ID from URL, or generate a new one if missing
     let finalThreadId = threadId;
-    let shouldUpdateUrl = false;
     
     if (!finalThreadId) {
-      // Create deterministic main thread using a simple but valid UUID
-      // Convert share code to a deterministic UUID
-      const shareCodeHash = shareCode.split('').reduce((a, b) => {
-          a = ((a << 5) - a) + b.charCodeAt(0);
-          return a & a;
-      }, 0);
-      const hashStr = Math.abs(shareCodeHash).toString(16).padStart(8, '0');
-      finalThreadId = `${hashStr.substring(0, 8)}-0000-4000-8000-${hashStr.padEnd(12, '0').substring(0, 12)}`;
-      shouldUpdateUrl = true;
+      // Generate a new thread ID for new room entries (like when joining from join page)
+      finalThreadId = crypto.randomUUID();
+      console.log('🆕 Generated new thread ID for room entry:', finalThreadId);
       
-      console.log('🏠 Creating main thread for room:', finalThreadId);
-    } else {
-      console.log('🆕 Using existing thread ID:', finalThreadId);
-    }
-    
-    // Only update URL if we're creating the main thread (not for new chat sessions)
-    if (shouldUpdateUrl) {
+      // Update URL to include the new thread ID
       const currentParams = new URLSearchParams(searchParams.toString());
       currentParams.set('threadId', finalThreadId);
-      // Remove legacy chatSession param if it exists
-      currentParams.delete('chatSession');
       const newUrl = `/chat/room/${shareCode}?${currentParams.toString()}`;
-      console.log('🔄 Updating URL to include main thread ID');
       window.history.replaceState({}, '', newUrl);
+    } else {
+      console.log('🆕 Using existing thread ID:', finalThreadId);
     }
 
     // Only update context if it's actually different to prevent re-renders
@@ -130,18 +116,11 @@ export default function RoomChatWrapper({
     );
   }
 
-  // Determine if this is a new chat session (not the main thread)
-  const isMainThread = roomContext.chatSessionId?.includes('-0000-4000-8000-');
-  const isNewChatSession = !isMainThread;
-  
-  // For new chat sessions, start with empty messages
-  // For main thread, use the loaded historical messages
-  const chatMessages = isNewChatSession ? [] : initialMessages;
+  // Use the loaded messages (now properly filtered by thread on server-side)
+  const chatMessages = initialMessages;
 
   console.log('🎯 Room chat rendering:', {
     threadId: roomContext.chatSessionId,
-    isMainThread,
-    isNewChatSession,
     messageCount: chatMessages.length
   });
 
@@ -149,7 +128,7 @@ export default function RoomChatWrapper({
     <div className="flex w-full h-full overflow-hidden">
       <div className="flex-1">
         <ChatComponent
-          key={`room_${shareCode}_${roomContext.chatSessionId}_${isNewChatSession ? Date.now() : 'main'}`}
+          key={`room_${shareCode}_${roomContext.chatSessionId}`}
           currentChat={chatMessages}
           chatId={`room_session_${roomContext.chatSessionId}`}
           initialModelType={initialModelType}

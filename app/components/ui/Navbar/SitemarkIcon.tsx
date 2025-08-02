@@ -14,10 +14,10 @@ export default function SitemarkIcon() {
       <Image
         src="/logos/logo-horizontal.png"
         alt="PatioAI"
-        width={120}
-        height={32}
+        width={100}
+        height={50}
         priority
-        className="h-8 w-auto"
+        // className="h-12 w-auto"
       />
     </div>
   );

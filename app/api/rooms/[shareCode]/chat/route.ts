@@ -98,6 +98,16 @@ async function saveRoomMessage(
   });
 
   try {
+    // First, check if this thread already has messages (to detect first message)
+    const { data: existingMessages } = await supabase
+      .from('room_messages')
+      .select('id')
+      .eq('thread_id', threadId)
+      .limit(1);
+
+    const isFirstMessage = !existingMessages || existingMessages.length === 0;
+
+    // Save the message
     const { error, data } = await supabase
       .from('room_messages')
       .insert({
@@ -119,8 +129,17 @@ async function saveRoomMessage(
     console.log(`✅ [${messageId}] Message saved successfully:`, {
       dbId: data?.[0]?.id,
       sender: senderName,
-      isAI: isAiResponse
+      isAI: isAiResponse,
+      isFirstMessage
     });
+
+    // Mark if this is the first message for potential sidebar updates
+    if (isFirstMessage && !isAiResponse) {
+      console.log(`🎉 [${messageId}] First message in thread - will trigger sidebar update via realtime`);
+      // The sidebar update will be handled by the realtime message listener
+      // which will detect new threads and refresh the sidebar accordingly
+    }
+
     return true;
   } catch (error) {
     console.error(`💥 [${messageId}] Exception saving message:`, error);
@@ -129,6 +148,10 @@ async function saveRoomMessage(
 }
 
 // Removed unused daily usage functions - can be re-added later if needed
+
+// Simple in-memory cache to prevent duplicate requests
+const recentRequests = new Map<string, number>();
+const REQUEST_DEBOUNCE_MS = 2000; // 2 second debounce
 
 export async function POST(
   req: NextRequest,
@@ -162,9 +185,35 @@ export async function POST(
       threadId,
       option,
       messagesCount: messages?.length,
-      lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50),
-      fullBody: JSON.stringify(body, null, 2)
+      lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50)
     });
+
+    // Create a unique request key for deduplication
+    const lastUserMessage = messages?.[messages.length - 1];
+    const requestKey = `${shareCode}-${threadId}-${displayName}-${lastUserMessage?.content?.substring(0, 100)}`;
+    const now = Date.now();
+    
+    // Check if we've seen this exact request recently
+    if (recentRequests.has(requestKey)) {
+      const lastRequestTime = recentRequests.get(requestKey)!;
+      if (now - lastRequestTime < REQUEST_DEBOUNCE_MS) {
+        console.log(`🚫 [${requestId}] Duplicate request detected, ignoring:`, requestKey);
+        return new NextResponse('Duplicate request ignored', { status: 429 });
+      }
+    }
+    
+    // Record this request
+    recentRequests.set(requestKey, now);
+    
+    // Clean up old entries (keep only last 100)
+    if (recentRequests.size > 100) {
+      const entries = Array.from(recentRequests.entries());
+      entries.sort((a, b) => b[1] - a[1]); // Sort by timestamp, newest first
+      recentRequests.clear();
+      entries.slice(0, 50).forEach(([key, time]) => {
+        recentRequests.set(key, time);
+      });
+    }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new NextResponse('No messages provided', {
@@ -200,9 +249,9 @@ export async function POST(
     }
 
     // Check if room has expired
-    const now = new Date();
+    const currentTime = new Date();
     const expiresAt = new Date(room.expires_at);
-    if (now > expiresAt) {
+    if (currentTime > expiresAt) {
       return new NextResponse('Room has expired', {
         status: 410,
         headers: { 'Content-Type': 'application/json' }

@@ -150,7 +150,7 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                       >
                         <Link 
                           href={userInfo ? 
-                            `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}` :
+                            `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${crypto.randomUUID()}` :
                             `/room/${room.shareCode}`
                           }
                           onClick={onRoomSelect}
@@ -202,7 +202,7 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                         >
                           <Link 
                             href={userInfo ? 
-                              `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}` :
+                              `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${crypto.randomUUID()}` :
                               `/room/${room.shareCode}`
                             }
                             onClick={onRoomSelect}
