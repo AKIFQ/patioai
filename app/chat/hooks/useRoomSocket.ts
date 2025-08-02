@@ -196,8 +196,11 @@ export function useRoomSocket({
         });
 
         socket.on('room-error', (error) => {
-          console.error('Room Socket.IO error:', error);
-          setConnectionStatus('CHANNEL_ERROR');
+          console.warn('Room Socket.IO error (non-critical):', error);
+          // Don't set error status for empty errors, just log them
+          if (error && Object.keys(error).length > 0) {
+            setConnectionStatus('CHANNEL_ERROR');
+          }
         });
 
         setConnectionStatus('SUBSCRIBED');

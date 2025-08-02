@@ -1,12 +1,33 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Optimized database queries for Socket.IO operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy Supabase client creation to avoid startup errors
+let supabase: any = null;
+
+function getSupabaseClient() {
+  if (!supabase) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!url || !key) {
+      console.warn('Supabase credentials not found, some features may not work');
+      return null;
+    }
+    
+    supabase = createClient(url, key);
+  }
+  return supabase;
+}
 
 export class SocketDatabaseService {
+  // Helper method to get supabase client with error handling
+  private static getClient() {
+    const client = getSupabaseClient();
+    if (!client) {
+      throw new Error('Database not available - Supabase credentials missing');
+    }
+    return client;
+  }
+
   // Optimized room validation with single query
   static async validateRoomAccess(shareCode: string): Promise<{
     valid: boolean;
@@ -14,6 +35,7 @@ export class SocketDatabaseService {
     error?: string;
   }> {
     try {
+      const supabase = this.getClient();
       const { data: room, error } = await supabase
         .from('rooms')
         .select(`
@@ -75,6 +97,7 @@ export class SocketDatabaseService {
     reasoning?: string;
   }): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
+      const supabase = this.getClient();
       const { data: result, error } = await supabase
         .from('room_messages')
         .insert({

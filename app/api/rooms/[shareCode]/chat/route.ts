@@ -411,18 +411,7 @@ export async function POST(
 
         if (aiSaved) {
           console.log(`✅ [${requestId}] AI response saved successfully`);
-          
-          // Emit Socket.IO event for room message (use share code for room identification)
-          const { emitRoomMessageCreated } = await import('@/lib/server/socketEmitter');
-          emitRoomMessageCreated(shareCode, {
-            id: `ai-${Date.now()}`,
-            room_id: room.id,
-            thread_id: threadId,
-            sender_name: 'AI Assistant',
-            content: text,
-            is_ai_response: true,
-            created_at: new Date().toISOString()
-          });
+          // Socket.IO event already emitted by saveRoomMessage function
         } else {
           console.log(`❌ [${requestId}] Failed to save AI response`);
         }
