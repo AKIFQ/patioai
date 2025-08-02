@@ -3,6 +3,7 @@ import { getSession } from '@/lib/server/supabase';
 import { createClient } from '@supabase/supabase-js';
 import { Ratelimit } from '@upstash/ratelimit';
 import { redis } from '@/lib/server/server';
+import { randomBytes } from 'crypto';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,30 +17,9 @@ const ratelimit = new Ratelimit({
   analytics: true,
 });
 
-// Generate human-readable share codes
-function generateShareCode(roomName?: string): string {
-  const adjectives = ['SUNNY', 'HAPPY', 'BRIGHT', 'COOL', 'SMART', 'QUICK', 'BOLD', 'CALM'];
-  const nouns = ['CHAT', 'ROOM', 'SPACE', 'TALK', 'MEET', 'GROUP', 'TEAM', 'CLUB'];
-  const years = ['2024', '2025'];
-  
-  if (roomName) {
-    // Convert room name to share code format
-    const cleanName = roomName
-      .toUpperCase()
-      .replace(/[^A-Z0-9\s]/g, '')
-      .replace(/\s+/g, '-')
-      .substring(0, 20);
-    
-    const year = years[Math.floor(Math.random() * years.length)];
-    return `${cleanName}-${year}`;
-  }
-  
-  // Generate random code
-  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-  const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  const year = years[Math.floor(Math.random() * years.length)];
-  
-  return `${adj}-${noun}-${year}`;
+// Generate secure cryptographic share codes
+function generateShareCode(): string {
+  return randomBytes(6).toString('hex').toUpperCase(); // 12-character hex (48-bit)
 }
 
 async function getUserTier(userId: string): Promise<'free' | 'pro'> {
@@ -119,7 +99,7 @@ export async function POST(req: NextRequest) {
     const expirationDays = userTier === 'pro' ? 30 : 7;
     
     // Generate unique share code
-    let shareCode = generateShareCode(name);
+    let shareCode = generateShareCode();
     let attempts = 0;
     const maxAttempts = 10;
     
@@ -133,7 +113,7 @@ export async function POST(req: NextRequest) {
       
       if (!existing) break;
       
-      shareCode = generateShareCode(name) + `-${Math.floor(Math.random() * 100)}`;
+      shareCode = generateShareCode();
       attempts++;
     }
     
