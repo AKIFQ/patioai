@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Send, Loader2, Bot, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { getOrCreateSessionId } from '@/lib/utils/session';
+
 import MemoizedMarkdown from '@/app/chat/components/tools/MemoizedMarkdown';
-import { subscribeToRoomMessages } from '@/lib/utils/supabase-realtime';
+import { useRoomSocket } from '@/app/chat/hooks/useRoomSocket';
+import type { Message } from 'ai';
 
 interface Room {
   id: string;
@@ -62,37 +63,36 @@ export default function RoomChat({ room, participant, participants }: RoomChatPr
     scrollToBottom();
   }, [messages]);
 
+  // Socket.IO realtime connection
+  const { isConnected } = useRoomSocket({
+    shareCode: room.shareCode,
+    displayName: participant.displayName,
+    chatSessionId: participant.sessionId,
+    onNewMessage: (message) => {
+      // Convert Socket.IO message format to RoomMessage format
+      const roomMessage: RoomMessage = {
+        id: message.id,
+        senderName: message.role === 'assistant' ? 'AI Assistant' : message.content.split(': ')[0],
+        content: message.role === 'assistant' ? message.content : message.content.split(': ').slice(1).join(': '),
+        isAiResponse: message.role === 'assistant',
+        createdAt: message.createdAt?.toISOString() || new Date().toISOString()
+      };
+
+      // Only add messages that aren't already in the list
+      setMessages(prev => {
+        const exists = prev.some(msg => msg.id === roomMessage.id);
+        if (exists) return prev;
+        return [...prev, roomMessage];
+      });
+    },
+    onTypingUpdate: (users) => {
+      // Handle typing indicators if needed
+      console.log('Users typing:', users);
+    }
+  });
+
   useEffect(() => {
     loadMessages();
-    
-    // Subscribe to real-time message updates
-    const unsubscribe = subscribeToRoomMessages(
-      room.id,
-      (newMessage) => {
-        // Only add messages that aren't already in the list
-        setMessages(prev => {
-          const exists = prev.some(msg => msg.id === newMessage.id);
-          if (exists) return prev;
-          
-          return [...prev, {
-            id: newMessage.id,
-            senderName: newMessage.sender_name,
-            content: newMessage.content,
-            isAiResponse: newMessage.is_ai_response,
-            createdAt: newMessage.created_at,
-            sources: newMessage.sources,
-            reasoning: newMessage.reasoning
-          }];
-        });
-      },
-      (error) => {
-        console.error('Realtime subscription error:', error);
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
   }, [room.shareCode, room.id]);
 
   const loadMessages = async () => {

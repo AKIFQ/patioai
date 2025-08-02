@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/server/server';
 import type { Attachment } from 'ai';
 import type { LanguageModelV1Source } from '@ai-sdk/provider';
 import type { ToolResult } from '@/app/chat/types/tooltypes';
+import { SocketDatabaseService } from '@/lib/database/socketQueries';
 
 export interface OpenAiLog {
   id: string;
@@ -65,24 +66,52 @@ export const saveChatToSupbabase = async (
       }
     ];
 
-    // Insert both messages in a single query
-    const { error: messagesError, data: insertedMessages } = await supabase
-      .from('chat_messages')
-      .insert(messagesData)
-      .select();
+    // Use optimized batch insert for better performance
+    const result = await SocketDatabaseService.insertChatMessages([
+      {
+        chatSessionId,
+        content: currentMessageContent,
+        isUserMessage: true,
+        attachments: attachments
+      },
+      {
+        chatSessionId,
+        content: completion,
+        isUserMessage: false,
+        attachments: undefined
+      }
+    ]);
 
-    if (messagesError) throw messagesError;
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to insert chat messages');
+    }
 
     // Emit Socket.IO events for both messages
     try {
       const { emitChatMessageCreated } = await import('@/lib/server/socketEmitter');
       
-      if (insertedMessages && insertedMessages.length >= 2) {
+      if (result.messageIds && result.messageIds.length >= 2) {
         // Emit user message event
-        emitChatMessageCreated(userId, insertedMessages[0]);
+        emitChatMessageCreated(userId, {
+          id: result.messageIds[0],
+          chat_session_id: chatSessionId,
+          content: currentMessageContent,
+          is_user_message: true,
+          attachments: attachments ? JSON.stringify(attachments) : null,
+          created_at: new Date().toISOString()
+        });
         
         // Emit AI message event
-        emitChatMessageCreated(userId, insertedMessages[1]);
+        emitChatMessageCreated(userId, {
+          id: result.messageIds[1],
+          chat_session_id: chatSessionId,
+          content: completion,
+          is_user_message: false,
+          reasoning: reasoning || null,
+          sources: sources && sources.length > 0 ? sources : null,
+          tool_invocations: toolInvocations ? JSON.stringify(toolInvocations) : null,
+          created_at: new Date().toISOString()
+        });
       }
     } catch (socketError) {
       console.warn('Failed to emit Socket.IO events for chat messages:', socketError);

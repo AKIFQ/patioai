@@ -150,6 +150,14 @@ export async function POST(req: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
     const shareableLink = `${baseUrl}/room/${shareCode}`;
 
+    // Emit Socket.IO event for room creation
+    try {
+      const { emitSidebarRefresh } = await import('@/lib/server/socketEmitter');
+      emitSidebarRefresh(userId);
+    } catch (socketError) {
+      console.warn('Failed to emit Socket.IO event for room creation:', socketError);
+    }
+
     return NextResponse.json({
       room: {
         id: room.id,

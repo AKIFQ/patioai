@@ -11,6 +11,7 @@ import { google } from '@ai-sdk/google';
 import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import type { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
 import { createClient } from '@supabase/supabase-js';
+import { SocketDatabaseService } from '@/lib/database/socketQueries';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -82,6 +83,7 @@ const getModel = (selectedModel: string) => {
 // Simplified: Save message directly to thread
 async function saveRoomMessage(
   roomId: string,
+  shareCode: string,
   threadId: string,
   senderName: string,
   content: string,
@@ -107,36 +109,33 @@ async function saveRoomMessage(
 
     const isFirstMessage = !existingMessages || existingMessages.length === 0;
 
-    // Save the message
-    const { error, data } = await supabase
-      .from('room_messages')
-      .insert({
-        room_id: roomId,
-        thread_id: threadId, // Direct thread reference
-        sender_name: senderName,
-        content,
-        is_ai_response: isAiResponse,
-        sources,
-        reasoning
-      })
-      .select();
+    // Use optimized database service for message insertion
+    const result = await SocketDatabaseService.insertRoomMessage({
+      roomId,
+      threadId,
+      senderName,
+      content,
+      isAiResponse,
+      sources,
+      reasoning
+    });
 
-    if (error) {
-      console.error(`❌ [${messageId}] Error saving message:`, error);
+    if (!result.success) {
+      console.error(`❌ [${messageId}] Error saving message:`, result.error);
       return false;
     }
 
     console.log(`✅ [${messageId}] Message saved successfully:`, {
-      dbId: data?.[0]?.id,
+      dbId: result.messageId,
       sender: senderName,
       isAI: isAiResponse,
       isFirstMessage
     });
 
     // Emit Socket.IO event for room message (use share code for room identification)
-    const { emitRoomMessageCreated } = await import('@/lib/server/socketEmitter');
+    const { emitRoomMessageCreated, getSocketIOInstance } = await import('@/lib/server/socketEmitter');
     emitRoomMessageCreated(shareCode, {
-      id: data?.[0]?.id || `msg-${Date.now()}`,
+      id: result.messageId || `msg-${Date.now()}`,
       room_id: roomId,
       thread_id: threadId,
       sender_name: senderName,
@@ -144,6 +143,34 @@ async function saveRoomMessage(
       is_ai_response: isAiResponse,
       created_at: new Date().toISOString()
     });
+
+    // Trigger AI response for user messages
+    if (!isAiResponse && isFirstMessage) {
+      try {
+        const io = getSocketIOInstance();
+        if (io) {
+          // Get current participants for AI context
+          const { data: participants } = await supabase
+            .from('room_participants')
+            .select('display_name')
+            .eq('room_id', roomId);
+
+          const participantNames = participants?.map(p => p.display_name) || [];
+
+          // Emit AI trigger event
+          io.to(`room:${shareCode}`).emit('trigger-ai-response', {
+            shareCode,
+            threadId,
+            message: content,
+            senderName,
+            roomName: room.name,
+            participants: participantNames
+          });
+        }
+      } catch (aiError) {
+        console.warn('Failed to trigger AI response:', aiError);
+      }
+    }
 
     // Mark if this is the first message for potential sidebar updates
     if (isFirstMessage && !isAiResponse) {
@@ -287,7 +314,7 @@ export async function POST(
 
     // Simplified: Save message directly to thread
     console.log(`💾 [${requestId}] Saving user message: "${message.substring(0, 50)}"`);
-    const messageSaved = await saveRoomMessage(room.id, threadId, displayName, message, false);
+    const messageSaved = await saveRoomMessage(room.id, shareCode, threadId, displayName, message, false);
     if (!messageSaved) {
       console.log(`❌ [${requestId}] Failed to save user message`);
       return new NextResponse('Failed to save message', {
@@ -373,6 +400,7 @@ export async function POST(
         // Save AI response to thread
         const aiSaved = await saveRoomMessage(
           room.id,
+          shareCode,
           threadId,
           'AI Assistant',
           text,

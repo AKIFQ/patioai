@@ -60,3 +60,35 @@ export function emitSidebarRefresh(userId: string) {
 
   console.log(`Emitted sidebar refresh for user ${userId}`);
 }
+
+// Helper function to emit API-driven events with configuration
+export function emitAPIEvent(eventType: string, data: any, target?: string) {
+  if (!io) {
+    console.warn('Socket.IO not initialized, cannot emit API event');
+    return;
+  }
+
+  const eventData = {
+    ...data,
+    timestamp: new Date().toISOString(),
+    source: 'api'
+  };
+
+  if (target) {
+    io.to(target).emit(eventType, eventData);
+  } else {
+    io.emit(eventType, eventData);
+  }
+
+  console.log(`Emitted API event ${eventType} to ${target || 'all'}`);
+}
+
+// Helper function to emit user-specific events
+export function emitUserEvent(userId: string, eventType: string, data: any) {
+  emitAPIEvent(eventType, data, `user:${userId}`);
+}
+
+// Helper function to emit room-specific events
+export function emitRoomEvent(shareCode: string, eventType: string, data: any) {
+  emitAPIEvent(eventType, data, `room:${shareCode}`);
+}

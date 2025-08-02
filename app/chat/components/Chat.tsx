@@ -21,6 +21,8 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import MemoizedMarkdown from './tools/MemoizedMarkdown';
 import ReasoningContent from './tools/Reasoning';
 import SourceView from './tools/SourceView';
+import VirtualizedMessageList from './VirtualizedMessageList';
+import { MemoizedMarkdownWithSuspense } from './LazyComponents';
 import DocumentSearchTool from './tools/DocumentChatTool';
 import WebsiteSearchTool from './tools/WebsiteChatTool';
 import MessageInput from './ChatMessageInput';
@@ -28,6 +30,7 @@ import { toast } from 'sonner';
 import RoomSettingsModal from './RoomSettingsModal';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
+import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
@@ -79,6 +82,16 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [realtimeMessages, setRealtimeMessages] = useState<Message[]>(currentChat || []);
   const [isClient, setIsClient] = useState(false);
+
+  // Performance monitoring
+  const { startMeasurement, endMeasurement } = usePerformanceMonitor('ChatComponent');
+
+  // Measure render performance
+  useEffect(() => {
+    startMeasurement();
+    const messageCount = roomContext ? realtimeMessages.length : messages.length;
+    endMeasurement(messageCount);
+  }, [startMeasurement, endMeasurement, roomContext, realtimeMessages.length, messages.length]);
 
   // Message deduplication and loading state for room chats
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
@@ -564,6 +577,15 @@ const ChatComponent: React.FC<ChatProps> = ({
             </h2>
           </div>
         ) : (
+          <VirtualizedMessageList
+            messages={roomContext ? realtimeMessages : messages}
+            height={600}
+            itemHeight={150}
+          />
+        )}
+        
+        {/* Keep the original rendering as fallback - remove this section later */}
+        {false && (
           <div>
             <ul className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
               {(roomContext ? realtimeMessages : messages).map((message, index) => {
