@@ -6,10 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Send, Loader2, Bot, User } from 'lucide-react';
+import Image from 'next/image';
 import { toast } from 'sonner';
 
 import MemoizedMarkdown from '@/app/chat/components/tools/MemoizedMarkdown';
 import { useRoomSocket } from '@/app/chat/hooks/useRoomSocket';
+import AILoadingMessage from '@/app/chat/components/AILoadingMessage';
 import type { Message } from 'ai';
 
 interface Room {
@@ -273,55 +275,85 @@ export default function RoomChat({ room, participant, participants }: RoomChatPr
             <p>No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          messages.map((message) => (
-            <Card key={message.id} className={`${
-              message.isAiResponse 
-                ? 'bg-muted/50 border-primary/20' 
-                : 'bg-background border-border/50'
-            }`}>
-              <CardHeader className="pb-2 px-4 pt-3">
-                <div className="flex items-center gap-3">
-                  {message.isAiResponse ? (
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-primary" />
+          <ul className="space-y-3">
+            {messages.map((message) => {
+              const isCurrentUser = message.senderName === participant.displayName;
+              
+              return (
+                <li key={message.id} className="group">
+                  <div className={`flex gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+                    {/* Avatar - only show on left side for non-current-user messages */}
+                    {!isCurrentUser && (
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                        {message.isAiResponse ? (
+                          <Image 
+                            src="/icons/icon-512x512.png" 
+                            alt="AI Assistant" 
+                            width={16} 
+                            height={16}
+                            className="rounded-full"
+                          />
+                        ) : (
+                          <User className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Message Content */}
+                    <div className={`max-w-[85%] sm:max-w-[75%] ${isCurrentUser ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
+                      {/* Sender name and time */}
+                      {!isCurrentUser && (
+                        <div className="text-xs text-muted-foreground mb-1 px-2 flex items-center gap-2">
+                          <span>{message.senderName}</span>
+                          <span>•</span>
+                          <span>{formatTime(message.createdAt)}</span>
+                        </div>
+                      )}
+                      
+                      <div className={`rounded-xl px-3 py-2 text-sm ${
+                        isCurrentUser 
+                          ? 'bg-primary text-primary-foreground rounded-br-sm' 
+                          : message.isAiResponse
+                            ? 'bg-blue-50 dark:bg-blue-950/30 text-foreground rounded-bl-sm border border-blue-200 dark:border-blue-800/50'
+                            : 'bg-muted text-foreground rounded-bl-sm border border-border/50'
+                      }`}>
+                        {message.isAiResponse ? (
+                          <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1">
+                            <MemoizedMarkdown 
+                              content={message.content} 
+                              id={`message-${message.id}`}
+                            />
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                        )}
+                      </div>
+                      
+                      {/* Time for current user messages */}
+                      {isCurrentUser && (
+                        <div className="text-xs text-muted-foreground mt-1 px-2">
+                          {formatTime(message.createdAt)}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center">
-                      <User className="h-4 w-4" />
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm">{message.senderName}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {formatTime(message.createdAt)}
-                    </p>
+
+                    {/* User Avatar - only show on right side for current user messages */}
+                    {isCurrentUser && (
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                        <User className="w-3 h-3 text-primary-foreground" />
+                      </div>
+                    )}
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                {message.isAiResponse ? (
-                  <MemoizedMarkdown 
-                    content={message.content} 
-                    id={`message-${message.id}`}
-                  />
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                )}
-              </CardContent>
-            </Card>
-          ))
+                </li>
+              );
+            })}
+          </ul>
         )}
         
         {isAiTyping && (
-          <Card className="bg-muted/50 border-primary/20">
-            <CardContent className="px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-primary" />
-                <span className="text-sm text-muted-foreground">AI is typing...</span>
-                <Loader2 className="h-3 w-3 animate-spin" />
-              </div>
-            </CardContent>
-          </Card>
+          <ul>
+            <AILoadingMessage />
+          </ul>
         )}
         
         <div ref={messagesEndRef} />

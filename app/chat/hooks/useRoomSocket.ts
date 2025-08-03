@@ -62,8 +62,10 @@ export function useRoomSocket({
       content: newMessage.is_ai_response
         ? newMessage.content
         : `${newMessage.sender_name}: ${newMessage.content}`,
-      createdAt: new Date(newMessage.created_at)
-    };
+      createdAt: new Date(newMessage.created_at),
+      // Preserve sender information for proper message alignment
+      ...(newMessage.sender_name && { senderName: newMessage.sender_name })
+    } as Message & { senderName?: string };
 
     onNewMessage(message);
   }, [displayName, chatSessionId, onNewMessage]);

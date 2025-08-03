@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import RoomSettingsModal from './RoomSettingsModal';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
+import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 
 // Icons from Lucide React
@@ -579,7 +580,9 @@ const ChatComponent: React.FC<ChatProps> = ({
           <VirtualizedMessageList
             messages={roomContext ? realtimeMessages : messages}
             height={600}
-            itemHeight={150}
+            itemHeight={80}
+            currentUserDisplayName={roomContext?.displayName}
+            showLoading={!roomContext && (status === 'streaming' || status === 'submitted')}
           />
         )}
         
@@ -822,37 +825,10 @@ const ChatComponent: React.FC<ChatProps> = ({
 
             {/* AI Loading indicator for room chats */}
             {roomContext && isRoomLoading && (
-              <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4">
-                <div className="my-4 mx-2">
-                  <Card className="relative gap-2 py-2 bg-card dark:bg-card/90 border-border/50">
-                    <CardHeader className="pb-2 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                          <Image 
-                            src="/icons/icon-512x512.png" 
-                            alt="AI Assistant" 
-                            width={20} 
-                            height={20}
-                            className="rounded-full"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-sm">AI Assistant</h3>
-                          <p className="text-xs text-muted-foreground">Thinking...</p>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="py-0 px-4">
-                      <div className="flex items-center justify-center py-4">
-                        <img
-                          src="/icons/icon-512x512.png"
-                          alt="Loading"
-                          className="w-8 h-8 animate-spin opacity-60"
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+              <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
+                <ul>
+                  <AILoadingMessage />
+                </ul>
               </div>
             )}
 

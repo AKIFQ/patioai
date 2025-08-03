@@ -75,11 +75,50 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         console.log(`User ${socket.userId} left personal channel on disconnect`);
       }
 
+      // Mark disconnection time for safe cleanup
+      (socket as any).disconnectedAt = Date.now();
+
+      // Remove all event listeners to prevent memory leaks
+      try {
+        const eventNames = (socket as any).eventNames?.() || [];
+        eventNames.forEach((eventName: string) => {
+          socket.removeAllListeners(eventName);
+        });
+        if (eventNames.length > 0) {
+          console.log(`🧹 Removed ${eventNames.length} event listeners for socket ${socket.id}`);
+        }
+      } catch (error) {
+        console.warn('Error removing event listeners:', error);
+      }
+
+      // Clear any existing cleanup timeout
+      if ((socket as any).cleanupTimeout) {
+        clearTimeout((socket as any).cleanupTimeout);
+        (socket as any).cleanupTimeout = null;
+      }
+
       // Optional: Clean up abandoned sessions after a delay
       if (reason === 'transport close' || reason === 'client namespace disconnect') {
-        setTimeout(async () => {
-          await cleanupAbandonedSessions(socket.userId);
+        const cleanupTimeout = setTimeout(async () => {
+          try {
+            await cleanupAbandonedSessions(socket.userId);
+            
+            // Trigger safe cleanup if memory is getting high
+            const memUsage = process.memoryUsage().heapUsed;
+            if (memUsage > 800 * 1024 * 1024) { // > 800MB
+              console.log('🧹 High memory detected after disconnect, triggering safe cleanup...');
+              const { safeCleanup } = require('../monitoring/safeCleanup');
+              safeCleanup.triggerManualCleanup().catch((error: any) => {
+                console.error('Safe cleanup error:', error);
+              });
+            }
+          } catch (error) {
+            console.error('Error in cleanup timeout:', error);
+          }
         }, 30000); // 30 second delay to allow for reconnection
+        
+        // Store timeout reference for potential cleanup
+        (socket as any).cleanupTimeout = cleanupTimeout;
       }
 
       console.log(`Cleanup completed for user ${socket.userId}`);

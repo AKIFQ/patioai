@@ -1,4 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
+import { SocketMonitor } from '../monitoring/socketMonitor';
+import { alertSystem } from '../monitoring/alertSystem';
 
 // Global Socket.IO server instance
 let io: SocketIOServer | null = null;
@@ -7,7 +9,26 @@ export function setSocketIOInstance(socketServer: SocketIOServer) {
   io = socketServer;
   // Also set it globally for Next.js API routes to access
   (global as any).__socketIO = socketServer;
-  console.log('Socket.IO instance set for event emission');
+  
+  // Initialize monitoring
+  const socketMonitor = SocketMonitor.getInstance();
+  socketMonitor.initialize(socketServer);
+  
+  // Set up alert system
+  alertSystem.addAlertHandler((alert) => {
+    console.log(`🚨 [${alert.type.toUpperCase()}] ${alert.message}`);
+    
+    // Emit alert to monitoring dashboard if needed
+    if (alert.type === 'critical') {
+      socketServer.emit('system-alert', {
+        type: alert.type,
+        message: alert.message,
+        timestamp: alert.timestamp.toISOString()
+      });
+    }
+  });
+  
+  console.log('Socket.IO instance set for event emission with monitoring enabled');
 }
 
 export function getSocketIOInstance(): SocketIOServer | null {
