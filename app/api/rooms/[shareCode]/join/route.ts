@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSession } from '@/lib/server/supabase';
+import { SocketDatabaseService } from '@/lib/database/socketQueries';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,29 +37,19 @@ export async function POST(
       );
     }
 
-    // Find the room by share code
-    const { data: room, error: roomError } = await (supabase as any)
-      .from('rooms')
-      .select('*')
-      .eq('share_code', shareCode)
-      .single();
-
-    if (roomError || !room) {
+    // Use optimized room validation
+    const validation = await SocketDatabaseService.validateRoomAccess(shareCode);
+    
+    if (!validation.valid) {
+      const status = validation.error === 'Room not found' ? 404 : 
+                    validation.error === 'Room has expired' ? 410 : 400;
       return NextResponse.json(
-        { error: 'Room not found' },
-        { status: 404 }
+        { error: validation.error },
+        { status }
       );
     }
 
-    // Check if room has expired
-    const now = new Date();
-    const expiresAt = new Date(room.expires_at);
-    if (now > expiresAt) {
-      return NextResponse.json(
-        { error: 'Room has expired' },
-        { status: 410 }
-      );
-    }
+    const room = validation.room!;
 
     // Get authenticated user if available
     const session = await getSession();
@@ -101,6 +92,22 @@ export async function POST(
 
     if (updatedParticipantsError) {
       console.error('Error fetching updated participants:', updatedParticipantsError);
+    }
+
+    // Emit Socket.IO event for participant join
+    try {
+      const { getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+      const io = getSocketIOInstance();
+      if (io) {
+        io.to(`room:${shareCode}`).emit('user-joined-room', {
+          displayName: displayName.trim(),
+          sessionId,
+          shareCode,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to emit participant join event:', error);
     }
 
     // Return room access and info

@@ -29,27 +29,27 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
   const extractShareCodeFromLink = (link: string): string | null => {
     try {
       // Handle various link formats:
-      // - http://localhost:3000/room/FAMILY-VACATION-2024
-      // - https://yourapp.com/room/STUDY-GROUP-2025
-      // - /room/PROJECT-ALPHA-2024
-      // - FAMILY-VACATION-2024 (just the share code)
+      // - http://localhost:3000/room/A1B2C3D4E5F6
+      // - https://yourapp.com/room/123456789ABC
+      // - /room/ABCDEF123456
+      // - A1B2C3D4E5F6 (just the share code)
       
       const trimmedLink = link.trim();
       
-      // If it's just a share code (no slashes and looks like a share code)
-      if (!trimmedLink.includes('/') && /^[A-Z0-9-]+$/i.test(trimmedLink)) {
+      // If it's just a share code (12-character hex format)
+      if (!trimmedLink.includes('/') && /^[A-F0-9]{12}$/i.test(trimmedLink)) {
         return trimmedLink.toUpperCase();
       }
       
-      // Extract from URL - more flexible regex
-      const urlMatch = trimmedLink.match(/\/room\/([A-Z0-9-]+)/i);
+      // Extract from URL - 12-character hex format
+      const urlMatch = trimmedLink.match(/\/room\/([A-F0-9]{12})/i);
       if (urlMatch) {
         return urlMatch[1].toUpperCase();
       }
       
       // Try to extract from end of URL if it ends with the share code
-      const endMatch = trimmedLink.match(/([A-Z0-9-]+)$/i);
-      if (endMatch && endMatch[1].length > 5) { // Reasonable share code length
+      const endMatch = trimmedLink.match(/([A-F0-9]{12})$/i);
+      if (endMatch) {
         return endMatch[1].toUpperCase();
       }
       
@@ -140,7 +140,7 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
             <div className="flex gap-2">
               <Input
                 id="roomLink"
-                placeholder="e.g., FAMILY-VACATION-2024 or https://yourapp.com/room/STUDY-GROUP-2025"
+                placeholder="e.g., A1B2C3D4E5F6 or https://yourapp.com/room/123456789ABC"
                 value={roomLink}
                 onChange={(e) => setRoomLink(e.target.value)}
                 onKeyDown={(e) => {

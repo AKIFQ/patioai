@@ -216,6 +216,16 @@ export async function POST(req: NextRequest) {
         steps.map((step) => step.toolResults).flat()
       );
       console.log('Chat saved to Supabase:', chatSessionId);
+
+      // Emit Socket.IO event for sidebar updates
+      const { emitChatMessageCreated } = await import('@/lib/server/socketEmitter');
+      emitChatMessageCreated(session.id, {
+        id: `chat-${Date.now()}`,
+        chat_session_id: chatSessionId,
+        content: lastMessageContent,
+        is_user_message: true,
+        created_at: new Date().toISOString()
+      });
     },
     onError: async (error) => {
       console.error('Error processing chat:', error);

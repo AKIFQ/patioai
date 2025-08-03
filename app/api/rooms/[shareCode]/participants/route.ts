@@ -77,6 +77,22 @@ export async function DELETE(
       return NextResponse.json({ error: 'Failed to remove participant' }, { status: 500 });
     }
 
+    // Emit Socket.IO event for participant removal
+    try {
+      const { getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+      const io = getSocketIOInstance();
+      if (io) {
+        io.to(`room:${shareCode}`).emit('user-left-room', {
+          displayName: participant.display_name,
+          sessionId,
+          shareCode,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to emit participant removal event:', error);
+    }
+
     // Also remove any chat sessions for this participant
     const { error: sessionDeleteError } = await (supabase as any)
       .from('room_chat_sessions')

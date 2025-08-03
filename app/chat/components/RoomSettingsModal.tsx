@@ -77,15 +77,17 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const [removingUser, setRemovingUser] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Copy share code to clipboard
-  const handleCopyShareCode = async () => {
+  // Copy share link to clipboard
+  const handleCopyShareLink = async () => {
     try {
-      await navigator.clipboard.writeText(roomContext.shareCode);
+      const baseUrl = window.location.origin;
+      const shareableLink = `${baseUrl}/room/${roomContext.shareCode}`;
+      await navigator.clipboard.writeText(shareableLink);
       setIsCopied(true);
-      toast.success('Share code copied to clipboard');
+      toast.success('Share link copied to clipboard');
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
-      toast.error('Failed to copy share code');
+      toast.error('Failed to copy share link');
     }
   };
 
@@ -304,19 +306,19 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Share Code */}
+                {/* Share Link */}
                 <div className="space-y-2">
-                  <Label>Share Code</Label>
+                  <Label>Share Link</Label>
                   <div className="flex items-center gap-2">
                     <Input
-                      value={roomContext.shareCode}
+                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
                       disabled
-                      className="flex-1 font-mono"
+                      className="flex-1 font-mono text-sm"
                     />
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleCopyShareCode}
+                      onClick={handleCopyShareLink}
                     >
                       {isCopied ? (
                         <CheckCircle className="h-4 w-4 text-green-600" />
@@ -433,7 +435,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-blue-700 dark:text-blue-300">
-                    Share the room code <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{roomContext.shareCode}</code> with others to invite them to this room.
+                    Share the room link <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded text-xs break-all">{typeof window !== 'undefined' ? window.location.origin : ''}/room/{roomContext.shareCode}</code> with others to invite them to this room.
                   </p>
                 </div>
               </CardContent>

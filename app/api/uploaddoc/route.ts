@@ -88,6 +88,39 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Emit Socket.IO events for successful document uploads
+    try {
+      const { emitSidebarRefresh, getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+      const io = getSocketIOInstance();
+      
+      if (io && results.some(r => r.success)) {
+        // Emit document upload events for successful uploads
+        results.forEach(result => {
+          if (result.success) {
+            io.to(`user:${session.id}`).emit('document-uploaded', {
+              new: {
+                id: result.documentId,
+                user_id: session.id,
+                title: result.title,
+                total_pages: result.totalPages || 1,
+                filter_tags: result.title,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              },
+              eventType: 'INSERT',
+              table: 'user_documents',
+              schema: 'public'
+            });
+          }
+        });
+        
+        // Trigger sidebar refresh
+        emitSidebarRefresh(session.id);
+      }
+    } catch (socketError) {
+      console.warn('Failed to emit Socket.IO events for document upload:', socketError);
+    }
+
     return NextResponse.json({ results });
   } catch (error) {
     console.error('Error in POST request:', error);

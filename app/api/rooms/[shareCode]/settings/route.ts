@@ -59,6 +59,21 @@ export async function PATCH(
       }
     }
 
+    // Emit Socket.IO event for room settings update
+    try {
+      const { getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+      const io = getSocketIOInstance();
+      if (io) {
+        io.to(`room:${shareCode}`).emit('room-settings-updated', {
+          shareCode,
+          name: name?.trim(),
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (socketError) {
+      console.warn('Failed to emit Socket.IO event for room settings update:', socketError);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating room settings:', error);
