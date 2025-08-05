@@ -91,14 +91,14 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
-  
+
   // State for reasoning display
   const [reasoningStates, setReasoningStates] = useState<Record<string, { isOpen: boolean; hasStartedStreaming: boolean }>>({});
   const [isClient, setIsClient] = useState(false);
 
   // Performance monitoring
   const { startMeasurement, endMeasurement } = usePerformanceMonitor('ChatComponent');
-  
+
   // Get viewport height for proper scrolling
   const viewportHeight = useViewportHeight();
 
@@ -261,10 +261,10 @@ const ChatComponent: React.FC<ChatProps> = ({
   useEffect(() => {
     // Early exit for maximum efficiency
     if (!roomContext || !isRoomLoading) return;
-    
+
     const messageCount = realtimeMessages.length;
     if (messageCount === 0) return;
-    
+
     // Only check the last message when count changes
     const lastMessage = realtimeMessages[messageCount - 1];
     if (lastMessage?.role === 'assistant') {
@@ -328,7 +328,7 @@ const ChatComponent: React.FC<ChatProps> = ({
           window.history.replaceState({}, '', newUrl);
           console.log(`🔄 Pre-emptively updated URL to: ${newUrl}`);
         }
-        
+
         // For individual chats: Use optimistic updates
         if (attachments && attachments.length > 0) {
           // Handle attachments
@@ -517,79 +517,62 @@ const ChatComponent: React.FC<ChatProps> = ({
   return (
     <div className="flex h-full w-full flex-col">
       {/* Sticky Chat Header with New Chat Button */}
-      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
+      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-3">
             {roomContext ? (
               <>
-                <h1 className="text-lg font-semibold">{roomContext.roomName}</h1>
-                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                  <span>Room: {roomContext.shareCode} • You: {roomContext.displayName}</span>
-                  {/* Real-time connection status - only show on client to prevent hydration issues */}
-                  {isClient && (
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${isConnected
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                      : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                      }`}>
-                      <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'
-                        }`} />
-                      {isConnected ? 'Live' : 'Connecting...'}
-                    </span>
-                  )}
-
-                  {/* Debug info - remove this after testing */}
-                  {isClient && process.env.NODE_ENV === 'development' && (
-                    <span className="text-xs text-muted-foreground">
-                      RT:{realtimeMessages.length} UC:{messages.length} T:{typingUsers.length}
-                    </span>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <h1 className="text-xl font-medium tracking-tight">{roomContext.roomName}</h1>
+                </div>
+                <div className="hidden sm:flex items-center text-sm text-muted-foreground/80">
+                  <span>{roomContext.participants.length} online</span>
+                  {/* Typing indicator in header */}
+                  {typingUsers.length > 0 && (
+                    <>
+                      <span className="mx-2">•</span>
+                      <span className="text-xs text-muted-foreground/60 animate-pulse">
+                        {typingUsers.length === 1
+                          ? `${typingUsers[0]} is typing...`
+                          : `${typingUsers.length} people typing...`
+                        }
+                      </span>
+                    </>
                   )}
                 </div>
               </>
             ) : (
-              <h1 className="text-lg font-semibold">Chat with AI</h1>
+              <h1 className="text-xl font-medium tracking-tight">Chat with AI</h1>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {roomContext && (
-              <>
-                <span className="text-sm text-muted-foreground">
-                  {roomContext.participants.length}/{roomContext.maxParticipants} participants
-                </span>
-                <span className="text-xs px-2 py-1 bg-secondary rounded">
-                  {roomContext.tier}
-                </span>
-
-                {/* Room Settings Modal */}
-                <RoomSettingsModal
-                  roomContext={roomContext}
-                  isCreator={roomContext.createdBy !== undefined} // Will be true if createdBy is set (meaning current user is creator)
-                  expiresAt={roomContext.expiresAt}
-                  onRoomUpdate={() => {
-                    // Refresh the page to get updated room data
-                    router.refresh();
-                  }}
-                />
-              </>
+              <RoomSettingsModal
+                roomContext={roomContext}
+                isCreator={roomContext.createdBy !== undefined}
+                expiresAt={roomContext.expiresAt}
+                onRoomUpdate={() => router.refresh()}
+              />
             )}
 
-            {/* New Chat Button - Show for all participants */}
-            {(
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNewChat}
-                disabled={isCreatingNewChat}
-                className="flex items-center gap-2"
-              >
-                {isCreatingNewChat ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNewChat}
+              disabled={isCreatingNewChat}
+              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+            >
+              {isCreatingNewChat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline ml-2">
                 {isCreatingNewChat ? 'Creating...' : 'New Chat'}
-              </Button>
-            )}
+              </span>
+            </Button>
           </div>
         </div>
       </div>
@@ -622,7 +605,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             isRoomChat={!!roomContext}
           />
         )}
-        
+
         {/* Keep the original rendering as fallback - remove this section later */}
         {false && (
           <div>
@@ -673,10 +656,10 @@ const ChatComponent: React.FC<ChatProps> = ({
                             </div>
                           ) : (
                             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                              <Image 
-                                src="/icons/icon-512x512.png" 
-                                alt="AI Assistant" 
-                                width={20} 
+                              <Image
+                                src="/icons/icon-512x512.png"
+                                alt="AI Assistant"
+                                width={20}
                                 height={20}
                                 className="rounded-full"
                               />
@@ -808,10 +791,10 @@ const ChatComponent: React.FC<ChatProps> = ({
                               >
                                 <AccordionTrigger className="px-4 py-3 font-medium hover:no-underline">
                                   <div className="flex items-center gap-2">
-                                    <Image 
-                                      src="/icons/icon-512x512.png" 
-                                      alt="AI Assistant" 
-                                      width={16} 
+                                    <Image
+                                      src="/icons/icon-512x512.png"
+                                      alt="AI Assistant"
+                                      width={16}
                                       height={16}
                                       className="rounded-full"
                                     />
@@ -862,13 +845,7 @@ const ChatComponent: React.FC<ChatProps> = ({
 
 
 
-            {/* Typing indicator for room chats */}
-            {roomContext && (
-              <TypingIndicator
-                typingUsers={typingUsers}
-                currentUser={roomContext.displayName}
-              />
-            )}
+
           </div>
         )}
       </div>
