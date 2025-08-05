@@ -218,7 +218,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-muted/70 transition-colors">
           <Settings className="h-4 w-4" />
         </Button>
       </DialogTrigger>
@@ -330,10 +330,10 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 </div>
 
                 {/* Room Stats */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-sm text-muted-foreground">Tier</Label>
-                    <Badge variant={roomContext.tier === 'pro' ? 'default' : 'secondary'}>
+                    <Label className="text-xs text-muted-foreground/80 uppercase tracking-wide">Tier</Label>
+                    <Badge variant={roomContext.tier === 'pro' ? 'default' : 'secondary'} className="text-xs">
                       {roomContext.tier === 'pro' ? (
                         <>
                           <Shield className="h-3 w-3 mr-1" />
@@ -345,8 +345,8 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     </Badge>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-sm text-muted-foreground">Participants</Label>
-                    <div className="text-sm">
+                    <Label className="text-xs text-muted-foreground/80 uppercase tracking-wide">Participants</Label>
+                    <div className="text-sm font-medium">
                       {roomContext.participants.length} / {roomContext.maxParticipants}
                     </div>
                   </div>
@@ -354,20 +354,20 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
                 {/* Expiry Warning */}
                 {expiresAt && (
-                  <div className={`p-3 rounded-lg border ${
+                  <div className={`p-3 rounded-lg border-border/40 ${
                     isExpiringSoon(expiresAt) 
-                      ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800' 
-                      : 'bg-muted'
+                      ? 'bg-yellow-50/50 border-yellow-200/40 dark:bg-yellow-950/20 dark:border-yellow-800/40' 
+                      : 'bg-muted/50'
                   }`}>
                     <div className="flex items-center gap-2">
                       <Clock className={`h-4 w-4 ${
-                        isExpiringSoon(expiresAt) ? 'text-yellow-600' : 'text-muted-foreground'
+                        isExpiringSoon(expiresAt) ? 'text-yellow-600' : 'text-muted-foreground/80'
                       }`} />
                       <span className="text-sm font-medium">
                         {isExpiringSoon(expiresAt) ? 'Expires Soon' : 'Expires'}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground/80 mt-1">
                       {formatExpiryDate(expiresAt)}
                     </p>
                   </div>
@@ -376,32 +376,33 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             </Card>
 
             {/* Participants Management */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+            <Card className="border-border/40 bg-background/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  Participants ({roomContext.participants.length})
+                  <span className="hidden sm:inline">Participants ({roomContext.participants.length})</span>
+                  <span className="sm:hidden">Users ({roomContext.participants.length})</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {roomContext.participants.map((participant) => (
                     <div
                       key={participant.sessionId}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/50"
+                      className="flex items-center justify-between p-3 rounded-lg border-border/40 bg-muted/30 hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Users className="h-4 w-4 text-primary" />
+                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Users className="h-3 w-3 text-primary" />
                         </div>
                         <div>
-                          <div className="font-medium flex items-center gap-2">
+                          <div className="font-medium flex items-center gap-2 text-sm">
                             {participant.displayName}
                             {participant.sessionId === roomContext.sessionId && (
-                              <Badge variant="outline" className="text-xs">You</Badge>
+                              <Badge variant="outline" className="text-xs h-5">You</Badge>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-muted-foreground/80 hidden sm:block">
                             Joined {new Date(participant.joinedAt).toLocaleDateString()}
                           </div>
                         </div>
@@ -410,10 +411,10 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                       {isCreator && participant.sessionId !== roomContext.sessionId && (
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="ghost"
                           onClick={() => handleRemoveUser(participant.sessionId, participant.displayName)}
                           disabled={removingUser === participant.sessionId}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50/50 transition-colors"
                         >
                           {removingUser === participant.sessionId ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -427,48 +428,54 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 </div>
 
                 {/* Add Participant Instructions */}
-                <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+                <div className="mt-3 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/40 dark:border-blue-800/40">
                   <div className="flex items-center gap-2 mb-2">
                     <UserPlus className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                      Invite More People
+                      <span className="hidden sm:inline">Invite More People</span>
+                      <span className="sm:hidden">Invite Others</span>
                     </span>
                   </div>
-                  <p className="text-xs text-blue-700 dark:text-blue-300">
-                    Share the room link <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded text-xs break-all">{typeof window !== 'undefined' ? window.location.origin : ''}/room/{roomContext.shareCode}</code> with others to invite them to this room.
+                  <p className="text-xs text-blue-700/80 dark:text-blue-300/80">
+                    <span className="hidden sm:inline">Share the room link with others to invite them to this room.</span>
+                    <span className="sm:hidden">Share the room link to invite others.</span>
                   </p>
                 </div>
               </CardContent>
             </Card>
 
             {/* Danger Zone */}
-            <Card className="border-red-200 dark:border-red-800">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2 text-red-600">
+            <Card className="border-red-200/40 dark:border-red-800/40 bg-red-50/20 dark:bg-red-950/10">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium flex items-center gap-2 text-red-600">
                   <AlertTriangle className="h-4 w-4" />
-                  Danger Zone
+                  <span className="hidden sm:inline">Danger Zone</span>
+                  <span className="sm:hidden">Actions</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 {isCreator ? (
                   <div className="space-y-3">
                     <div>
-                      <h4 className="font-medium text-red-900 dark:text-red-100">Delete Room</h4>
-                      <p className="text-sm text-red-700 dark:text-red-300 mb-3">
-                        This will permanently delete the room and all its messages. This action cannot be undone.
+                      <h4 className="font-medium text-red-900 dark:text-red-100 text-sm">Delete Room</h4>
+                      <p className="text-xs text-red-700/80 dark:text-red-300/80 mb-3">
+                        <span className="hidden sm:inline">This will permanently delete the room and all its messages. This action cannot be undone.</span>
+                        <span className="sm:hidden">Permanently delete room and messages.</span>
                       </p>
                       {!showDeleteConfirm ? (
                         <Button
-                          variant="outline"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setShowDeleteConfirm(true)}
-                          className="border-red-200 text-red-600 hover:bg-red-50"
+                          className="h-8 border-red-200/40 text-red-600 hover:bg-red-50/50 transition-colors"
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Room
+                          <span className="hidden sm:inline">Delete Room</span>
+                          <span className="sm:hidden">Delete</span>
                         </Button>
                       ) : (
                         <div className="space-y-2">
-                          <p className="text-sm font-medium text-red-900 dark:text-red-100">
+                          <p className="text-xs font-medium text-red-900 dark:text-red-100">
                             Are you sure? This action cannot be undone.
                           </p>
                           <div className="flex gap-2">
@@ -477,19 +484,22 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                               variant="destructive"
                               onClick={handleDeleteRoom}
                               disabled={isPending}
+                              className="h-8"
                             >
                               {isPending ? (
                                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                               ) : (
                                 <Trash2 className="h-4 w-4 mr-2" />
                               )}
-                              Yes, Delete Room
+                              <span className="hidden sm:inline">Yes, Delete Room</span>
+                              <span className="sm:hidden">Delete</span>
                             </Button>
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="ghost"
                               onClick={() => setShowDeleteConfirm(false)}
                               disabled={isPending}
+                              className="h-8"
                             >
                               Cancel
                             </Button>
@@ -500,22 +510,25 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                   </div>
                 ) : (
                   <div>
-                    <h4 className="font-medium text-red-900 dark:text-red-100">Leave Room</h4>
-                    <p className="text-sm text-red-700 dark:text-red-300 mb-3">
-                      You will be removed from this room and won't be able to see new messages.
+                    <h4 className="font-medium text-red-900 dark:text-red-100 text-sm">Leave Room</h4>
+                    <p className="text-xs text-red-700/80 dark:text-red-300/80 mb-3">
+                      <span className="hidden sm:inline">You will be removed from this room and won't be able to see new messages.</span>
+                      <span className="sm:hidden">Leave this room permanently.</span>
                     </p>
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="sm"
                       onClick={handleLeaveRoom}
                       disabled={isPending}
-                      className="border-red-200 text-red-600 hover:bg-red-50"
+                      className="h-8 border-red-200/40 text-red-600 hover:bg-red-50/50 transition-colors"
                     >
                       {isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       ) : (
                         <UserMinus className="h-4 w-4 mr-2" />
                       )}
-                      Leave Room
+                      <span className="hidden sm:inline">Leave Room</span>
+                      <span className="sm:hidden">Leave</span>
                     </Button>
                   </div>
                 )}

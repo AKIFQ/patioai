@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/client/client';
-const supabase = createClient();
 
 export async function signInWithGoogle() {
+  const supabase = createClient();
+
   await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {

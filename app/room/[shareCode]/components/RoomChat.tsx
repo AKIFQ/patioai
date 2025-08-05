@@ -249,21 +249,19 @@ export default function RoomChat({ room, participant, participants }: RoomChatPr
 
   return (
     <div className="flex flex-col h-screen max-h-screen">
-      {/* Room Header */}
+      {/* Room Header - Ultra Slim */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-        <div className="flex items-center justify-between p-4">
-          <div>
-            <h1 className="text-xl font-semibold">{room.name}</h1>
-            <p className="text-sm text-muted-foreground">
-              Room: {room.shareCode}
-            </p>
+        <div className="flex items-center justify-between px-3 py-1.5">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <h1 className="text-sm font-medium truncate">{room.name}</h1>
+            <span className="text-xs text-muted-foreground">({room.shareCode})</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="flex items-center gap-1">
-              <Users className="h-3 w-3" />
+          <div className="flex items-center gap-1">
+            <Badge variant="secondary" className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 h-5">
+              <Users className="h-2.5 w-2.5" />
               {participants.length}/{room.maxParticipants}
             </Badge>
-            <Badge variant="outline">{room.tier}</Badge>
+            <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5">{room.tier}</Badge>
           </div>
         </div>
       </div>

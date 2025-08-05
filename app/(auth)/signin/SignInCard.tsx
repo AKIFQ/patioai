@@ -11,7 +11,7 @@ import { Loader2 } from 'lucide-react';
 import ForgotPassword from '../ForgotPassword';
 import { GoogleIcon } from '../CustomIcons';
 import { login } from '../action';
-import { signInWithGoogle } from '../OAuth';
+import { signInWithGoogle } from '@/lib/auth/oauth';
 import { useRouter } from 'next/navigation';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';

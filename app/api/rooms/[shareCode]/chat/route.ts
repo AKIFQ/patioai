@@ -141,6 +141,8 @@ async function saveRoomMessage(
       sender_name: senderName,
       content,
       is_ai_response: isAiResponse,
+      reasoning: reasoning || null,
+      sources: sources ? JSON.stringify(sources) : null,
       created_at: new Date().toISOString()
     });
 
@@ -214,13 +216,14 @@ export async function POST(
     // Anonymous users are identified by sessionId
 
     const body = await req.json();
-    const { messages, displayName, option, threadId } = body;
+    const { messages, displayName, option, threadId, triggerAI = true } = body;
 
     console.log(`📨 [${requestId}] Room chat API received:`, {
       shareCode,
       displayName,
       threadId,
       option,
+      triggerAI,
       messagesCount: messages?.length,
       lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50)
     });
@@ -312,8 +315,8 @@ export async function POST(
       });
     }
 
-    // Simplified: Save message directly to thread
-    console.log(`💾 [${requestId}] Saving user message: "${message.substring(0, 50)}"`);
+    // Save user message to thread
+    console.log(`💾 [${requestId}] Saving user message: "${message.substring(0, 50)}" (triggerAI: ${triggerAI})`);
     const messageSaved = await saveRoomMessage(room.id, shareCode, threadId, displayName, message, false);
     if (!messageSaved) {
       console.log(`❌ [${requestId}] Failed to save user message`);
@@ -323,6 +326,15 @@ export async function POST(
       });
     }
     console.log(`✅ [${requestId}] User message saved successfully`);
+
+    // If triggerAI is false, just return success without generating AI response
+    if (!triggerAI) {
+      console.log(`📤 [${requestId}] Message saved without AI response (triggerAI: false)`);
+      return new NextResponse('Message saved successfully', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     // Simplified: Skip daily usage tracking for now
 

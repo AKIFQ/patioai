@@ -192,13 +192,13 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
 
                     {/* Room Chat Sessions */}
                     {isExpanded && (
-                      <div className="ml-6 mt-1 space-y-1">
+                      <div className="ml-4 mt-0.5 space-y-0.5">
                         {/* New Chat Button */}
                         <Button
                           asChild
                           variant="outline"
                           size="sm"
-                          className="w-full justify-start text-xs h-8"
+                          className="w-full justify-start text-xs h-6 py-1"
                         >
                           <Link 
                             href={userInfo ? 
@@ -207,14 +207,14 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                             }
                             onClick={onRoomSelect}
                           >
-                            <Plus className="h-3 w-3 mr-1" />
+                            <Plus className="h-2.5 w-2.5 mr-1" />
                             New Chat
                           </Link>
                         </Button>
 
                         {/* Loading State */}
                         {isLoadingSessions && (
-                          <div className="text-xs text-muted-foreground p-2">
+                          <div className="text-xs text-muted-foreground px-2 py-1">
                             Loading chats...
                           </div>
                         )}
@@ -232,17 +232,17 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                                 `/room/${room.shareCode}`
                               }
                               onClick={onRoomSelect}
-                              className={`block w-full text-left p-2 rounded text-xs transition-colors border-l-2 ${
+                              className={`block w-full text-left px-2 py-1 rounded text-xs transition-colors border-l-2 ${
                                 isSessionActive 
                                   ? 'bg-accent text-accent-foreground border-l-accent-foreground' 
                                   : 'hover:bg-accent/50 border-l-transparent'
                               }`}
                             >
                               <div className="flex items-center gap-1">
-                                <MessageSquare className="h-3 w-3 flex-shrink-0" />
+                                <MessageSquare className="h-2.5 w-2.5 flex-shrink-0" />
                                 <span className="truncate">{title}</span>
                               </div>
-                              <div className="text-muted-foreground text-xs mt-1">
+                              <div className="text-muted-foreground text-xs mt-0.5">
                                 {new Date(session.updated_at).toLocaleDateString()}
                               </div>
                             </Link>
@@ -251,7 +251,7 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
 
                         {/* No Sessions Message */}
                         {!isLoadingSessions && sessions.length === 0 && (
-                          <div className="text-xs text-muted-foreground p-2">
+                          <div className="text-xs text-muted-foreground px-2 py-1">
                             No chats yet
                           </div>
                         )}

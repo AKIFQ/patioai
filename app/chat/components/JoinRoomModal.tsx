@@ -136,7 +136,10 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
         
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="roomLink">Room Link or Share Code</Label>
+            <Label htmlFor="roomLink" className="text-sm font-medium">
+              <span className="hidden sm:inline">Room Link or Share Code</span>
+              <span className="sm:hidden">Room Link</span>
+            </Label>
             <div className="flex gap-2">
               <Input
                 id="roomLink"
@@ -148,13 +151,13 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
                     handleJoinRoom();
                   }
                 }}
-                className="font-mono text-sm"
+                className="font-mono text-sm h-9"
               />
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={handlePaste}
-                className="shrink-0"
+                className="shrink-0 h-9 hover:bg-muted/70 transition-colors"
               >
                 Paste
               </Button>
@@ -162,13 +165,13 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
             
             {/* Show extracted share code preview */}
             {roomLink.trim() && (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground/80">
                 {extractShareCodeFromLink(roomLink) ? (
-                  <span className="text-green-600">
+                  <span className="text-green-600 font-medium">
                     ✓ Share code: {extractShareCodeFromLink(roomLink)}
                   </span>
                 ) : (
-                  <span className="text-red-600">
+                  <span className="text-red-600 font-medium">
                     ✗ Invalid format - please check the link
                   </span>
                 )}
@@ -176,14 +179,16 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
             )}
           </div>
           
-          <div className="bg-muted/50 p-3 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="bg-muted/30 p-3 rounded-lg space-y-2 border border-border/40">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
               <ExternalLink className="h-4 w-4" />
-              <span>You can paste the full room link or just the share code</span>
+              <span className="hidden sm:inline">You can paste the full room link or just the share code</span>
+              <span className="sm:hidden">Paste full link or share code</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
               <Users className="h-4 w-4" />
-              <span>You'll be asked for a display name when joining</span>
+              <span className="hidden sm:inline">You'll be asked for a display name when joining</span>
+              <span className="sm:hidden">Display name required</span>
             </div>
           </div>
         </div>

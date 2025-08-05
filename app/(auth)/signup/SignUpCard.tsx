@@ -11,7 +11,7 @@ import ForgotPassword from '../ForgotPassword';
 import { GoogleIcon } from '../CustomIcons';
 import { signup } from '../action';
 import { useFormStatus } from 'react-dom';
-import { signInWithGoogle } from '../OAuth';
+import { signInWithGoogle } from '@/lib/auth/oauth';
 import Link from 'next/link';
 import {
   Popover,

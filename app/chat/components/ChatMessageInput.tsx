@@ -28,9 +28,9 @@ import {
   Loader2,
   ChevronDown,
   Paperclip,
-  Square,
   X,
-  FileIcon
+  FileIcon,
+  Zap
 } from 'lucide-react';
 
 // Memoized FilePreview component outside MessageInput (before MessageInput)
@@ -128,9 +128,6 @@ interface RoomContext {
 
 const MessageInput = ({
   chatId,
-  apiEndpoint,
-  currentChat,
-  option,
   currentChatId,
   modelType,
   selectedOption,
@@ -144,9 +141,6 @@ const MessageInput = ({
   setInput
 }: {
   chatId: string;
-  apiEndpoint: string;
-  currentChat: Message[];
-  option: string;
   currentChatId: string;
   modelType: string;
   selectedOption: string;
@@ -154,14 +148,13 @@ const MessageInput = ({
   handleOptionChange: (value: string) => void;
   roomContext?: RoomContext;
   onTyping?: (isTyping: boolean) => void;
-  onSubmit: (message: string, attachments?: File[]) => void;
+  onSubmit: (message: string, attachments?: File[], triggerAI?: boolean) => void;
   isLoading: boolean;
   input: string;
   setInput: (value: string) => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
-  const { mutate } = useSWRConfig();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -255,7 +248,9 @@ const MessageInput = ({
     }
 
     if (event.key === 'Enter' && event.shiftKey) {
-      // Allow newline on Shift + Enter
+      // Trigger prompt action on Shift + Enter
+      event.preventDefault();
+      handlePromptSubmit(event);
     } else if (event.key === 'Enter') {
       // Prevent default behavior and submit form on Enter only
       event.preventDefault();
@@ -284,12 +279,7 @@ const MessageInput = ({
     }
   };
 
-  // Create FileList from files
-  function createFileList(files: File[]): FileList {
-    const dataTransfer = new DataTransfer();
-    files.forEach((file) => dataTransfer.items.add(file));
-    return dataTransfer.files;
-  }
+
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -320,7 +310,7 @@ const MessageInput = ({
     }
   };
 
-  // Handle form submission
+  // Handle form submission (send button - no AI response)
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && attachedFiles.length === 0) return;
@@ -338,11 +328,11 @@ const MessageInput = ({
       router.push(newUrl, { scroll: false });
     }
     
-    // Submit through parent component
+    // Submit through parent component WITHOUT triggering AI
     const submissionId = Math.random().toString(36).substring(7);
-    console.log(`🚀 [${submissionId}] CONTROLLED SUBMIT: "${input.substring(0, 50)}"`);
+    console.log(`📤 [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
     
-    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined);
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false);
     
     // Clear form
     setInput('');
@@ -351,7 +341,41 @@ const MessageInput = ({
       fileInputRef.current.value = '';
     }
     
-    console.log(`✅ [${submissionId}] CONTROLLED SUBMIT: Completed`);
+    console.log(`✅ [${submissionId}] SEND ONLY: Completed`);
+  };
+
+  // Handle prompt submission (with AI response)
+  const handlePromptSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() && attachedFiles.length === 0) return;
+    if (isLoading) return; // Prevent double submission
+
+    // Only navigate for regular chats, not room chats
+    if (chatId !== currentChatId && !chatId.startsWith('room_')) {
+      const currentSearchParams = new URLSearchParams(window.location.search);
+      let newUrl = `/chat/${chatId}`;
+
+      if (currentSearchParams.toString()) {
+        newUrl += `?${currentSearchParams.toString()}`;
+      }
+
+      router.push(newUrl, { scroll: false });
+    }
+    
+    // Submit through parent component WITH AI response triggered
+    const submissionId = Math.random().toString(36).substring(7);
+    console.log(`⚡ [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
+    
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true);
+    
+    // Clear form
+    setInput('');
+    setAttachedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
+    console.log(`✅ [${submissionId}] PROMPT SUBMIT: Completed`);
   };
 
   return (
@@ -467,25 +491,44 @@ const MessageInput = ({
             )}
           </div>
 
-          {/* Send button or spinner with matched sizing */}
-          {isLoading ? (
-            <div className="h-8 w-8 sm:h-10 sm:w-10 mr-2 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background">
-              {/* Loading indicator */}
-              <div className="flex items-center justify-center">
-                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary animate-spin" />
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            {/* Prompt button */}
+            {!isLoading && (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={handlePromptSubmit}
+                disabled={!input.trim() && attachedFiles.length === 0}
+                className="h-8 w-8 sm:h-10 sm:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group"
+                title="Send with AI response (Shift + Enter)"
+              >
+                <Zap className="text-amber-500 w-4 h-4 sm:w-5 sm:h-5 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+              </Button>
+            )}
+
+            {/* Send button or spinner with matched sizing */}
+            {isLoading ? (
+              <div className="h-8 w-8 sm:h-10 sm:w-10 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background">
+                {/* Loading indicator */}
+                <div className="flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary animate-spin" />
+                </div>
               </div>
-            </div>
-          ) : (
-            <Button
-              type="submit"
-              size="icon"
-              variant="ghost"
-              disabled={!input.trim() && attachedFiles.length === 0}
-              className="h-8 w-8 sm:h-10 sm:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-primary/30 rounded-lg cursor-pointer"
-            >
-              <Send className="text-primary w-5 h-5 sm:w-8 sm:h-8" />
-            </Button>
-          )}
+            ) : (
+              <Button
+                type="submit"
+                size="icon"
+                variant="ghost"
+                disabled={!input.trim() && attachedFiles.length === 0}
+                className="h-8 w-8 sm:h-10 sm:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-primary/30 rounded-lg cursor-pointer"
+                title="Send message only (Enter)"
+              >
+                <Send className="text-primary w-5 h-5 sm:w-8 sm:h-8" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* File previews section with clear visual separation */}

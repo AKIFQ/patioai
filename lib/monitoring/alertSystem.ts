@@ -1,6 +1,7 @@
 import { SocketMonitor } from './socketMonitor';
 import { ErrorTracker } from './errorTracker';
 import { PerformanceMonitor } from './performanceMonitor';
+import { MemoryManager } from './memoryManager';
 
 interface Alert {
   id: string;
@@ -112,14 +113,14 @@ export class AlertSystem {
       category: 'performance',
       condition: (metrics) => {
         const memUsage = process.memoryUsage();
-        return memUsage.heapUsed / 1024 / 1024 > 500; // 500MB
+        return memUsage.heapUsed / 1024 / 1024 > 2000; // 2GB
       },
       severity: 'warning',
       message: () => {
         const memUsage = process.memoryUsage();
         return `High memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB heap used`;
       },
-      cooldown: 10
+      cooldown: 2
     });
 
     this.alertRules.push({
@@ -128,42 +129,31 @@ export class AlertSystem {
       category: 'performance',
       condition: (metrics) => {
         const memUsage = process.memoryUsage();
-        return memUsage.heapUsed / 1024 / 1024 > 1000; // 1GB
+        return memUsage.heapUsed / 1024 / 1024 > 3000; // 3GB
       },
       severity: 'critical',
       message: () => {
         const memUsage = process.memoryUsage();
         return `Critical memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB heap used`;
       },
-      cooldown: 5
+      cooldown: 1
     });
   }
 
   private startMonitoring() {
-    // Check alerts every minute
+    // Check alerts every 5 minutes (less frequent)
     const alertInterval = setInterval(() => {
       this.checkAlerts();
-    }, 60 * 1000);
+    }, 5 * 60 * 1000);
     this.monitoringIntervals.push(alertInterval);
 
-    // Clean up old alerts every hour
+    // Clean up old alerts every 10 minutes (more frequent)
     const cleanupInterval = setInterval(() => {
       this.cleanupAlerts();
-    }, 60 * 60 * 1000);
+    }, 10 * 60 * 1000);
     this.monitoringIntervals.push(cleanupInterval);
 
-    // Force garbage collection every 10 minutes if available
-    if (global.gc) {
-      const gcInterval = setInterval(() => {
-        try {
-          global.gc();
-          console.log('🧹 Forced garbage collection completed');
-        } catch (error) {
-          console.warn('Garbage collection failed:', error);
-        }
-      }, 10 * 60 * 1000);
-      this.monitoringIntervals.push(gcInterval);
-    }
+
   }
 
   private async checkAlerts() {
@@ -216,6 +206,18 @@ export class AlertSystem {
     this.alerts.push(alert);
     this.lastAlertTimes.set(rule.id, new Date());
 
+    // Trigger automatic cleanup for critical memory alerts
+    if (rule.id === 'critical-memory-usage') {
+      const memoryManager = MemoryManager.getInstance();
+      memoryManager.forceCleanup().then(result => {
+        if (result.success) {
+          console.log(`🧹 Auto-cleanup freed ${Math.round(result.freedMemory / 1024 / 1024)}MB`);
+        }
+      }).catch(error => {
+        console.error('Auto-cleanup failed:', error);
+      });
+    }
+
     // Notify alert handlers
     this.alertHandlers.forEach(handler => {
       try {
@@ -245,30 +247,17 @@ export class AlertSystem {
   }
 
   private cleanupAlerts() {
-    const initialCount = this.alerts.length;
-
-    // Keep only alerts from the last 6 hours (reduced from 24h)
-    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
-    this.alerts = this.alerts.filter(alert => alert.timestamp > cutoff);
-
-    // Limit total alerts to prevent memory bloat
-    if (this.alerts.length > 1000) {
-      this.alerts = this.alerts
-        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-        .slice(0, 500);
+    // Keep only last 10 alerts maximum
+    if (this.alerts.length > 10) {
+      this.alerts = this.alerts.slice(-10);
     }
 
-    // Clean up old alert times
-    const alertRuleIds = new Set(this.alertRules.map(rule => rule.id));
+    // Keep only last 30 minutes of alert times
+    const cutoff = Date.now() - 30 * 60 * 1000;
     for (const [ruleId, time] of this.lastAlertTimes.entries()) {
-      if (!alertRuleIds.has(ruleId) || Date.now() - time.getTime() > 6 * 60 * 60 * 1000) {
+      if (time.getTime() < cutoff) {
         this.lastAlertTimes.delete(ruleId);
       }
-    }
-
-    const cleanedCount = initialCount - this.alerts.length;
-    if (cleanedCount > 0) {
-      console.log(`🧹 Cleaned up ${cleanedCount} old alerts, ${this.alerts.length} remaining`);
     }
   }
 

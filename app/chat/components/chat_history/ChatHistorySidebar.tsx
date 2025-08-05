@@ -193,7 +193,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
       const threadFirstMessages = new Map();
       const threadLatestTimes = new Map();
-      
+
       // Group room messages by thread_id and find the first user message for each thread
       (roomChatsData || []).forEach((msg: any) => {
         if (msg.thread_id && !msg.is_ai_response) {
@@ -209,12 +209,12 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           }
         }
       });
-      
+
       // Create sidebar entries for each thread
       const allRoomThreads: any[] = [];
       threadFirstMessages.forEach((firstMsg, threadId) => {
         const roomData = roomsLookup.get(firstMsg.room_id);
-        
+
         if (roomData && roomData.shareCode) {
           // Use the first few words of the first user message as the title
           let title = 'New Chat';
@@ -250,10 +250,10 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       const roomThreads: any[] = [];
       const threadFirstMessages = new Map();
       const threadLatestTimes = new Map();
-      
+
       // Find the current room
       const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
-      
+
       if (currentRoom) {
         // Group room messages by thread_id for the current room
         (roomChatsData || []).forEach((msg: any) => {
@@ -270,7 +270,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             }
           }
         });
-        
+
         // Create sidebar entries for each thread in the current room
         threadFirstMessages.forEach((firstMsg, threadId) => {
           // Use the first few words of the first user message as the title
@@ -305,41 +305,41 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     }
   }, [currentRoomShareCode, roomChatsData, currentRooms]);
 
-  // Minimized sidebar when closed
+  // Minimized sidebar - Clean and minimal
   if (!sidebarOpen) {
     return (
-      <div className="h-full border-r border-border w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2">
+      <div className="h-full border-r border-border/40 w-[50px] flex-shrink-0 bg-background/80 backdrop-blur-md flex flex-col items-center py-4">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={toggleSidebar}
-                className="mb-2"
+                className="h-8 w-8 mb-3 hover:bg-muted/70 transition-colors"
                 aria-label="Open sidebar"
               >
-                <Menu size={20} />
+                <Menu size={16} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">Open sidebar</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
-        <Separator className="w-4/5 my-2" />
+        <Separator className="w-6 my-3 opacity-30" />
 
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 asChild
                 aria-label="Start new chat"
-                className="my-2"
+                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
               >
                 <a href="/chat">
-                  <FilePlus size={20} />
+                  <FilePlus size={16} />
                 </a>
               </Button>
             </TooltipTrigger>
@@ -352,12 +352,12 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={() => setIsCreateGroupModalOpen(true)}
                 aria-label="Create room"
-                className="my-2"
+                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
               >
-                <Users size={20} />
+                <Users size={16} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">Create room</TooltipContent>
@@ -369,12 +369,12 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={() => setSidebarOpen(true)}
-                className="my-2"
+                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
                 aria-label="Chat mode"
               >
-                <MessageSquare size={20} />
+                <MessageSquare size={16} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">Chat history</TooltipContent>
@@ -386,101 +386,103 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   return (
     <>
-      <CreateRoomModal 
+      <CreateRoomModal
         isOpen={isCreateGroupModalOpen}
         onClose={() => setIsCreateGroupModalOpen(false)}
         onRoomCreated={handleRoomCreated}
       />
-      
-      <JoinRoomModal 
+
+      <JoinRoomModal
         isOpen={isJoinRoomModalOpen}
         onClose={() => setIsJoinRoomModalOpen(false)}
       />
       <Sidebar
         collapsible="none"
-        className="h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col"
+        className="h-full border-r border-border/40 w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background/80 backdrop-blur-md"
       >
-        <SidebarHeader className="px-3 !py-0 !gap-0 border-b">
-          {/* PatioAI Logo - At the very top */}
-          <div className="flex items-center justify-between ">
-            <Image
-              src="/logos/logo-horizontal.png"
-              alt="PatioAI"
-              width={90}
-              height={40}
-              priority
-              className="rounded-lg"
-            />
+        <SidebarHeader className="px-5 py-4 border-b border-border/40 gap-0">
+          {/* PatioAI Logo - Larger with more spacing */}
+          <div className="flex items-center justify-between mb-5 mt-2">
+            <div className="ml-2">
+              <Image
+                src="/logos/logo-horizontal.png"
+                alt="PatioAI"
+                width={100}
+                height={24}
+                priority
+                className="opacity-90"
+              />
+            </div>
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={toggleSidebar}
-              className="text-muted-foreground hover:text-foreground"
+              className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/70 transition-colors"
               aria-label="Close sidebar"
             >
-              <PanelLeftIcon size={16} />
+              <PanelLeftIcon size={14} />
             </Button>
           </div>
-          
-          {/* Home Chat Button - Below logo */}
-          <Button 
+
+          {/* Personal Chat Button - Aligned with ROOMS */}
+          <Button
             asChild
-            variant="outline"
-            className="w-full mb-3"
+            variant="ghost"
+            className="w-full justify-start h-8 mb-6 ml-2 hover:bg-muted/70 transition-colors text-sm font-medium"
             size="sm"
           >
             <Link href="/chat">
-              <MessageSquare size={16} className="mr-2" />
-              Home Chat
+              Personal Chat
             </Link>
           </Button>
-          
-          {/* ROOMS Header with close button */}
-          <div className="flex items-center justify-between w-full mb-2">
-            <h2 className="text-sm font-semibold">ROOMS</h2>
+
+          {/* ROOMS Header - Compact */}
+          <div className="flex items-center justify-between mb-1 ml-2">
+            <h2 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Rooms</h2>
           </div>
-          
-          {/* Room Action Buttons - Below ROOMS header */}
-          <div className="flex items-center space-x-2 px-3 mb-2">
+
+          {/* Room Action Buttons - Compact */}
+          <div className="flex gap-2 ml-2">
             <Button
               onClick={() => setIsCreateGroupModalOpen(true)}
-              className="flex-1"
+              className="flex-1 h-7 text-xs font-medium"
               size="sm"
+              variant="ghost"
             >
-              <Users size={16} className="mr-1" />
+              <Users size={13} className="mr-1.5" />
               New
             </Button>
             <Button
               onClick={() => setIsJoinRoomModalOpen(true)}
-              className="flex-1"
+              className="flex-1 h-7 text-xs font-medium"
               size="sm"
               variant="outline"
             >
-              <Users size={16} className="mr-1" />
+              <Users size={13} className="mr-1.5" />
               Join
             </Button>
           </div>
         </SidebarHeader>
 
-        {/* Rooms List - Top Section (Scrollable) */}
-        <div className="flex-1 overflow-y-auto border-b">
-          <div className="p-2">
+        {/* Rooms List - Clean scrollable section */}
+        <div className="flex-1 overflow-y-auto border-b border-border/40">
+          <div className="px-4 py-2">
             {!userInfo.email ? (
-              <div className="text-center p-4 space-y-2">
-                <p className="text-sm text-muted-foreground">Sign in to view rooms</p>
-                <Button asChild size="sm">
+              <div className="text-center py-6 space-y-3">
+                <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
+                <Button asChild size="sm" variant="outline" className="h-8">
                   <Link href="/signin">Sign in</Link>
                 </Button>
               </div>
             ) : isLoadingRooms ? (
-              <div className="text-center p-4">
-                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Loading rooms...</p>
+              <div className="text-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-3 text-muted-foreground/60" />
+                <p className="text-sm text-muted-foreground/80">Loading rooms...</p>
               </div>
             ) : currentRooms.length === 0 ? (
-              <div className="text-center p-4">
-                <p className="text-sm text-muted-foreground">No rooms yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Create your first room above</p>
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground/80">No rooms yet</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Create your first room above</p>
               </div>
             ) : (
               <div className="space-y-1">
@@ -489,22 +491,23 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                     key={room.id}
                     href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
                     onClick={handleRoomSelect}
-                    className={`block w-full text-left p-3 rounded-lg border transition-colors ${
-                      currentRoomShareCode === room.shareCode
-                        ? 'bg-primary/10 border-primary/20 text-primary'
-                        : 'hover:bg-muted/50 border-transparent'
-                    }`}
+                    className={`block w-full text-left p-3 rounded-lg transition-colors ${currentRoomShareCode === room.shareCode
+                      ? 'bg-primary/10 text-primary'
+                      : 'hover:bg-muted/60'
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="font-medium text-sm truncate">{room.name}</span>
                       {room.isCreator && (
-                        <Crown className="h-3 w-3 text-yellow-500 ml-auto" />
+                        <Crown className="h-3 w-3 text-amber-500 ml-auto" />
                       )}
                     </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{room.participantCount}/{room.maxParticipants} users</span>
-                      <span className="capitalize">{room.tier}</span>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                      <span>{room.participantCount} online</span>
+                      <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
+                        {room.tier}
+                      </span>
                     </div>
                   </Link>
                 ))}
@@ -513,20 +516,20 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           </div>
         </div>
 
-        {/* Chat History - Bottom Section (Scrollable) */}
+        {/* Chat History - Clean bottom section */}
         <div className="h-[40%] flex flex-col">
-          <div className="p-2 border-b bg-muted/30">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {currentRoomShareCode ? 'ROOM THREADS' : 'CHATS & THREADS'}
+          <div className="px-4 py-1.5 border-b border-border/40 bg-muted/20">
+            <h3 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide ml-2">
+              {currentRoomShareCode ? 'Room Threads' : 'Recent Chats'}
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto">
             {currentRoomShareCode ? (
-              <div className="p-2">
+              <div className="px-4 py-2">
                 {processedThreads.length === 0 ? (
-                  <div className="text-center p-4">
-                    <p className="text-sm text-muted-foreground">No chat threads yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">Start a new conversation!</p>
+                  <div className="text-center py-6">
+                    <p className="text-sm text-muted-foreground/80">No chat threads yet</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">Start a new conversation!</p>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -535,15 +538,15 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                         key={thread.id}
                         href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
                         onClick={handleChatSelect}
-                        className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                        className="block p-2.5 rounded-lg hover:bg-muted/60 transition-colors"
                       >
-                        <div className="text-xs text-muted-foreground mb-1">
-                          {new Date(thread.created_at).toLocaleDateString([], { 
+                        <div className="text-xs text-muted-foreground/70 mb-1">
+                          {new Date(thread.created_at).toLocaleDateString([], {
                             month: 'short',
                             day: 'numeric'
                           })} {thread.roomName && `• ${thread.roomName}`}
                         </div>
-                        <div className="text-sm text-foreground">
+                        <div className="text-sm text-foreground font-medium truncate">
                           {thread.firstMessage}
                         </div>
                       </Link>
@@ -552,7 +555,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 )}
               </div>
             ) : (
-              <div className="p-2">
+              <div className="px-4 py-2">
                 {/* Personal Chats */}
                 <ChatHistorySection
                   initialChatPreviews={initialChatPreviews}
@@ -562,13 +565,13 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   onChatSelect={handleChatSelect}
                   mutateChatPreviews={mutateChatPreviews}
                 />
-                
+
                 {/* Room Threads */}
                 {processedThreads.length > 0 && (
                   <>
-                    <div className="mt-4 mb-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        ROOM THREADS
+                    <div className="mt-4 mb-1 ml-2">
+                      <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
+                        Room Threads
                       </h4>
                     </div>
                     <div className="space-y-1">
@@ -577,15 +580,15 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                           key={thread.id}
                           href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
                           onClick={handleChatSelect}
-                          className="block p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                          className="block p-2.5 rounded-lg hover:bg-muted/60 transition-colors"
                         >
-                          <div className="text-xs text-muted-foreground mb-1">
-                            {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], { 
+                          <div className="text-xs text-muted-foreground/70 mb-1">
+                            {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], {
                               month: 'short',
                               day: 'numeric'
                             })}
                           </div>
-                          <div className="text-sm text-foreground">
+                          <div className="text-sm text-foreground font-medium truncate">
                             {thread.firstMessage}
                           </div>
                         </Link>

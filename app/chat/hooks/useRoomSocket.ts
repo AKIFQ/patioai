@@ -55,8 +55,8 @@ export function useRoomSocket({
 
     console.log('PROCESSING SOCKET MSG from:', newMessage.sender_name, 'for user:', displayName);
 
-    // Convert to Message format (same as Supabase realtime)
-    const message: Message = {
+    // Convert to Message format with reasoning support
+    const message: Message & { senderName?: string; reasoning?: string; sources?: any[] } = {
       id: newMessage.id,
       role: newMessage.is_ai_response ? 'assistant' : 'user',
       content: newMessage.is_ai_response
@@ -64,8 +64,15 @@ export function useRoomSocket({
         : `${newMessage.sender_name}: ${newMessage.content}`,
       createdAt: new Date(newMessage.created_at),
       // Preserve sender information for proper message alignment
-      ...(newMessage.sender_name && { senderName: newMessage.sender_name })
-    } as Message & { senderName?: string };
+      ...(newMessage.sender_name && { senderName: newMessage.sender_name }),
+      // Include reasoning and sources for AI messages
+      ...(newMessage.is_ai_response && newMessage.reasoning && { reasoning: newMessage.reasoning }),
+      ...(newMessage.is_ai_response && newMessage.sources && {
+        sources: typeof newMessage.sources === 'string'
+          ? JSON.parse(newMessage.sources)
+          : newMessage.sources
+      })
+    };
 
     onNewMessage(message);
   }, [displayName, chatSessionId, onNewMessage]);
@@ -99,7 +106,7 @@ export function useRoomSocket({
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {
     console.log('broadcastTyping called:', isTyping, 'displayName:', displayName);
-    
+
     if (!socket || !isConnected || !displayName || !roomUuidRef.current) {
       console.log('No socket connection or missing data, skipping broadcast');
       return;
@@ -217,7 +224,7 @@ export function useRoomSocket({
 
     return () => {
       mounted = false;
-      
+
       // Clean up empty thread if no messages were sent
       if (!hasMessagesRef.current && chatSessionId) {
         console.log('Cleaning up empty thread on unmount:', chatSessionId);

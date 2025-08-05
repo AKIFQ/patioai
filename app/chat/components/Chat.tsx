@@ -32,6 +32,8 @@ import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
 import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
+import { useViewportHeight } from '../hooks/useViewportHeight';
+
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
@@ -47,6 +49,13 @@ interface RoomContext {
   createdBy?: string;
   expiresAt?: string;
   chatSessionId?: string;
+}
+
+// Enhanced message interface for room chats with reasoning support
+interface EnhancedMessage extends Message {
+  reasoning?: string;
+  sources?: any[];
+  senderName?: string;
 }
 
 interface ChatProps {
@@ -81,11 +90,17 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [realtimeMessages, setRealtimeMessages] = useState<Message[]>(currentChat || []);
+  const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
+
+  // State for reasoning display
+  const [reasoningStates, setReasoningStates] = useState<Record<string, { isOpen: boolean; hasStartedStreaming: boolean }>>({});
   const [isClient, setIsClient] = useState(false);
 
   // Performance monitoring
   const { startMeasurement, endMeasurement } = usePerformanceMonitor('ChatComponent');
+
+  // Get viewport height for proper scrolling
+  const viewportHeight = useViewportHeight();
 
   // Measure render performance - moved after messages are defined
   const measurePerformance = useCallback(() => {
@@ -103,21 +118,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     setIsClient(true);
   }, []);
 
-  // Stop loading when AI message is actually rendered
-  useEffect(() => {
-    if (roomContext && isRoomLoading && realtimeMessages.length > 0) {
-      const lastMessage = realtimeMessages[realtimeMessages.length - 1];
-      if (lastMessage && lastMessage.role === 'assistant') {
-        // Use a longer delay to ensure the message is fully rendered in the DOM
-        const timeoutId = setTimeout(() => {
-          console.log('🛑 LOADING: AI message rendered, stopping loading state');
-          setIsRoomLoading(false);
-        }, 2000); // 2 second delay to ensure full render
 
-        return () => clearTimeout(timeoutId);
-      }
-    }
-  }, [roomContext, isRoomLoading, realtimeMessages]);
 
 
 
@@ -202,7 +203,7 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
     id: stableChatId,
-    api: roomContext ? '/api/dummy' : apiEndpoint, // Use dummy endpoint for room chats
+    api: apiEndpoint, // Use real endpoint for both room and individual chats
     experimental_throttle: 50,
     initialMessages: roomContext ? [] : (currentChat || []), // Empty for room chats
     body: roomContext ? {
@@ -244,8 +245,37 @@ const ChatComponent: React.FC<ChatProps> = ({
     }
   });
 
+  // Debug: Log streaming behavior
+  useEffect(() => {
+    if (!roomContext) {
+      console.log('🔄 STREAMING DEBUG:', {
+        status,
+        messageCount: messages.length,
+        lastMessage: messages[messages.length - 1]?.content?.substring(0, 50) + '...',
+        isStreaming: status === 'streaming'
+      });
+    }
+  }, [messages, status, roomContext]);
+
+  // Optimized loading timeout for room chats
+  useEffect(() => {
+    // Early exit for maximum efficiency
+    if (!roomContext || !isRoomLoading) return;
+
+    const messageCount = realtimeMessages.length;
+    if (messageCount === 0) return;
+
+    // Only check the last message when count changes
+    const lastMessage = realtimeMessages[messageCount - 1];
+    if (lastMessage?.role === 'assistant') {
+      // Efficient timeout with cleanup
+      const timeoutId = setTimeout(() => setIsRoomLoading(false), 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
+
   // Handle message submission from MessageInput
-  const handleSubmit = useCallback(async (message: string, attachments?: File[]) => {
+  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true) => {
     // Prevent duplicate submissions
     if (isSubmitting) {
       console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
@@ -257,36 +287,71 @@ const ChatComponent: React.FC<ChatProps> = ({
 
     try {
       if (roomContext) {
-        // For room chats: Direct API call with loading state
-        console.log('🏠 Room chat: Making direct API call (no optimistic updates)');
-        setIsRoomLoading(true);
+        if (triggerAI) {
+          // For room chats with AI response: Direct API call with loading state
+          console.log('🏠 Room chat: Making direct API call (with AI response)');
+          setIsRoomLoading(true);
 
-        const response = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages: [
-              ...realtimeMessages,
-              {
-                role: 'user',
-                content: message,
-                id: crypto.randomUUID(),
-                createdAt: new Date()
-              }
-            ],
-            displayName: roomContext.displayName,
-            option: optimisticOption,
-            threadId: roomContext.chatSessionId
-          })
-        });
+          const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: [
+                ...realtimeMessages,
+                {
+                  role: 'user',
+                  content: message,
+                  id: crypto.randomUUID(),
+                  createdAt: new Date()
+                }
+              ],
+              displayName: roomContext.displayName,
+              option: optimisticOption,
+              threadId: roomContext.chatSessionId,
+              triggerAI: true
+            })
+          });
 
-        if (!response.ok) {
-          throw new Error(`API call failed: ${response.status}`);
+          if (!response.ok) {
+            throw new Error(`API call failed: ${response.status}`);
+          }
+
+          console.log('✅ Room chat: Direct API call successful (with AI)');
+        } else {
+          // For room chats without AI response: Use same endpoint but with triggerAI: false
+          console.log('📤 Room chat: Sending user message only (no AI)');
+
+          const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: [
+                ...realtimeMessages,
+                {
+                  role: 'user',
+                  content: message,
+                  id: crypto.randomUUID(),
+                  createdAt: new Date()
+                }
+              ],
+              displayName: roomContext.displayName,
+              option: optimisticOption,
+              threadId: roomContext.chatSessionId,
+              triggerAI: false
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`API call failed: ${response.status}`);
+          }
+
+          console.log('✅ Room chat: User message sent (no AI)');
         }
-
-        console.log('✅ Room chat: Direct API call successful');
+        
         // Clear the input field immediately for better UX
         handleInputChange({ target: { value: '' } } as any);
         // Real-time will handle showing the messages
@@ -298,23 +363,43 @@ const ChatComponent: React.FC<ChatProps> = ({
           window.history.replaceState({}, '', newUrl);
           console.log(`🔄 Pre-emptively updated URL to: ${newUrl}`);
         }
-        
-        // For individual chats: Use optimistic updates
-        if (attachments && attachments.length > 0) {
-          // Handle attachments
-          const fileList = new DataTransfer();
-          attachments.forEach(file => fileList.items.add(file));
 
-          await append({
-            role: 'user',
-            content: message,
-            experimental_attachments: fileList.files
-          });
+        if (triggerAI) {
+          // For individual chats with AI response: Use optimistic updates
+          if (attachments && attachments.length > 0) {
+            // Handle attachments
+            const fileList = new DataTransfer();
+            attachments.forEach(file => fileList.items.add(file));
+
+            await append({
+              role: 'user',
+              content: message,
+              experimental_attachments: fileList.files
+            });
+          } else {
+            await append({
+              role: 'user',
+              content: message
+            });
+          }
         } else {
-          await append({
-            role: 'user',
-            content: message
-          });
+          // For individual chats without AI response: Just add user message
+          const userMessage = {
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            content: message,
+            createdAt: new Date(),
+            ...(attachments && attachments.length > 0 && {
+              experimental_attachments: (() => {
+                const fileList = new DataTransfer();
+                attachments.forEach(file => fileList.items.add(file));
+                return fileList.files;
+              })()
+            })
+          };
+
+          setMessages(prevMessages => [...prevMessages, userMessage]);
+          console.log('📤 Added user message without AI response');
         }
       }
     } catch (error) {
@@ -331,12 +416,12 @@ const ChatComponent: React.FC<ChatProps> = ({
         setIsSubmitting(false);
       }, 1000);
     }
-  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting]);
+  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting, setMessages, stableChatId]);
 
   const { mutate } = useSWRConfig();
 
   // Real-time functionality for room chats - memoized to prevent re-renders
-  const handleNewMessage = useCallback((newMessage: Message) => {
+  const handleNewMessage = useCallback((newMessage: EnhancedMessage) => {
     console.log('🏠 Chat received RT message:', newMessage.role, 'from', newMessage.content?.substring(0, 30));
 
     // Use functional updates to avoid dependency on processedMessageIds
@@ -356,7 +441,13 @@ const ChatComponent: React.FC<ChatProps> = ({
         }
         console.log('✅ Adding new RT message to chat UI:', newMessage.id);
 
-
+        // Initialize reasoning state for AI messages
+        if (newMessage.role === 'assistant' && newMessage.reasoning) {
+          setReasoningStates(prev => ({
+            ...prev,
+            [newMessage.id]: { isOpen: true, hasStartedStreaming: false }
+          }));
+        }
 
         return [...prevMessages, newMessage];
       });
@@ -481,111 +572,92 @@ const ChatComponent: React.FC<ChatProps> = ({
   return (
     <div className="flex h-full w-full flex-col">
       {/* Sticky Chat Header with New Chat Button */}
-      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
+      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-3">
             {roomContext ? (
               <>
-                <h1 className="text-lg font-semibold">{roomContext.roomName}</h1>
-                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                  <span>Room: {roomContext.shareCode} • You: {roomContext.displayName}</span>
-                  {/* Real-time connection status - only show on client to prevent hydration issues */}
-                  {isClient && (
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${isConnected
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                      : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                      }`}>
-                      <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'
-                        }`} />
-                      {isConnected ? 'Live' : 'Connecting...'}
-                    </span>
-                  )}
-
-                  {/* Debug info - remove this after testing */}
-                  {isClient && process.env.NODE_ENV === 'development' && (
-                    <span className="text-xs text-muted-foreground">
-                      RT:{realtimeMessages.length} UC:{messages.length} T:{typingUsers.length}
-                    </span>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <h1 className="text-xl font-medium tracking-tight">{roomContext.roomName}</h1>
+                </div>
+                <div className="hidden sm:flex items-center text-sm text-muted-foreground/80">
+                  <span>{roomContext.participants.length} online</span>
+                  {/* Typing indicator in header */}
+                  {typingUsers.length > 0 && (
+                    <>
+                      <span className="mx-2">•</span>
+                      <span className="text-xs text-muted-foreground/60 animate-pulse">
+                        {typingUsers.length === 1
+                          ? `${typingUsers[0]} is typing...`
+                          : `${typingUsers.length} people typing...`
+                        }
+                      </span>
+                    </>
                   )}
                 </div>
               </>
             ) : (
-              <h1 className="text-lg font-semibold">Chat with AI</h1>
+              <h1 className="text-xl font-medium tracking-tight">Chat with AI</h1>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {roomContext && (
-              <>
-                <span className="text-sm text-muted-foreground">
-                  {roomContext.participants.length}/{roomContext.maxParticipants} participants
-                </span>
-                <span className="text-xs px-2 py-1 bg-secondary rounded">
-                  {roomContext.tier}
-                </span>
-
-                {/* Room Settings Modal */}
-                <RoomSettingsModal
-                  roomContext={roomContext}
-                  isCreator={roomContext.createdBy !== undefined} // Will be true if createdBy is set (meaning current user is creator)
-                  expiresAt={roomContext.expiresAt}
-                  onRoomUpdate={() => {
-                    // Refresh the page to get updated room data
-                    router.refresh();
-                  }}
-                />
-              </>
+              <RoomSettingsModal
+                roomContext={roomContext}
+                isCreator={roomContext.createdBy !== undefined}
+                expiresAt={roomContext.expiresAt}
+                onRoomUpdate={() => router.refresh()}
+              />
             )}
 
-            {/* New Chat Button - Show for all participants */}
-            {(
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNewChat}
-                disabled={isCreatingNewChat}
-                className="flex items-center gap-2"
-              >
-                {isCreatingNewChat ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNewChat}
+              disabled={isCreatingNewChat}
+              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+            >
+              {isCreatingNewChat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline ml-2">
                 {isCreatingNewChat ? 'Creating...' : 'New Chat'}
-              </Button>
-            )}
+              </span>
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Scrollable Chat Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-hidden">
         {/* Use realtime messages for room chats, regular messages for individual chats */}
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
           <div className="flex flex-col justify-center items-center min-h-full text-center px-4">
-            <h2 className="text-2xl font-semibold text-foreground/80 pb-2">
-              Chat with our AI Assistant
-            </h2>
-
-            <p className="text-muted-foreground pb-2 max-w-2xl">
-              Experience the power of AI-driven conversations with our chat
-              template. Ask questions on any topic and get informative responses
-              instantly.
-            </p>
-            <h2 className="text-2xl font-semibold text-foreground/80">
-              Start your conversation!
-            </h2>
+            {roomContext ? (
+              <h2 className="text-xl font-medium text-muted-foreground">
+                Welcome to {roomContext.roomName} — let's collaborate!
+              </h2>
+            ) : (
+              <h2 className="text-xl font-medium text-muted-foreground">
+                Ready to chat? Ask me anything!
+              </h2>
+            )}
           </div>
         ) : (
           <VirtualizedMessageList
             messages={roomContext ? realtimeMessages : messages}
-            height={600}
+            height={viewportHeight - 200} // Account for header and input area
             itemHeight={80}
             currentUserDisplayName={roomContext?.displayName}
-            showLoading={!roomContext && (status === 'streaming' || status === 'submitted')}
+            showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
+            isRoomChat={!!roomContext}
           />
         )}
-        
+
         {/* Keep the original rendering as fallback - remove this section later */}
         {false && (
           <div>
@@ -621,7 +693,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                   message.parts?.filter((part) => part.type === 'source') || [];
 
                 return (
-                  <li key={message.id} className="my-4 mx-2">
+                  <li key={message.id} className="my-1.5 mx-2">
                     <Card
                       className={`relative gap-2 py-2 ${isUserMessage
                         ? 'bg-primary/5 dark:bg-primary/10 border-primary/20'
@@ -636,10 +708,10 @@ const ChatComponent: React.FC<ChatProps> = ({
                             </div>
                           ) : (
                             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                              <Image 
-                                src="/icons/icon-512x512.png" 
-                                alt="AI Assistant" 
-                                width={20} 
+                              <Image
+                                src="/icons/icon-512x512.png"
+                                alt="AI Assistant"
+                                width={20}
                                 height={20}
                                 className="rounded-full"
                               />
@@ -771,10 +843,10 @@ const ChatComponent: React.FC<ChatProps> = ({
                               >
                                 <AccordionTrigger className="px-4 py-3 font-medium hover:no-underline">
                                   <div className="flex items-center gap-2">
-                                    <Image 
-                                      src="/icons/icon-512x512.png" 
-                                      alt="AI Assistant" 
-                                      width={16} 
+                                    <Image
+                                      src="/icons/icon-512x512.png"
+                                      alt="AI Assistant"
+                                      width={16}
                                       height={16}
                                       className="rounded-full"
                                     />
@@ -823,22 +895,9 @@ const ChatComponent: React.FC<ChatProps> = ({
               <ChatScrollAnchor trackVisibility status={status} />
             </ul>
 
-            {/* AI Loading indicator for room chats */}
-            {roomContext && isRoomLoading && (
-              <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
-                <ul>
-                  <AILoadingMessage />
-                </ul>
-              </div>
-            )}
 
-            {/* Typing indicator for room chats */}
-            {roomContext && (
-              <TypingIndicator
-                typingUsers={typingUsers}
-                currentUser={roomContext.displayName}
-              />
-            )}
+
+
           </div>
         )}
       </div>
