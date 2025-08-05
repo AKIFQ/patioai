@@ -15,6 +15,7 @@ interface VirtualizedMessageListProps {
   itemHeight?: number;
   currentUserDisplayName?: string; // For room chats to identify current user's messages
   showLoading?: boolean; // Show AI loading indicator
+  isRoomChat?: boolean; // Whether this is a room chat (affects reasoning display)
 }
 
 interface MessageItemProps {
@@ -23,6 +24,7 @@ interface MessageItemProps {
   data: {
     messages: Message[];
     currentUserDisplayName?: string;
+    isRoomChat?: boolean;
   };
 }
 
@@ -41,6 +43,7 @@ const MessageItem = memo(({ index, style, data }: MessageItemProps) => {
         message={message}
         index={index}
         isUserMessage={isUserMessage}
+        isRoomChat={data.isRoomChat}
       />
     </div>
   );
@@ -53,7 +56,8 @@ const VirtualizedMessageList = memo(({
   height, 
   itemHeight = 80,
   currentUserDisplayName,
-  showLoading = false
+  showLoading = false,
+  isRoomChat = false
 }: VirtualizedMessageListProps) => {
   const listRef = useRef<List>(null);
   
@@ -105,8 +109,9 @@ const VirtualizedMessageList = memo(({
 
   const itemData = useMemo(() => ({
     messages,
-    currentUserDisplayName
-  }), [messages, currentUserDisplayName]);
+    currentUserDisplayName,
+    isRoomChat
+  }), [messages, currentUserDisplayName, isRoomChat]);
 
   // Don't virtualize if there are few messages
   if (messages.length < 20) {
@@ -115,6 +120,7 @@ const VirtualizedMessageList = memo(({
         ref={scrollRef}
         className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4 overflow-y-auto"
         style={{ height }}
+        data-chat-container
       >
         <ul>
           {messages.map((message, index) => {
@@ -130,10 +136,11 @@ const VirtualizedMessageList = memo(({
                 message={message}
                 index={index}
                 isUserMessage={isUserMessage}
+                isRoomChat={isRoomChat}
               />
             );
           })}
-          {showLoading && <AILoadingMessage />}
+          {showLoading && <AILoadingMessage showInline />}
         </ul>
         
         {/* Scroll to bottom button */}
@@ -150,7 +157,7 @@ const VirtualizedMessageList = memo(({
   }
 
   return (
-    <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4 relative">
+    <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4 relative" data-chat-container>
       <List
         ref={listRef}
         height={height}

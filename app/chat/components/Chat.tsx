@@ -34,6 +34,7 @@ import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
 
+
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
 
@@ -48,6 +49,13 @@ interface RoomContext {
   createdBy?: string;
   expiresAt?: string;
   chatSessionId?: string;
+}
+
+// Enhanced message interface for room chats with reasoning support
+interface EnhancedMessage extends Message {
+  reasoning?: string;
+  sources?: any[];
+  senderName?: string;
 }
 
 interface ChatProps {
@@ -82,7 +90,10 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [realtimeMessages, setRealtimeMessages] = useState<Message[]>(currentChat || []);
+  const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
+  
+  // State for reasoning display
+  const [reasoningStates, setReasoningStates] = useState<Record<string, { isOpen: boolean; hasStartedStreaming: boolean }>>({});
   const [isClient, setIsClient] = useState(false);
 
   // Performance monitoring
@@ -107,21 +118,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     setIsClient(true);
   }, []);
 
-  // Stop loading when AI message is actually rendered
-  useEffect(() => {
-    if (roomContext && isRoomLoading && realtimeMessages.length > 0) {
-      const lastMessage = realtimeMessages[realtimeMessages.length - 1];
-      if (lastMessage && lastMessage.role === 'assistant') {
-        // Use a longer delay to ensure the message is fully rendered in the DOM
-        const timeoutId = setTimeout(() => {
-          console.log('🛑 LOADING: AI message rendered, stopping loading state');
-          setIsRoomLoading(false);
-        }, 2000); // 2 second delay to ensure full render
 
-        return () => clearTimeout(timeoutId);
-      }
-    }
-  }, [roomContext, isRoomLoading, realtimeMessages]);
 
 
 
@@ -206,7 +203,7 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
     id: stableChatId,
-    api: roomContext ? '/api/dummy' : apiEndpoint, // Use dummy endpoint for room chats
+    api: apiEndpoint, // Use real endpoint for both room and individual chats
     experimental_throttle: 50,
     initialMessages: roomContext ? [] : (currentChat || []), // Empty for room chats
     body: roomContext ? {
@@ -247,6 +244,35 @@ const ChatComponent: React.FC<ChatProps> = ({
       }
     }
   });
+
+  // Debug: Log streaming behavior
+  useEffect(() => {
+    if (!roomContext) {
+      console.log('🔄 STREAMING DEBUG:', {
+        status,
+        messageCount: messages.length,
+        lastMessage: messages[messages.length - 1]?.content?.substring(0, 50) + '...',
+        isStreaming: status === 'streaming'
+      });
+    }
+  }, [messages, status, roomContext]);
+
+  // Optimized loading timeout for room chats
+  useEffect(() => {
+    // Early exit for maximum efficiency
+    if (!roomContext || !isRoomLoading) return;
+    
+    const messageCount = realtimeMessages.length;
+    if (messageCount === 0) return;
+    
+    // Only check the last message when count changes
+    const lastMessage = realtimeMessages[messageCount - 1];
+    if (lastMessage?.role === 'assistant') {
+      // Efficient timeout with cleanup
+      const timeoutId = setTimeout(() => setIsRoomLoading(false), 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput
   const handleSubmit = useCallback(async (message: string, attachments?: File[]) => {
@@ -340,7 +366,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const { mutate } = useSWRConfig();
 
   // Real-time functionality for room chats - memoized to prevent re-renders
-  const handleNewMessage = useCallback((newMessage: Message) => {
+  const handleNewMessage = useCallback((newMessage: EnhancedMessage) => {
     console.log('🏠 Chat received RT message:', newMessage.role, 'from', newMessage.content?.substring(0, 30));
 
     // Use functional updates to avoid dependency on processedMessageIds
@@ -360,7 +386,13 @@ const ChatComponent: React.FC<ChatProps> = ({
         }
         console.log('✅ Adding new RT message to chat UI:', newMessage.id);
 
-
+        // Initialize reasoning state for AI messages
+        if (newMessage.role === 'assistant' && newMessage.reasoning) {
+          setReasoningStates(prev => ({
+            ...prev,
+            [newMessage.id]: { isOpen: true, hasStartedStreaming: false }
+          }));
+        }
 
         return [...prevMessages, newMessage];
       });
@@ -586,7 +618,8 @@ const ChatComponent: React.FC<ChatProps> = ({
             height={viewportHeight - 200} // Account for header and input area
             itemHeight={80}
             currentUserDisplayName={roomContext?.displayName}
-            showLoading={!roomContext && (status === 'streaming' || status === 'submitted')}
+            showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
+            isRoomChat={!!roomContext}
           />
         )}
         
@@ -827,14 +860,7 @@ const ChatComponent: React.FC<ChatProps> = ({
               <ChatScrollAnchor trackVisibility status={status} />
             </ul>
 
-            {/* AI Loading indicator for room chats */}
-            {roomContext && isRoomLoading && (
-              <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
-                <ul>
-                  <AILoadingMessage />
-                </ul>
-              </div>
-            )}
+
 
             {/* Typing indicator for room chats */}
             {roomContext && (

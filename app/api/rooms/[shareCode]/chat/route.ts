@@ -141,6 +141,8 @@ async function saveRoomMessage(
       sender_name: senderName,
       content,
       is_ai_response: isAiResponse,
+      reasoning: reasoning || null,
+      sources: sources ? JSON.stringify(sources) : null,
       created_at: new Date().toISOString()
     });
 

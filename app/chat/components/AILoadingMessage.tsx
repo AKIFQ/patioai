@@ -5,9 +5,15 @@ import Image from 'next/image';
 
 interface AILoadingMessageProps {
   className?: string;
+  message?: string;
+  showInline?: boolean; // For inline display in message list
 }
 
-const AILoadingMessage: React.FC<AILoadingMessageProps> = ({ className = '' }) => {
+const AILoadingMessage: React.FC<AILoadingMessageProps> = ({ 
+  className = '', 
+  message = 'AI is thinking...',
+  showInline = false 
+}) => {
   return (
     <li className={`mb-3 last:mb-0 ${className}`}>
       <div className="flex gap-2 justify-start">
@@ -31,7 +37,7 @@ const AILoadingMessage: React.FC<AILoadingMessageProps> = ({ className = '' }) =
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
-              <span className="text-xs text-muted-foreground">AI is thinking...</span>
+              <span className="text-xs text-muted-foreground">{message}</span>
             </div>
           </div>
         </div>

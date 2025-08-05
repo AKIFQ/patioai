@@ -7,14 +7,23 @@ import { Copy, Check, User, Bot } from 'lucide-react';
 import Image from 'next/image';
 import MemoizedMarkdown from './tools/MemoizedMarkdown';
 import SourceView from './tools/SourceView';
+import RoomReasoningBlock from './RoomReasoningBlock';
 
-interface ChatMessageProps {
-  message: Message;
-  index: number;
-  isUserMessage: boolean;
+// Enhanced message interface for room chats with reasoning support
+interface EnhancedMessage extends Message {
+  reasoning?: string;
+  sources?: any[];
+  senderName?: string;
 }
 
-const ChatMessage = memo(({ message, index, isUserMessage }: ChatMessageProps) => {
+interface ChatMessageProps {
+  message: EnhancedMessage;
+  index: number;
+  isUserMessage: boolean;
+  isRoomChat?: boolean;
+}
+
+const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }: ChatMessageProps) => {
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopy = useCallback((content: string) => {
@@ -29,8 +38,8 @@ const ChatMessage = memo(({ message, index, isUserMessage }: ChatMessageProps) =
   const reasoningParts: any[] = [];
 
   return (
-    <li key={message.id} className="mb-3 last:mb-0 group">
-      <div className={`flex gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'}`}>
+    <li key={message.id} className="mb-3 last:mb-0 group" data-message-id={message.id}>
+      <div className={`flex gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'}`} role={message.role}>
         {/* Avatar - only show on left side for non-current-user messages */}
         {!isUserMessage && (
           <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
@@ -51,18 +60,32 @@ const ChatMessage = memo(({ message, index, isUserMessage }: ChatMessageProps) =
         {/* Message Content */}
         <div className={`max-w-[85%] sm:max-w-[75%] ${isUserMessage ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
           {/* Sender name for non-current-user messages */}
-          {!isUserMessage && (message as any).senderName && (message as any).senderName !== 'AI Assistant' && (
+          {!isUserMessage && message.senderName && message.senderName !== 'AI Assistant' && (
             <div className="text-xs text-muted-foreground mb-1 px-2">
-              {(message as any).senderName}
+              {message.senderName}
             </div>
           )}
 
-          <div className={`rounded-xl px-3 py-2 text-sm ${isUserMessage
-            ? 'bg-primary text-primary-foreground rounded-br-sm'
-            : message.role === 'assistant'
-              ? 'bg-blue-50 dark:bg-blue-950/30 text-foreground rounded-bl-sm border border-blue-200 dark:border-blue-800/50'
-              : 'bg-muted text-foreground rounded-bl-sm border border-border/50'
-            }`}>
+          {/* Reasoning Block - Show at top for AI messages in room chats */}
+          {!isUserMessage && isRoomChat && message.role === 'assistant' && message.reasoning && (
+            <div className="w-full mb-2">
+              <RoomReasoningBlock
+                reasoning={message.reasoning}
+                messageId={message.id}
+                isStreaming={false} // Room messages are complete when received
+              />
+            </div>
+          )}
+
+          <div 
+            className={`rounded-xl px-3 py-2 text-sm ${isUserMessage
+              ? 'bg-primary text-primary-foreground rounded-br-sm'
+              : message.role === 'assistant'
+                ? 'bg-blue-50 dark:bg-blue-950/30 text-foreground rounded-bl-sm border border-blue-200 dark:border-blue-800/50'
+                : 'bg-muted text-foreground rounded-bl-sm border border-border/50'
+              }`}
+            data-message-content={message.id}
+          >
             {/* Render text parts first (main message content) */}
             {textParts.length > 0 ? (
               <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1">
