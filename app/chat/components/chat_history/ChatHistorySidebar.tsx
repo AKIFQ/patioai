@@ -400,15 +400,15 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         collapsible="none"
         className="h-full border-r border-border/40 w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background/80 backdrop-blur-md"
       >
-        <SidebarHeader className="px-5 py-2 border-b border-border/40">
-          {/* PatioAI Logo - Larger and positioned right */}
-          <div className="flex items-center justify-between -my-1">
+        <SidebarHeader className="px-5 py-4 border-b border-border/40 gap-0">
+          {/* PatioAI Logo - Larger with more spacing */}
+          <div className="flex items-center justify-between mb-5 mt-2">
             <div className="ml-2">
               <Image
                 src="/logos/logo-horizontal.png"
                 alt="PatioAI"
-                width={90}
-                height={32}
+                width={100}
+                height={24}
                 priority
                 className="opacity-90"
               />
@@ -424,11 +424,11 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             </Button>
           </div>
 
-          {/* Personal Chat Button - Sleek */}
+          {/* Personal Chat Button - Aligned with ROOMS */}
           <Button
             asChild
             variant="ghost"
-            className="w-full justify-start h-8 mb-1 mt-0 hover:bg-muted/70 transition-colors text-sm font-medium"
+            className="w-full justify-start h-8 mb-6 ml-2 hover:bg-muted/70 transition-colors text-sm font-medium"
             size="sm"
           >
             <Link href="/chat">

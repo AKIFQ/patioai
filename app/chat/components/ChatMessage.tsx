@@ -73,7 +73,7 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
       <div className={`flex gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'}`} role={message.role}>
         {/* Avatar - only show on left side for non-current-user messages */}
         {!isUserMessage && (
-          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+          <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center overflow-hidden">
             {message.role === 'assistant' ? (
               <Image
                 src="/icons/icon-512x512.png"
@@ -108,7 +108,7 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
               className={`rounded-xl px-3 py-1.5 text-sm ${isUserMessage
                 ? 'bg-primary text-primary-foreground rounded-br-sm'
                 : message.role === 'assistant'
-                  ? 'bg-blue-50 dark:bg-blue-950/30 text-foreground rounded-bl-sm border border-blue-200 dark:border-blue-800/50'
+                  ? 'bg-amber-50 dark:bg-amber-950/30 text-foreground rounded-bl-sm border border-amber-200 dark:border-amber-800/50'
                   : 'bg-muted text-foreground rounded-bl-sm border border-border/50'
                 }`}
               data-message-content={message.id}
@@ -181,7 +181,7 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
       </div>
 
       {/* Sender name and timestamp - positioned below with proper indentation */}
-      {isRoomChat && message.senderName && message.senderName !== 'AI Assistant' && (
+      {isRoomChat && message.senderName && message.senderName !== 'AI Assistant' && !isUserMessage && (
         <div className={`flex items-center gap-1.5 mt-0.5 ${isUserMessage ? 'justify-end pr-8' : 'justify-start pl-8'}`}>
           <span className="text-[10px] font-medium text-muted-foreground/80">
             {message.senderName}
