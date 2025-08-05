@@ -428,7 +428,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           <Button
             asChild
             variant="ghost"
-            className="w-full justify-start h-8 mb-2 mt-0 hover:bg-muted/70 transition-colors text-sm font-medium"
+            className="w-full justify-start h-8 mb-1 mt-0 hover:bg-muted/70 transition-colors text-sm font-medium"
             size="sm"
           >
             <Link href="/chat">
@@ -437,12 +437,12 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           </Button>
 
           {/* ROOMS Header - Compact */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1 ml-2">
             <h2 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Rooms</h2>
           </div>
 
           {/* Room Action Buttons - Compact */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 ml-2">
             <Button
               onClick={() => setIsCreateGroupModalOpen(true)}
               className="flex-1 h-7 text-xs font-medium"
@@ -518,8 +518,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
         {/* Chat History - Clean bottom section */}
         <div className="h-[40%] flex flex-col">
-          <div className="px-5 py-3 border-b border-border/40 bg-muted/20">
-            <h3 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
+          <div className="px-4 py-1.5 border-b border-border/40 bg-muted/20">
+            <h3 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide ml-2">
               {currentRoomShareCode ? 'Room Threads' : 'Recent Chats'}
             </h3>
           </div>
@@ -569,7 +569,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 {/* Room Threads */}
                 {processedThreads.length > 0 && (
                   <>
-                    <div className="mt-6 mb-2">
+                    <div className="mt-4 mb-1 ml-2">
                       <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
                         Room Threads
                       </h4>

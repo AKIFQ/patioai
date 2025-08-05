@@ -275,7 +275,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput
-  const handleSubmit = useCallback(async (message: string, attachments?: File[]) => {
+  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true) => {
     // Prevent duplicate submissions
     if (isSubmitting) {
       console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
@@ -287,36 +287,71 @@ const ChatComponent: React.FC<ChatProps> = ({
 
     try {
       if (roomContext) {
-        // For room chats: Direct API call with loading state
-        console.log('🏠 Room chat: Making direct API call (no optimistic updates)');
-        setIsRoomLoading(true);
+        if (triggerAI) {
+          // For room chats with AI response: Direct API call with loading state
+          console.log('🏠 Room chat: Making direct API call (with AI response)');
+          setIsRoomLoading(true);
 
-        const response = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages: [
-              ...realtimeMessages,
-              {
-                role: 'user',
-                content: message,
-                id: crypto.randomUUID(),
-                createdAt: new Date()
-              }
-            ],
-            displayName: roomContext.displayName,
-            option: optimisticOption,
-            threadId: roomContext.chatSessionId
-          })
-        });
+          const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: [
+                ...realtimeMessages,
+                {
+                  role: 'user',
+                  content: message,
+                  id: crypto.randomUUID(),
+                  createdAt: new Date()
+                }
+              ],
+              displayName: roomContext.displayName,
+              option: optimisticOption,
+              threadId: roomContext.chatSessionId,
+              triggerAI: true
+            })
+          });
 
-        if (!response.ok) {
-          throw new Error(`API call failed: ${response.status}`);
+          if (!response.ok) {
+            throw new Error(`API call failed: ${response.status}`);
+          }
+
+          console.log('✅ Room chat: Direct API call successful (with AI)');
+        } else {
+          // For room chats without AI response: Use same endpoint but with triggerAI: false
+          console.log('📤 Room chat: Sending user message only (no AI)');
+
+          const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: [
+                ...realtimeMessages,
+                {
+                  role: 'user',
+                  content: message,
+                  id: crypto.randomUUID(),
+                  createdAt: new Date()
+                }
+              ],
+              displayName: roomContext.displayName,
+              option: optimisticOption,
+              threadId: roomContext.chatSessionId,
+              triggerAI: false
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`API call failed: ${response.status}`);
+          }
+
+          console.log('✅ Room chat: User message sent (no AI)');
         }
-
-        console.log('✅ Room chat: Direct API call successful');
+        
         // Clear the input field immediately for better UX
         handleInputChange({ target: { value: '' } } as any);
         // Real-time will handle showing the messages
@@ -329,22 +364,42 @@ const ChatComponent: React.FC<ChatProps> = ({
           console.log(`🔄 Pre-emptively updated URL to: ${newUrl}`);
         }
 
-        // For individual chats: Use optimistic updates
-        if (attachments && attachments.length > 0) {
-          // Handle attachments
-          const fileList = new DataTransfer();
-          attachments.forEach(file => fileList.items.add(file));
+        if (triggerAI) {
+          // For individual chats with AI response: Use optimistic updates
+          if (attachments && attachments.length > 0) {
+            // Handle attachments
+            const fileList = new DataTransfer();
+            attachments.forEach(file => fileList.items.add(file));
 
-          await append({
-            role: 'user',
-            content: message,
-            experimental_attachments: fileList.files
-          });
+            await append({
+              role: 'user',
+              content: message,
+              experimental_attachments: fileList.files
+            });
+          } else {
+            await append({
+              role: 'user',
+              content: message
+            });
+          }
         } else {
-          await append({
-            role: 'user',
-            content: message
-          });
+          // For individual chats without AI response: Just add user message
+          const userMessage = {
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            content: message,
+            createdAt: new Date(),
+            ...(attachments && attachments.length > 0 && {
+              experimental_attachments: (() => {
+                const fileList = new DataTransfer();
+                attachments.forEach(file => fileList.items.add(file));
+                return fileList.files;
+              })()
+            })
+          };
+
+          setMessages(prevMessages => [...prevMessages, userMessage]);
+          console.log('📤 Added user message without AI response');
         }
       }
     } catch (error) {
@@ -361,7 +416,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         setIsSubmitting(false);
       }, 1000);
     }
-  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting]);
+  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting, setMessages, stableChatId]);
 
   const { mutate } = useSWRConfig();
 
@@ -638,7 +693,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                   message.parts?.filter((part) => part.type === 'source') || [];
 
                 return (
-                  <li key={message.id} className="my-4 mx-2">
+                  <li key={message.id} className="my-1.5 mx-2">
                     <Card
                       className={`relative gap-2 py-2 ${isUserMessage
                         ? 'bg-primary/5 dark:bg-primary/10 border-primary/20'

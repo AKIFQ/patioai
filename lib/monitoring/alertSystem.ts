@@ -1,6 +1,7 @@
 import { SocketMonitor } from './socketMonitor';
 import { ErrorTracker } from './errorTracker';
 import { PerformanceMonitor } from './performanceMonitor';
+import { MemoryManager } from './memoryManager';
 
 interface Alert {
   id: string;
@@ -112,14 +113,14 @@ export class AlertSystem {
       category: 'performance',
       condition: (metrics) => {
         const memUsage = process.memoryUsage();
-        return memUsage.heapUsed / 1024 / 1024 > 500; // 500MB
+        return memUsage.heapUsed / 1024 / 1024 > 2000; // 2GB
       },
       severity: 'warning',
       message: () => {
         const memUsage = process.memoryUsage();
         return `High memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB heap used`;
       },
-      cooldown: 10
+      cooldown: 2
     });
 
     this.alertRules.push({
@@ -128,14 +129,14 @@ export class AlertSystem {
       category: 'performance',
       condition: (metrics) => {
         const memUsage = process.memoryUsage();
-        return memUsage.heapUsed / 1024 / 1024 > 1000; // 1GB
+        return memUsage.heapUsed / 1024 / 1024 > 3000; // 3GB
       },
       severity: 'critical',
       message: () => {
         const memUsage = process.memoryUsage();
         return `Critical memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB heap used`;
       },
-      cooldown: 5
+      cooldown: 1
     });
   }
 
@@ -204,6 +205,18 @@ export class AlertSystem {
 
     this.alerts.push(alert);
     this.lastAlertTimes.set(rule.id, new Date());
+
+    // Trigger automatic cleanup for critical memory alerts
+    if (rule.id === 'critical-memory-usage') {
+      const memoryManager = MemoryManager.getInstance();
+      memoryManager.forceCleanup().then(result => {
+        if (result.success) {
+          console.log(`🧹 Auto-cleanup freed ${Math.round(result.freedMemory / 1024 / 1024)}MB`);
+        }
+      }).catch(error => {
+        console.error('Auto-cleanup failed:', error);
+      });
+    }
 
     // Notify alert handlers
     this.alertHandlers.forEach(handler => {

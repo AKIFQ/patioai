@@ -6,6 +6,8 @@ import { config } from './lib/config/endpoints';
 import { createSocketHandlers } from './lib/server/socketHandlers';
 import { setSocketIOInstance } from './lib/server/socketEmitter';
 import { AuthenticatedSocket } from './types/socket';
+import { MemoryManager } from './lib/monitoring/memoryManager';
+import { AlertSystem } from './lib/monitoring/alertSystem';
 
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -67,6 +69,13 @@ app.prepare().then(() => {
   // Set the global Socket.IO instance for API routes to use
   setSocketIOInstance(io);
 
+  // Initialize monitoring systems
+  const memoryManager = MemoryManager.getInstance();
+  const alertSystem = AlertSystem.getInstance();
+  
+  console.log('🧠 Memory Manager initialized with aggressive cleanup');
+  console.log('🚨 Alert System initialized with updated thresholds');
+
   // Initialize socket handlers
   const socketHandlers = createSocketHandlers(io);
 
@@ -108,6 +117,8 @@ app.prepare().then(() => {
       
       // 3. Cleanup monitoring systems
       console.log('🧹 Cleaning up monitoring systems...');
+      memoryManager.cleanup();
+      alertSystem.cleanup();
       
       console.log('✅ Graceful shutdown completed');
       process.exit(0);

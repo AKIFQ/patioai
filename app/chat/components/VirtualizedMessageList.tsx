@@ -118,7 +118,7 @@ const VirtualizedMessageList = memo(({
     return (
       <div 
         ref={scrollRef}
-        className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4 overflow-y-auto"
+        className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-2 overflow-y-auto"
         style={{ height }}
         data-chat-container
       >
@@ -157,7 +157,7 @@ const VirtualizedMessageList = memo(({
   }
 
   return (
-    <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4 relative" data-chat-container>
+    <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-2 relative" data-chat-container>
       <List
         ref={listRef}
         height={height}

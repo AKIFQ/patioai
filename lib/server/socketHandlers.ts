@@ -87,6 +87,11 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         if (eventNames.length > 0) {
           console.log(`🧹 Removed ${eventNames.length} event listeners for socket ${socket.id}`);
         }
+        
+        // Clear socket references to prevent memory leaks
+        (socket as any).userId = null;
+        (socket as any).rooms = null;
+        (socket as any).handshake = null;
       } catch (error) {
         console.warn('Error removing event listeners:', error);
       }
@@ -103,15 +108,22 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           try {
             await cleanupAbandonedSessions(socket.userId);
             
-            // Log memory usage for monitoring
+            // Check memory usage and trigger cleanup if needed
             const memUsage = process.memoryUsage().heapUsed;
-            if (memUsage > 800 * 1024 * 1024) { // > 800MB
-              console.warn(`⚠️ High memory usage: ${Math.round(memUsage / 1024 / 1024)}MB`);
+            const memUsageMB = memUsage / 1024 / 1024;
+            
+            if (memUsageMB > 2500) { // > 2.5GB
+              console.warn(`⚠️ High memory usage after disconnect: ${Math.round(memUsageMB)}MB - triggering cleanup`);
+              
+              // Import and trigger memory cleanup
+              const { MemoryManager } = await import('../monitoring/memoryManager');
+              const memoryManager = MemoryManager.getInstance();
+              await memoryManager.forceCleanup();
             }
           } catch (error) {
             console.error('Error in cleanup timeout:', error);
           }
-        }, 30000); // 30 second delay to allow for reconnection
+        }, 15000); // Reduced to 15 seconds for faster cleanup
         
         // Store timeout reference for potential cleanup
         (socket as any).cleanupTimeout = cleanupTimeout;
