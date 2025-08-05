@@ -119,7 +119,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
             
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="roomName">Room Name</Label>
+                <Label htmlFor="roomName" className="text-sm font-medium">Room Name</Label>
                 <Input
                   id="roomName"
                   placeholder="e.g., Family Vacation Planning"
@@ -130,15 +130,17 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                       handleCreateRoom();
                     }
                   }}
+                  className="h-9"
                 />
               </div>
               
-              <div className="bg-muted/50 p-3 rounded-lg space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="bg-muted/30 p-3 rounded-lg space-y-2 border border-border/40">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
                   <Users className="h-4 w-4" />
-                  <span>Free tier: 5 participants max</span>
+                  <span className="hidden sm:inline">Free tier: 5 participants max</span>
+                  <span className="sm:hidden">5 participants max</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
                   <Clock className="h-4 w-4" />
                   <span>Expires in 7 days</span>
                 </div>
@@ -157,49 +159,50 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Room Created Successfully!</DialogTitle>
-              <DialogDescription>
-                Share this link with others to invite them to your room.
+              <DialogTitle className="text-lg font-medium">Room Created Successfully!</DialogTitle>
+              <DialogDescription className="text-muted-foreground/80">
+                <span className="hidden sm:inline">Share this link with others to invite them to your room.</span>
+                <span className="sm:hidden">Share this link to invite others.</span>
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4">
-              <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+              <div className="bg-muted/30 p-4 rounded-lg space-y-3 border border-border/40">
                 <div>
-                  <Label className="text-sm font-medium">Room Name</Label>
-                  <p className="text-sm text-muted-foreground">{createdRoom.room.name}</p>
+                  <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Room Name</Label>
+                  <p className="text-sm font-medium">{createdRoom.room.name}</p>
                 </div>
                 
                 <div>
-                  <Label className="text-sm font-medium">Share Code</Label>
-                  <p className="text-sm font-mono text-muted-foreground">{createdRoom.room.shareCode}</p>
+                  <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Share Code</Label>
+                  <p className="text-sm font-mono text-muted-foreground/80">{createdRoom.room.shareCode}</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <Label className="text-sm font-medium">Max Participants</Label>
-                    <p className="text-muted-foreground">{createdRoom.room.maxParticipants}</p>
+                    <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Max Participants</Label>
+                    <p className="text-muted-foreground/80 font-medium">{createdRoom.room.maxParticipants}</p>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Expires</Label>
-                    <p className="text-muted-foreground">{formatExpirationDate(createdRoom.room.expiresAt)}</p>
+                    <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Expires</Label>
+                    <p className="text-muted-foreground/80 font-medium">{formatExpirationDate(createdRoom.room.expiresAt)}</p>
                   </div>
                 </div>
               </div>
               
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Shareable Link</Label>
+                <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Shareable Link</Label>
                 <div className="flex gap-2">
                   <Input
                     value={createdRoom.shareableLink}
                     readOnly
-                    className="font-mono text-sm"
+                    className="font-mono text-sm h-9"
                   />
                   <Button
-                    variant="outline"
-                    size="icon"
+                    variant="ghost"
+                    size="sm"
                     onClick={handleCopyLink}
-                    className="shrink-0"
+                    className="shrink-0 h-9 w-9 p-0 hover:bg-muted/70 transition-colors"
                   >
                     {isCopied ? (
                       <Check className="h-4 w-4 text-green-600" />
@@ -212,7 +215,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
             </div>
 
             <DialogFooter>
-              <Button onClick={handleClose}>
+              <Button onClick={handleClose} size="sm" className="h-8">
                 Done
               </Button>
             </DialogFooter>

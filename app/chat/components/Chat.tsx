@@ -582,18 +582,15 @@ const ChatComponent: React.FC<ChatProps> = ({
         {/* Use realtime messages for room chats, regular messages for individual chats */}
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
           <div className="flex flex-col justify-center items-center min-h-full text-center px-4">
-            <h2 className="text-2xl font-semibold text-foreground/80 pb-2">
-              Chat with our AI Assistant
-            </h2>
-
-            <p className="text-muted-foreground pb-2 max-w-2xl">
-              Experience the power of AI-driven conversations with our chat
-              template. Ask questions on any topic and get informative responses
-              instantly.
-            </p>
-            <h2 className="text-2xl font-semibold text-foreground/80">
-              Start your conversation!
-            </h2>
+            {roomContext ? (
+              <h2 className="text-xl font-medium text-muted-foreground">
+                Welcome to {roomContext.roomName} — let's collaborate!
+              </h2>
+            ) : (
+              <h2 className="text-xl font-medium text-muted-foreground">
+                Ready to chat? Ask me anything!
+              </h2>
+            )}
           </div>
         ) : (
           <VirtualizedMessageList
