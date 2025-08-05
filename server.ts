@@ -6,10 +6,7 @@ import { config } from './lib/config/endpoints';
 import { createSocketHandlers } from './lib/server/socketHandlers';
 import { setSocketIOInstance } from './lib/server/socketEmitter';
 import { AuthenticatedSocket } from './types/socket';
-import { memoryMonitor } from './lib/monitoring/memoryMonitor';
-import { memoryProfiler } from './lib/monitoring/memoryProfiler';
-import { safeCleanup } from './lib/monitoring/safeCleanup';
-import EmergencyMemoryCleanup from './lib/utils/memoryCleanup';
+
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -111,11 +108,6 @@ app.prepare().then(() => {
       
       // 3. Cleanup monitoring systems
       console.log('🧹 Cleaning up monitoring systems...');
-      safeCleanup.shutdown();
-      memoryMonitor.cleanup();
-      
-      // 4. Final memory cleanup
-      await EmergencyMemoryCleanup.performEmergencyCleanup();
       
       console.log('✅ Graceful shutdown completed');
       process.exit(0);
@@ -132,18 +124,12 @@ app.prepare().then(() => {
   // Global error handling
   process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
-    // Try emergency cleanup before exit
-    EmergencyMemoryCleanup.performEmergencyCleanup().finally(() => {
-      process.exit(1);
-    });
+    process.exit(1);
   });
 
   process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    // Try emergency cleanup before exit
-    EmergencyMemoryCleanup.performEmergencyCleanup().finally(() => {
-      process.exit(1);
-    });
+    process.exit(1);
   });
 
   server
@@ -155,22 +141,6 @@ app.prepare().then(() => {
       console.log(`> Ready on http://${hostname}:${port}`);
       console.log(`> Socket.IO server initialized`);
       
-      // Initialize memory monitoring and safe cleanup
-      console.log('🔍 Initializing memory monitoring and safe cleanup...');
-      const initialMemory = memoryMonitor.getCurrentStats();
-      console.log(`📊 Initial memory usage: ${Math.round(initialMemory.heapUsed / 1024 / 1024)}MB`);
-      
-      // Initialize safe cleanup system
-      console.log('🧹 Safe auto-cleanup system initialized');
-      
-      // Check if we're starting with high memory
-      if (memoryMonitor.isMemoryHigh()) {
-        console.warn('⚠️ Starting with high memory usage - running analysis and cleanup...');
-        setTimeout(async () => {
-          memoryProfiler.logMemoryReport();
-          // Trigger immediate safe cleanup
-          await safeCleanup.triggerManualCleanup();
-        }, 5000); // Wait 5 seconds for everything to initialize
-      }
+      console.log(`> Socket.IO server initialized with monitoring`);
     });
 });

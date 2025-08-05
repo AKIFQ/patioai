@@ -103,14 +103,10 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           try {
             await cleanupAbandonedSessions(socket.userId);
             
-            // Trigger safe cleanup if memory is getting high
+            // Log memory usage for monitoring
             const memUsage = process.memoryUsage().heapUsed;
             if (memUsage > 800 * 1024 * 1024) { // > 800MB
-              console.log('🧹 High memory detected after disconnect, triggering safe cleanup...');
-              const { safeCleanup } = require('../monitoring/safeCleanup');
-              safeCleanup.triggerManualCleanup().catch((error: any) => {
-                console.error('Safe cleanup error:', error);
-              });
+              console.warn(`⚠️ High memory usage: ${Math.round(memUsage / 1024 / 1024)}MB`);
             }
           } catch (error) {
             console.error('Error in cleanup timeout:', error);

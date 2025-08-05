@@ -32,6 +32,7 @@ import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
 import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
+import { useViewportHeight } from '../hooks/useViewportHeight';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
@@ -86,6 +87,9 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Performance monitoring
   const { startMeasurement, endMeasurement } = usePerformanceMonitor('ChatComponent');
+  
+  // Get viewport height for proper scrolling
+  const viewportHeight = useViewportHeight();
 
   // Measure render performance - moved after messages are defined
   const measurePerformance = useCallback(() => {
@@ -559,7 +563,7 @@ const ChatComponent: React.FC<ChatProps> = ({
       </div>
 
       {/* Scrollable Chat Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-hidden">
         {/* Use realtime messages for room chats, regular messages for individual chats */}
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
           <div className="flex flex-col justify-center items-center min-h-full text-center px-4">
@@ -579,7 +583,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         ) : (
           <VirtualizedMessageList
             messages={roomContext ? realtimeMessages : messages}
-            height={600}
+            height={viewportHeight - 200} // Account for header and input area
             itemHeight={80}
             currentUserDisplayName={roomContext?.displayName}
             showLoading={!roomContext && (status === 'streaming' || status === 'submitted')}

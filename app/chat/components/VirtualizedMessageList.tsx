@@ -5,6 +5,9 @@ import { FixedSizeList as List } from 'react-window';
 import { type Message } from '@ai-sdk/react';
 import ChatMessage from './ChatMessage';
 import AILoadingMessage from './AILoadingMessage';
+import { useAutoScroll } from '../hooks/useAutoScroll';
+import { useVirtualizedAutoScroll } from '../hooks/useVirtualizedAutoScroll';
+import ScrollToBottomButton from './ScrollToBottomButton';
 
 interface VirtualizedMessageListProps {
   messages: Message[];
@@ -53,13 +56,52 @@ const VirtualizedMessageList = memo(({
   showLoading = false
 }: VirtualizedMessageListProps) => {
   const listRef = useRef<List>(null);
+  
+  // For non-virtualized lists (< 20 messages)
+  const { scrollRef, isAtBottom: nonVirtualizedAtBottom, isAutoScrolling: nonVirtualizedAutoScrolling, scrollToBottom, enableAutoScroll: enableNonVirtualizedAutoScroll } = useAutoScroll({
+    threshold: 100,
+    resumeDelay: 1500,
+    enabled: true
+  });
+  
+  // For virtualized lists (>= 20 messages)
+  const { 
+    isAtBottom: virtualizedAtBottom, 
+    isAutoScrolling: virtualizedAutoScrolling, 
+    scrollToBottom: scrollVirtualizedToBottom, 
+    enableAutoScroll: enableVirtualizedAutoScroll,
+    handleScroll: handleVirtualizedScroll,
+    updateDimensions
+  } = useVirtualizedAutoScroll({
+    threshold: 2,
+    resumeDelay: 1500,
+    enabled: true
+  });
+  
+  // Determine which scroll state to use
+  const isVirtualized = messages.length >= 20;
+  const isAtBottom = isVirtualized ? virtualizedAtBottom : nonVirtualizedAtBottom;
+  const isAutoScrolling = isVirtualized ? virtualizedAutoScrolling : nonVirtualizedAutoScrolling;
+
+  // Update dimensions for virtualized scroll calculations
+  useEffect(() => {
+    if (isVirtualized) {
+      updateDimensions(messages.length, height, itemHeight);
+    }
+  }, [messages.length, height, itemHeight, isVirtualized, updateDimensions]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (listRef.current && messages.length > 0) {
-      listRef.current.scrollToItem(messages.length - 1, 'end');
+    if (messages.length > 0 && isAutoScrolling) {
+      if (isVirtualized && listRef.current) {
+        // For virtualized list, scroll to last item
+        scrollVirtualizedToBottom(listRef);
+      } else {
+        // For non-virtualized list, use smooth scroll
+        scrollToBottom();
+      }
     }
-  }, [messages.length]);
+  }, [messages.length, isAutoScrolling, isVirtualized, scrollVirtualizedToBottom, scrollToBottom]);
 
   const itemData = useMemo(() => ({
     messages,
@@ -69,7 +111,11 @@ const VirtualizedMessageList = memo(({
   // Don't virtualize if there are few messages
   if (messages.length < 20) {
     return (
-      <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
+      <div 
+        ref={scrollRef}
+        className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4 overflow-y-auto"
+        style={{ height }}
+      >
         <ul>
           {messages.map((message, index) => {
             // For room chats, check if the message is from the current user by comparing sender names
@@ -89,12 +135,22 @@ const VirtualizedMessageList = memo(({
           })}
           {showLoading && <AILoadingMessage />}
         </ul>
+        
+        {/* Scroll to bottom button */}
+        <ScrollToBottomButton
+          show={!isAtBottom}
+          onClick={() => {
+            scrollToBottom();
+            enableNonVirtualizedAutoScroll();
+          }}
+          hasNewMessages={!isAutoScrolling}
+        />
       </div>
     );
   }
 
   return (
-    <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
+    <div className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4 relative">
       <List
         ref={listRef}
         height={height}
@@ -103,9 +159,20 @@ const VirtualizedMessageList = memo(({
         itemSize={itemHeight}
         itemData={itemData}
         overscanCount={5}
+        onScroll={handleVirtualizedScroll}
       >
         {MessageItem}
       </List>
+      
+      {/* Scroll to bottom button for virtualized list */}
+      <ScrollToBottomButton
+        show={!isAtBottom}
+        onClick={() => {
+          scrollVirtualizedToBottom(listRef);
+          enableVirtualizedAutoScroll();
+        }}
+        hasNewMessages={!isAutoScrolling}
+      />
     </div>
   );
 });
