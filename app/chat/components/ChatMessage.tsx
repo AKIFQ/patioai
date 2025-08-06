@@ -8,6 +8,7 @@ import Image from 'next/image';
 import MemoizedMarkdown from './tools/MemoizedMarkdown';
 import SourceView from './tools/SourceView';
 import RoomReasoningBlock from './RoomReasoningBlock';
+import StreamingReasoningBlock from './StreamingReasoningBlock';
 
 // Enhanced message interface for room chats with reasoning support
 interface EnhancedMessage extends Message {
@@ -43,8 +44,12 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
       if (message.senderName) {
         const senderPrefix = `${message.senderName}: `;
         if (message.content.startsWith(senderPrefix)) {
-          console.log('🧹 Removing sender prefix from user message:', senderPrefix);
-          return message.content.substring(senderPrefix.length);
+          const cleaned = message.content.substring(senderPrefix.length);
+          // Only return cleaned content if it's not empty
+          if (cleaned.trim()) {
+            console.log('🧹 Removing sender prefix from user message:', senderPrefix);
+            return cleaned;
+          }
         }
       }
       
@@ -54,8 +59,12 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
         const potentialName = message.content.substring(0, colonIndex);
         // Check if it looks like a name (letters, spaces, reasonable length)
         if (/^[A-Za-z\s\.]+$/.test(potentialName) && potentialName.length < 40) {
-          console.log('🧹 Removing detected sender prefix from user message:', potentialName + ': ');
-          return message.content.substring(colonIndex + 2);
+          const cleaned = message.content.substring(colonIndex + 2);
+          // Only return cleaned content if it's not empty
+          if (cleaned.trim()) {
+            console.log('🧹 Removing detected sender prefix from user message:', potentialName + ': ');
+            return cleaned;
+          }
         }
       }
     }
@@ -64,9 +73,21 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
   }, [message.content, message.senderName, isRoomChat, message.role]);
 
   // Separate text and reasoning parts for better rendering
-  const textParts = cleanContent ? [{ type: 'text' as const, text: cleanContent }] : [];
+  const textParts = cleanContent && cleanContent.trim() ? [{ type: 'text' as const, text: cleanContent }] : [];
   // Note: reasoning parts removed for now due to type issues
   const reasoningParts: any[] = [];
+
+  // Debug logging for content issues
+  if (process.env.NODE_ENV === 'development' && (!cleanContent || !cleanContent.trim())) {
+    console.log('⚠️ Empty cleanContent for message:', {
+      messageId: message.id,
+      originalContent: message.content,
+      cleanContent,
+      senderName: message.senderName,
+      role: message.role,
+      isRoomChat
+    });
+  }
 
   return (
     <li key={message.id} className="mb-1.5 last:mb-0 group" data-message-id={message.id}>
@@ -96,11 +117,21 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
             {/* Reasoning Block - Show at top for AI messages in room chats */}
             {!isUserMessage && isRoomChat && message.role === 'assistant' && message.reasoning && (
               <div className="w-full mb-2">
-                <RoomReasoningBlock
-                  reasoning={message.reasoning}
-                  messageId={message.id}
-                  isStreaming={false} // Room messages are complete when received
-                />
+                {/* Check if this is a streaming message */}
+                {(message as any).isStreaming ? (
+                  <StreamingReasoningBlock
+                    reasoning={message.reasoning}
+                    messageId={message.id}
+                    isStreaming={(message as any).isStreaming}
+                    phase={(message as any).phase}
+                  />
+                ) : (
+                  <RoomReasoningBlock
+                    reasoning={message.reasoning}
+                    messageId={message.id}
+                    isStreaming={false} // Room messages are complete when received
+                  />
+                )}
               </div>
             )}
 
@@ -114,7 +145,7 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
               data-message-content={message.id}
             >
               {/* Render text parts first (main message content) */}
-              {textParts.length > 0 ? (
+              {textParts.length > 0 && textParts[0].text.trim() ? (
                 <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1">
                   {textParts.map((part, partIndex) => (
                     <MemoizedMarkdown
@@ -123,6 +154,13 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
                       id={`message-${message.id}-text-${partIndex}`}
                     />
                   ))}
+                </div>
+              ) : message.content && message.content.trim() ? (
+                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1">
+                  <MemoizedMarkdown
+                    content={message.content}
+                    id={`message-${message.id}-fallback`}
+                  />
                 </div>
               ) : (
                 <div className="text-muted-foreground italic text-xs">No content</div>

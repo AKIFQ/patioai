@@ -91,6 +91,9 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
+  
+  // NEW: Streaming state (safe - separate from existing messages)
+  const [streamingMessages, setStreamingMessages] = useState<Map<string, EnhancedMessage>>(new Map());
 
   // State for reasoning display
   const [reasoningStates, setReasoningStates] = useState<Record<string, { isOpen: boolean; hasStartedStreaming: boolean }>>({});
@@ -108,8 +111,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     // Will be called after messages are available
   }, [startMeasurement]);
 
-  // Message deduplication and loading state for room chats
-  const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
+  // Loading state for room chats
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRoomLoading, setIsRoomLoading] = useState(false);
 
@@ -278,96 +280,56 @@ const ChatComponent: React.FC<ChatProps> = ({
   const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true) => {
     // Prevent duplicate submissions
     if (isSubmitting) {
-      console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
       return;
     }
 
     setIsSubmitting(true);
-    console.log(`🚀 CHAT: Handling submission: "${message.substring(0, 50)}"`);
 
     try {
       if (roomContext) {
         if (triggerAI) {
-          // For room chats with AI response: Direct API call with loading state
-          console.log('🏠 Room chat: Making direct API call (with AI response)');
           setIsRoomLoading(true);
+        }
 
-          const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messages: [
-                ...realtimeMessages,
-                {
-                  role: 'user',
-                  content: message,
-                  id: crypto.randomUUID(),
-                  createdAt: new Date()
-                }
-              ],
-              displayName: roomContext.displayName,
-              option: optimisticOption,
-              threadId: roomContext.chatSessionId,
-              triggerAI: true
-            })
-          });
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [
+              ...realtimeMessages,
+              {
+                role: 'user',
+                content: message,
+                id: crypto.randomUUID(),
+                createdAt: new Date()
+              }
+            ],
+            displayName: roomContext.displayName,
+            option: optimisticOption,
+            threadId: roomContext.chatSessionId,
+            triggerAI
+          })
+        });
 
-          if (!response.ok) {
-            throw new Error(`API call failed: ${response.status}`);
-          }
-
-          console.log('✅ Room chat: Direct API call successful (with AI)');
-        } else {
-          // For room chats without AI response: Use same endpoint but with triggerAI: false
-          console.log('📤 Room chat: Sending user message only (no AI)');
-
-          const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messages: [
-                ...realtimeMessages,
-                {
-                  role: 'user',
-                  content: message,
-                  id: crypto.randomUUID(),
-                  createdAt: new Date()
-                }
-              ],
-              displayName: roomContext.displayName,
-              option: optimisticOption,
-              threadId: roomContext.chatSessionId,
-              triggerAI: false
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error(`API call failed: ${response.status}`);
-          }
-
-          console.log('✅ Room chat: User message sent (no AI)');
+        if (!response.ok) {
+          throw new Error(`API call failed: ${response.status}`);
         }
         
         // Clear the input field immediately for better UX
         handleInputChange({ target: { value: '' } } as any);
-        // Real-time will handle showing the messages
 
       } else {
         // For individual chats: Update URL immediately to prevent re-renders
         if (window.location.pathname === '/chat' && stableChatId) {
           const newUrl = `/chat/${stableChatId}${window.location.search}`;
           window.history.replaceState({}, '', newUrl);
-          console.log(`🔄 Pre-emptively updated URL to: ${newUrl}`);
         }
 
         if (triggerAI) {
           // For individual chats with AI response: Use optimistic updates
           if (attachments && attachments.length > 0) {
-            // Handle attachments
             const fileList = new DataTransfer();
             attachments.forEach(file => fileList.items.add(file));
 
@@ -399,11 +361,10 @@ const ChatComponent: React.FC<ChatProps> = ({
           };
 
           setMessages(prevMessages => [...prevMessages, userMessage]);
-          console.log('📤 Added user message without AI response');
         }
       }
     } catch (error) {
-      console.error('❌ CHAT: Error in handleSubmit:', error);
+      console.error('Error in handleSubmit:', error);
       if (roomContext) {
         toast.error('Failed to send message. Please try again.');
       }
@@ -414,53 +375,194 @@ const ChatComponent: React.FC<ChatProps> = ({
       // Reset submission flag after a delay to prevent rapid-fire submissions
       setTimeout(() => {
         setIsSubmitting(false);
-      }, 1000);
+      }, 500);
     }
   }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting, setMessages, stableChatId]);
 
   const { mutate } = useSWRConfig();
 
-  // Real-time functionality for room chats - memoized to prevent re-renders
+  // Optimized message handler with better deduplication
   const handleNewMessage = useCallback((newMessage: EnhancedMessage) => {
-    console.log('🏠 Chat received RT message:', newMessage.role, 'from', newMessage.content?.substring(0, 30));
-
-    // Use functional updates to avoid dependency on processedMessageIds
-    setProcessedMessageIds(prevProcessed => {
-      // Check if we've already processed this message
-      if (prevProcessed.has(newMessage.id)) {
-        console.log('⚠️ Message already processed, skipping:', newMessage.id);
-        return prevProcessed; // Return same reference to avoid re-render
+    setRealtimeMessages(prevMessages => {
+      // Check if message already exists
+      const exists = prevMessages.find(msg => msg.id === newMessage.id);
+      if (exists) {
+        return prevMessages; // Return same reference to prevent re-render
       }
 
-      // Mark message as processed and update UI
-      setRealtimeMessages(prevMessages => {
-        const exists = prevMessages.find(msg => msg.id === newMessage.id);
-        if (exists) {
-          console.log('⚠️ Message already exists in UI, skipping:', newMessage.id);
-          return prevMessages;
-        }
-        console.log('✅ Adding new RT message to chat UI:', newMessage.id);
+      // Initialize reasoning state for AI messages
+      if (newMessage.role === 'assistant' && newMessage.reasoning) {
+        setReasoningStates(prev => ({
+          ...prev,
+          [newMessage.id]: { isOpen: true, hasStartedStreaming: false }
+        }));
+      }
 
-        // Initialize reasoning state for AI messages
-        if (newMessage.role === 'assistant' && newMessage.reasoning) {
-          setReasoningStates(prev => ({
-            ...prev,
-            [newMessage.id]: { isOpen: true, hasStartedStreaming: false }
-          }));
-        }
-
-        return [...prevMessages, newMessage];
-      });
-
-      // Return new Set with the processed message ID
-      return new Set(prevProcessed).add(newMessage.id);
+      return [...prevMessages, newMessage];
     });
   }, []); // Empty dependency array - stable function
 
   const handleTypingUpdate = useCallback((users: string[]) => {
-    console.log('👥 Typing users updated in Chat:', users);
     setTypingUsers(users);
   }, []);
+
+  // NEW: Streaming handlers (safe - only used if streaming is enabled)
+  const handleReasoningStart = useCallback((data: any) => {
+    console.log('🧠 [CLIENT] Reasoning start event received:', {
+      streamId: data.streamId,
+      threadId: data.threadId,
+      currentThreadId: roomContext?.chatSessionId,
+      matches: data.threadId === roomContext?.chatSessionId
+    });
+
+    if (!roomContext || data.threadId !== roomContext.chatSessionId) {
+      console.log('🚫 [CLIENT] Ignoring reasoning start - thread mismatch');
+      return;
+    }
+    
+    console.log('🧠 [CLIENT] Processing reasoning start:', data.streamId);
+    
+    const streamingMessage: EnhancedMessage = {
+      id: data.streamId,
+      role: 'assistant',
+      content: '✨ Generating response...', // Initial content for Gemini
+      createdAt: new Date(data.timestamp),
+      senderName: 'AI Assistant',
+      // Custom properties for streaming
+      streamId: data.streamId,
+      phase: 'answering', // Start directly with answering for Gemini
+      reasoningContent: '',
+      answerContent: '',
+      isStreaming: true,
+      reasoning: '' // Initialize reasoning field
+    } as any;
+
+    setStreamingMessages(prev => new Map(prev.set(data.streamId, streamingMessage)));
+  }, [roomContext]);
+
+  const handleReasoningChunk = useCallback((data: any) => {
+    console.log('🧠 [CLIENT] Reasoning chunk event received:', {
+      streamId: data.streamId,
+      chunkLength: data.chunk?.length,
+      accumulatedLength: data.accumulatedReasoning?.length
+    });
+
+    if (!roomContext || data.threadId !== roomContext.chatSessionId) {
+      console.log('🚫 [CLIENT] Ignoring reasoning chunk - thread mismatch');
+      return;
+    }
+
+    console.log('🧠 [CLIENT] Processing reasoning chunk for:', data.streamId);
+    setStreamingMessages(prev => {
+      const existing = prev.get(data.streamId);
+      if (!existing) return prev;
+
+      const updated = {
+        ...existing,
+        reasoningContent: data.accumulatedReasoning,
+        reasoning: data.accumulatedReasoning, // For compatibility with existing components
+        content: data.accumulatedReasoning // IMPORTANT: Update main content field so it displays
+      };
+
+      return new Map(prev.set(data.streamId, updated));
+    });
+  }, [roomContext]);
+
+  const handleReasoningComplete = useCallback((data: any) => {
+    if (!roomContext || data.threadId !== roomContext.chatSessionId) return;
+    
+    console.log('🧠 Reasoning complete, transitioning to answer:', data.streamId);
+
+    setStreamingMessages(prev => {
+      const existing = prev.get(data.streamId);
+      if (!existing) return prev;
+
+      const updated = {
+        ...existing,
+        phase: 'answering',
+        reasoningContent: data.finalReasoning,
+        reasoning: data.finalReasoning,
+        content: '' // Clear content when transitioning to answer phase
+      };
+
+      return new Map(prev.set(data.streamId, updated));
+    });
+  }, [roomContext]);
+
+  const handleAnswerStart = useCallback((data: any) => {
+    if (!roomContext || data.threadId !== roomContext.chatSessionId) return;
+    console.log('💬 Answer started:', data.streamId);
+  }, [roomContext]);
+
+  const handleAnswerChunk = useCallback((data: any) => {
+    if (!roomContext || data.threadId !== roomContext.chatSessionId) return;
+
+    setStreamingMessages(prev => {
+      const existing = prev.get(data.streamId);
+      if (!existing) return prev;
+
+      const updated = {
+        ...existing,
+        answerContent: data.accumulatedAnswer,
+        content: data.accumulatedAnswer // IMPORTANT: Update main content field for answer
+      };
+
+      return new Map(prev.set(data.streamId, updated));
+    });
+  }, [roomContext]);
+
+  const handleStreamComplete = useCallback((data: any) => {
+    if (!roomContext || data.threadId !== roomContext.chatSessionId) return;
+    
+    console.log('✅ Stream complete:', data.streamId);
+
+    // Mark as complete and remove after delay (regular message will replace it)
+    setStreamingMessages(prev => {
+      const existing = prev.get(data.streamId);
+      if (!existing) return prev;
+
+      const completed = {
+        ...existing,
+        phase: 'complete',
+        isStreaming: false
+      };
+
+      const newMap = new Map(prev.set(data.streamId, completed));
+      
+      // Remove after delay to allow regular message to appear
+      setTimeout(() => {
+        setStreamingMessages(current => {
+          const updated = new Map(current);
+          updated.delete(data.streamId);
+          return updated;
+        });
+      }, 1000);
+
+      return newMap;
+    });
+  }, [roomContext]);
+
+  const handleStreamError = useCallback((data: any) => {
+    console.error('❌ Stream error:', data.streamId, data.error);
+    
+    // Remove streaming message on error
+    setStreamingMessages(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(data.streamId);
+      return newMap;
+    });
+  }, []);
+
+  // Create streaming handlers object
+  const streamingHandlers = useMemo(() => ({
+    onReasoningStart: handleReasoningStart,
+    onReasoningChunk: handleReasoningChunk,
+    onReasoningComplete: handleReasoningComplete,
+    onAnswerStart: handleAnswerStart,
+    onAnswerChunk: handleAnswerChunk,
+    onStreamComplete: handleStreamComplete,
+    onStreamError: handleStreamError
+  }), [handleReasoningStart, handleReasoningChunk, handleReasoningComplete, handleAnswerStart, handleAnswerChunk, handleStreamComplete, handleStreamError]);
 
   // Memoize realtime hook props to prevent unnecessary re-initializations
   const realtimeProps = useMemo(() => {
@@ -468,11 +570,14 @@ const ChatComponent: React.FC<ChatProps> = ({
     return {
       shareCode: roomContext.shareCode,
       displayName: roomContext.displayName,
+      sessionId: roomContext.sessionId, // Pass sessionId for authentication
       chatSessionId: roomContext.chatSessionId,
       onNewMessage: handleNewMessage,
-      onTypingUpdate: handleTypingUpdate
+      onTypingUpdate: handleTypingUpdate,
+      // NEW: Add streaming handlers (safe - only used if streaming enabled)
+      streamingHandlers: streamingHandlers
     };
-  }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate]);
+  }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.sessionId, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate, streamingHandlers]);
 
   // Initialize real-time hook with safe fallbacks
   const realtimeHook = realtimeProps ? useRoomSocket(realtimeProps) : null;
@@ -656,249 +761,6 @@ const ChatComponent: React.FC<ChatProps> = ({
             showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
             isRoomChat={!!roomContext}
           />
-        )}
-
-        {/* Keep the original rendering as fallback - remove this section later */}
-        {false && (
-          <div>
-            <ul className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
-              {(roomContext ? realtimeMessages : messages).map((message, index) => {
-
-
-                const isUserMessage = message.role === 'user';
-                const copyToClipboard = (str: string) => {
-                  window.navigator.clipboard.writeText(str);
-                };
-                const handleCopy = (content: string) => {
-                  copyToClipboard(content);
-                  setIsCopied(true);
-                  setTimeout(() => setIsCopied(false), 1000);
-                };
-
-                // First filter the tool invocation parts to check if we need the accordion
-                const toolInvocationParts = !isUserMessage
-                  ? message.parts?.filter(
-                    (part) => part.type === 'tool-invocation'
-                  ) || []
-                  : [];
-
-                const hasToolInvocations = toolInvocationParts.length > 0;
-
-                // Group parts by type for ordered rendering
-                const textParts =
-                  message.parts?.filter((part) => part.type === 'text') || [];
-                const reasoningParts =
-                  message.parts?.filter((part) => part.type === 'reasoning') || [];
-                const sourceParts =
-                  message.parts?.filter((part) => part.type === 'source') || [];
-
-                return (
-                  <li key={message.id} className="my-1.5 mx-2">
-                    <Card
-                      className={`relative gap-2 py-2 ${isUserMessage
-                        ? 'bg-primary/5 dark:bg-primary/10 border-primary/20'
-                        : 'bg-card dark:bg-card/90 border-border/50'
-                        }`}
-                    >
-                      <CardHeader className="pb-2 px-4">
-                        <div className="flex items-center gap-3">
-                          {isUserMessage ? (
-                            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                              <User className="h-4 w-4 text-primary-foreground" />
-                            </div>
-                          ) : (
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                              <Image
-                                src="/icons/icon-512x512.png"
-                                alt="AI Assistant"
-                                width={20}
-                                height={20}
-                                className="rounded-full"
-                              />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-sm">
-                              {isUserMessage ? 'You' : 'AI Assistant'}
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                              {message.createdAt
-                                ? new Date(message.createdAt).toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    hour12: false
-                                  }
-                                )
-                                : new Date().toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: false
-                                })}
-                            </p>
-                          </div>
-                          {!isUserMessage && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleCopy(message.content)}
-                            >
-                              {isCopied ? (
-                                <CheckCircle
-                                  size={14}
-                                  className="text-green-600 dark:text-green-400"
-                                />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="py-0 px-4">
-                        {/* Render text parts first (main message content) */}
-                        {textParts.length > 0 ? (
-                          textParts.map((part, partIndex) => (
-                            <MemoizedMarkdown
-                              key={`text-${partIndex}`}
-                              content={part.text}
-                              id={`${isUserMessage ? 'user' : 'assistant'}-text-${message.id
-                                }-${partIndex}`}
-                            />
-                          ))
-                        ) : (
-                          // Fallback for messages that don't have parts (like room messages)
-                          message.content && (
-                            <MemoizedMarkdown
-                              content={message.content}
-                              id={`${isUserMessage ? 'user' : 'assistant'}-content-${message.id}`}
-                            />
-                          )
-                        )}
-
-                        {/* Then render reasoning parts (only for assistant messages) */}
-                        {!isUserMessage &&
-                          reasoningParts.map((part, partIndex) => (
-                            <div key={`reasoning-${partIndex}`} className="mt-4">
-                              <ReasoningContent
-                                details={part.details}
-                                messageId={message.id}
-                              />
-                            </div>
-                          ))}
-
-                        {/* Then render source parts (only for assistant messages) */}
-                        {!isUserMessage && sourceParts.length > 0 && (
-                          <div className="mt-2">
-                            <SourceView
-                              sources={sourceParts.map((part) => part.source)}
-                            />
-                          </div>
-                        )}
-
-                        {/* Display attached files in user messages */}
-                        {isUserMessage &&
-                          message.experimental_attachments &&
-                          message.experimental_attachments.length > 0 && (
-                            <div className="mt-4 pt-4 border-t">
-                              <h4 className="text-sm font-medium mb-2">
-                                Attached Files:
-                              </h4>
-                              <div className="space-y-2">
-                                {message.experimental_attachments.map(
-                                  (attachment, idx) => (
-                                    <div
-                                      key={`attachment-${idx}`}
-                                      className="flex items-center gap-2 p-2 bg-background rounded border"
-                                    >
-                                      <FileIcon className="h-4 w-4 text-blue-500" />
-                                      <Link
-                                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex-1"
-                                        href={`?file=${attachment.name}`}
-                                      >
-                                        {attachment.name}
-                                      </Link>
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                        {/* Render all tool invocations in a single accordion */}
-                        {hasToolInvocations && (
-                          <div className="mt-6">
-                            <Accordion
-                              type="single"
-                              defaultValue="tool-invocation"
-                              collapsible
-                              className="w-full border rounded-lg"
-                            >
-                              <AccordionItem
-                                value="tool-invocation"
-                                className="border-0"
-                              >
-                                <AccordionTrigger className="px-4 py-3 font-medium hover:no-underline">
-                                  <div className="flex items-center gap-2">
-                                    <Image
-                                      src="/icons/icon-512x512.png"
-                                      alt="AI Assistant"
-                                      width={16}
-                                      height={16}
-                                      className="rounded-full"
-                                    />
-                                    <span>AI Tools Used</span>
-                                  </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 pb-4">
-                                  <div className="space-y-4">
-                                    {toolInvocationParts.map((part) => {
-                                      const toolName = part.toolInvocation.toolName;
-                                      const toolId = part.toolInvocation.toolCallId;
-                                      switch (toolName) {
-                                        case 'searchUserDocument':
-                                          return (
-                                            <DocumentSearchTool
-                                              key={toolId}
-                                              toolInvocation={part.toolInvocation}
-                                            />
-                                          );
-                                        case 'websiteSearchTool':
-                                          return (
-                                            <WebsiteSearchTool
-                                              key={toolId}
-                                              toolInvocation={part.toolInvocation}
-                                            />
-                                          );
-                                        default:
-                                          return null;
-                                      }
-                                    })}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            </Accordion>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </li>
-                );
-
-
-
-
-              })}
-              <ChatScrollAnchor trackVisibility status={status} />
-            </ul>
-
-
-
-
-          </div>
         )}
       </div>
 

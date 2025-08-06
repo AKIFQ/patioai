@@ -126,7 +126,7 @@ interface RoomContext {
   chatSessionId?: string;
 }
 
-const MessageInput = ({
+const MessageInput = React.memo(({
   chatId,
   currentChatId,
   modelType,
@@ -193,94 +193,19 @@ const MessageInput = ({
 
   // Removed unused chatSessionIdForRoom calculation
 
-  // Only log in development
-  if (process.env.NODE_ENV === 'development') {
+  // Only log in development (reduced frequency)
+  const initLoggedRef = useRef(false);
+  if (process.env.NODE_ENV === 'development' && !initLoggedRef.current) {
     console.log(`📝 MESSAGE INPUT: Component initialized as controlled component`);
+    initLoggedRef.current = true;
   }
   
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-    
-    // Handle typing indicator
-    if (onTypingRef.current) {
-      onTypingRef.current(true);
-      
-      // Clear existing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      
-      // Set new timeout to stop typing
-      typingTimeoutRef.current = setTimeout(() => {
-        if (onTypingRef.current) {
-          onTypingRef.current(false);
-        }
-      }, 1000);
-    }
   };
 
-  // Handle typing indicators for room chats
-  const handleTyping = useCallback(() => {
-    if (!roomContext) return;
-
-    console.log('🎯 handleTyping called for room:', roomContext.shareCode);
-    
-    // Start typing
-    safeOnTyping(true);
-
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    // Stop typing after 1 second of inactivity
-    typingTimeoutRef.current = setTimeout(() => {
-      console.log('⏰ Typing timeout - stopping typing');
-      safeOnTyping(false);
-    }, 1000);
-  }, [roomContext, safeOnTyping]);
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle typing indicators
-    if (roomContext) {
-      handleTyping();
-    }
-
-    if (event.key === 'Enter' && event.shiftKey) {
-      // Trigger prompt action on Shift + Enter
-      event.preventDefault();
-      handlePromptSubmit(event);
-    } else if (event.key === 'Enter') {
-      // Prevent default behavior and submit form on Enter only
-      event.preventDefault();
-      // Stop typing when sending message
-      if (roomContext) {
-        safeOnTyping(false);
-      }
-      handleFormSubmit(event);
-    }
-  };
-
-  // Handle input change with typing indicators
-  const handleInputChangeWithTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    handleInputChange(e);
-    
-    // Handle typing indicators for room chats
-    if (roomContext) {
-      console.log('📝 Input changed, value length:', e.target.value.length);
-      if (e.target.value.length > 0) {
-        console.log('📝 Starting typing indicator');
-        handleTyping();
-      } else {
-        console.log('📝 Stopping typing indicator (empty input)');
-        safeOnTyping(false);
-      }
-    }
-  };
-
-
-
+  // Handle file operations
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -311,7 +236,7 @@ const MessageInput = ({
   };
 
   // Handle form submission (send button - no AI response)
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && attachedFiles.length === 0) return;
     if (isLoading) return; // Prevent double submission
@@ -329,9 +254,6 @@ const MessageInput = ({
     }
     
     // Submit through parent component WITHOUT triggering AI
-    const submissionId = Math.random().toString(36).substring(7);
-    console.log(`📤 [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
-    
     onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false);
     
     // Clear form
@@ -340,12 +262,10 @@ const MessageInput = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    
-    console.log(`✅ [${submissionId}] SEND ONLY: Completed`);
-  };
+  }, [input, attachedFiles, isLoading, chatId, currentChatId, router, onSubmit, setInput]);
 
   // Handle prompt submission (with AI response)
-  const handlePromptSubmit = async (e: React.FormEvent) => {
+  const handlePromptSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && attachedFiles.length === 0) return;
     if (isLoading) return; // Prevent double submission
@@ -363,9 +283,6 @@ const MessageInput = ({
     }
     
     // Submit through parent component WITH AI response triggered
-    const submissionId = Math.random().toString(36).substring(7);
-    console.log(`⚡ [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
-    
     onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true);
     
     // Clear form
@@ -374,9 +291,67 @@ const MessageInput = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  }, [input, attachedFiles, isLoading, chatId, currentChatId, router, onSubmit, setInput]);
+
+  // Optimized typing handler with debouncing
+  const handleTyping = useCallback(() => {
+    if (!roomContext || !onTypingRef.current) return;
+
+    // Clear existing timeout first
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Only start typing if not already typing
+    safeOnTyping(true);
+
+    // Stop typing after 2 seconds of inactivity (increased from 1s)
+    typingTimeoutRef.current = setTimeout(() => {
+      safeOnTyping(false);
+    }, 2000);
+  }, [roomContext, safeOnTyping]);
+
+  // Keyboard event handler
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Only handle typing for actual typing keys, not navigation keys
+    if (roomContext && !['Enter', 'Shift', 'Control', 'Alt', 'Meta', 'Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+      handleTyping();
+    }
+
+    if (event.key === 'Enter' && event.shiftKey) {
+      // Trigger prompt action on Shift + Enter
+      event.preventDefault();
+      handlePromptSubmit(event);
+    } else if (event.key === 'Enter') {
+      // Prevent default behavior and submit form on Enter only
+      event.preventDefault();
+      // Stop typing when sending message
+      if (roomContext && typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        safeOnTyping(false);
+      }
+      handleFormSubmit(event);
+    }
+  }, [roomContext, handleTyping, safeOnTyping, handlePromptSubmit, handleFormSubmit]);
+
+  // Optimized input change handler with debounced typing
+  const handleInputChangeWithTyping = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setInput(newValue);
     
-    console.log(`✅ [${submissionId}] PROMPT SUBMIT: Completed`);
-  };
+    // Handle typing indicators for room chats only
+    if (roomContext && onTypingRef.current) {
+      if (newValue.length > 0) {
+        handleTyping(); // This is already debounced
+      } else {
+        // Stop typing immediately when input is empty
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        safeOnTyping(false);
+      }
+    }
+  }, [roomContext, handleTyping, safeOnTyping, setInput]);
 
   return (
     <>
@@ -548,6 +523,8 @@ const MessageInput = ({
       </form>
     </>
   );
-};
+});
+
+MessageInput.displayName = 'MessageInput';
 
 export default MessageInput;

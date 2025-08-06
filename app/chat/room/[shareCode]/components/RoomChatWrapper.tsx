@@ -45,10 +45,11 @@ export default function RoomChatWrapper({
   useEffect(() => {
     // Get URL parameters - simplified to just what we need
     const displayName = searchParams.get('displayName');
+    const sessionId = searchParams.get('sessionId');
     const threadId = searchParams.get('threadId') || searchParams.get('chatSession'); // Support both new and legacy params
 
-    // If no display name, redirect to join page
-    if (!displayName) {
+    // If no display name or sessionId, redirect to join page
+    if (!displayName || !sessionId) {
       router.push(`/room/${shareCode}`);
       return;
     }
@@ -75,7 +76,7 @@ export default function RoomChatWrapper({
       shareCode,
       roomName: roomInfo.room.name,
       displayName,
-      sessionId: displayName, // Use display name as session identifier
+      sessionId: sessionId, // Use actual session ID from URL for authentication
       participants: roomInfo.participants,
       maxParticipants: roomInfo.room.maxParticipants,
       tier: roomInfo.room.tier,
@@ -89,11 +90,13 @@ export default function RoomChatWrapper({
       if (!prevContext || 
           prevContext.shareCode !== newContext.shareCode ||
           prevContext.displayName !== newContext.displayName ||
+          prevContext.sessionId !== newContext.sessionId ||
           prevContext.chatSessionId !== newContext.chatSessionId) {
         console.log('🎯 Room context updated:', {
           shareCode,
           threadId: finalThreadId,
-          displayName
+          displayName,
+          sessionId
         });
         return newContext;
       }

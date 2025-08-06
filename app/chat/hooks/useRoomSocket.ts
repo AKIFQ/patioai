@@ -9,21 +9,36 @@ const supabase = createClient();
 interface RoomSocketHookProps {
   shareCode: string;
   displayName: string;
+  sessionId: string; // Authentication token (e.g., auth_userId)
   chatSessionId?: string; // Add chat session filtering
   onNewMessage: (message: Message) => void;
   onTypingUpdate: (users: string[]) => void;
   onParticipantChange?: (participants: any[]) => void;
+  // NEW: Streaming handlers (optional - safe if not provided)
+  onStreamingMessage?: (message: any) => void;
+  streamingHandlers?: {
+    onReasoningStart?: (data: any) => void;
+    onReasoningChunk?: (data: any) => void;
+    onReasoningComplete?: (data: any) => void;
+    onAnswerStart?: (data: any) => void;
+    onAnswerChunk?: (data: any) => void;
+    onStreamComplete?: (data: any) => void;
+    onStreamError?: (data: any) => void;
+  };
 }
 
 export function useRoomSocket({
   shareCode,
   displayName,
+  sessionId,
   chatSessionId,
   onNewMessage,
   onTypingUpdate,
-  onParticipantChange
+  onParticipantChange,
+  onStreamingMessage,
+  streamingHandlers
 }: RoomSocketHookProps) {
-  const { socket, isConnected } = useSocket(displayName);
+  const { socket, isConnected } = useSocket(sessionId); // Use sessionId for authentication
   const [connectionStatus, setConnectionStatus] = useState<string>('DISCONNECTED');
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const roomUuidRef = useRef<string | null>(null);
@@ -31,29 +46,15 @@ export function useRoomSocket({
 
   // Handle new room messages from Socket.IO
   const handleNewRoomMessage = useCallback((data: any) => {
-    console.log('RAW SOCKET ROOM MESSAGE:', data);
     const newMessage = data.new || data;
-
-    console.log('ROOM MSG received:', {
-      sender: newMessage.sender_name,
-      isAI: newMessage.is_ai_response,
-      content: newMessage.content?.substring(0, 50) + '...',
-      roomId: newMessage.room_id,
-      threadId: newMessage.thread_id,
-      currentUser: displayName,
-      currentThread: chatSessionId
-    });
 
     // Filter by thread ID if specified
     if (chatSessionId && newMessage.thread_id !== chatSessionId) {
-      console.log('SKIPPING: Message from different thread');
       return;
     }
 
     // Track that this thread has messages
     hasMessagesRef.current = true;
-
-    console.log('PROCESSING SOCKET MSG from:', newMessage.sender_name, 'for user:', displayName);
 
     // Convert to Message format with reasoning support
     const message: Message & { senderName?: string; reasoning?: string; sources?: any[] } = {
@@ -79,16 +80,13 @@ export function useRoomSocket({
 
   // Handle typing updates from Socket.IO
   const handleTypingUpdate = useCallback((data: any) => {
-    console.log('Typing update received:', data);
     const typingUsers = data.users || [];
     const filteredUsers = typingUsers.filter((name: string) => name && name !== displayName);
-    console.log('Typing users updated:', filteredUsers);
     onTypingUpdate(filteredUsers);
   }, [displayName, onTypingUpdate]);
 
   // Handle participant changes from Socket.IO
   const handleParticipantChange = useCallback((data: any) => {
-    console.log('Participant change:', data);
     if (onParticipantChange) {
       onParticipantChange([]);
     }
@@ -96,21 +94,29 @@ export function useRoomSocket({
 
   // Handle room deletion from Socket.IO
   const handleRoomDeleted = useCallback((data: any) => {
-    console.log('Room deleted:', data);
     // Redirect user away from deleted room
     if (typeof window !== 'undefined') {
       window.location.href = '/chat';
     }
   }, []);
 
+
+
+  // Track current typing state to prevent duplicate broadcasts
+  const isTypingRef = useRef(false);
+
   // Function to broadcast typing status
   const broadcastTyping = useCallback((isTyping: boolean) => {
-    console.log('broadcastTyping called:', isTyping, 'displayName:', displayName);
-
     if (!socket || !isConnected || !displayName || !roomUuidRef.current) {
-      console.log('No socket connection or missing data, skipping broadcast');
       return;
     }
+
+    // Prevent duplicate broadcasts
+    if (isTypingRef.current === isTyping) {
+      return;
+    }
+
+    isTypingRef.current = isTyping;
 
     try {
       if (isTyping) {
@@ -121,16 +127,15 @@ export function useRoomSocket({
 
         console.log('Broadcasting typing START for:', displayName);
         socket.emit('typing-start', {
-          roomId: shareCode, // Use share code instead of room UUID
+          roomId: shareCode,
           displayName,
           timestamp: Date.now()
         });
 
-        // Auto-stop typing after 3 seconds
+        // Auto-stop typing after 4 seconds
         typingTimeoutRef.current = setTimeout(() => {
-          console.log('Auto-stopping typing for:', displayName);
           stopTyping();
-        }, 3000);
+        }, 4000);
       } else {
         console.log('Broadcasting typing STOP for:', displayName);
         stopTyping();
@@ -138,15 +143,21 @@ export function useRoomSocket({
     } catch (error) {
       console.error('Error broadcasting typing status:', error);
     }
-  }, [socket, isConnected, displayName]);
+  }, [socket, isConnected, displayName, shareCode]);
 
   const stopTyping = useCallback(() => {
-    console.log('stopTyping called');
+    // Only emit if we were actually typing
+    if (!isTypingRef.current) {
+      return;
+    }
+
+    isTypingRef.current = false;
+
     try {
       if (socket && isConnected) {
         console.log('Emitting typing stop');
         socket.emit('typing-stop', {
-          roomId: shareCode, // Use share code instead of room UUID
+          roomId: shareCode,
           displayName
         });
       }
@@ -157,7 +168,7 @@ export function useRoomSocket({
     } catch (error) {
       console.error('Error stopping typing:', error);
     }
-  }, [socket, isConnected, displayName]);
+  }, [socket, isConnected, displayName, shareCode]);
 
   useEffect(() => {
     if (!shareCode || !displayName || !socket || !isConnected) {
@@ -197,6 +208,31 @@ export function useRoomSocket({
         socket.on('user-joined-room', handleParticipantChange);
         socket.on('user-left-room', handleParticipantChange);
         socket.on('room-deleted', handleRoomDeleted);
+
+        // NEW: Set up streaming event listeners (safe - only if handlers provided)
+        if (streamingHandlers) {
+          if (streamingHandlers.onReasoningStart) {
+            socket.on('ai-reasoning-start', streamingHandlers.onReasoningStart);
+          }
+          if (streamingHandlers.onReasoningChunk) {
+            socket.on('ai-reasoning-chunk', streamingHandlers.onReasoningChunk);
+          }
+          if (streamingHandlers.onReasoningComplete) {
+            socket.on('ai-reasoning-complete', streamingHandlers.onReasoningComplete);
+          }
+          if (streamingHandlers.onAnswerStart) {
+            socket.on('ai-answer-start', streamingHandlers.onAnswerStart);
+          }
+          if (streamingHandlers.onAnswerChunk) {
+            socket.on('ai-answer-chunk', streamingHandlers.onAnswerChunk);
+          }
+          if (streamingHandlers.onStreamComplete) {
+            socket.on('ai-stream-complete', streamingHandlers.onStreamComplete);
+          }
+          if (streamingHandlers.onStreamError) {
+            socket.on('ai-stream-error', streamingHandlers.onStreamError);
+          }
+        }
 
         // Connection status updates
         socket.on('room-joined', () => {
@@ -247,6 +283,17 @@ export function useRoomSocket({
         socket.off('room-deleted', handleRoomDeleted);
         socket.off('room-joined');
         socket.off('room-error');
+
+        // NEW: Clean up streaming listeners (safe - only if they were set up)
+        if (streamingHandlers) {
+          socket.off('ai-reasoning-start');
+          socket.off('ai-reasoning-chunk');
+          socket.off('ai-reasoning-complete');
+          socket.off('ai-answer-start');
+          socket.off('ai-answer-chunk');
+          socket.off('ai-stream-complete');
+          socket.off('ai-stream-error');
+        }
 
         // Leave the room
         if (shareCode) {

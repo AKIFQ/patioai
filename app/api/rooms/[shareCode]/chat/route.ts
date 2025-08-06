@@ -12,6 +12,7 @@ import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import type { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
 import { createClient } from '@supabase/supabase-js';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
+import { safeStreamingManager } from '@/lib/streaming/SafeStreamingManager';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -393,6 +394,15 @@ export async function POST(
       } satisfies OpenAIResponsesProviderOptions;
     }
 
+    // Generate unique stream ID for this response
+    const streamId = `stream-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    console.log(`🎬 [${requestId}] Generated stream ID: ${streamId}`);
+    
+    // Start streaming session (safe - won't break if disabled)
+    console.log(`🚀 [${requestId}] Starting streaming session...`);
+    const streamStarted = await safeStreamingManager.startStream(streamId, shareCode, threadId);
+    console.log(`🚀 [${requestId}] Stream started result: ${streamStarted}`);
+
     const result = streamText({
       model: getModel(selectedModel),
       system: getRoomSystemPrompt(room.name, participantNames),
@@ -403,13 +413,64 @@ export async function POST(
       },
       experimental_activeTools: ['websiteSearchTool'],
       maxSteps: 3,
-      // Removed telemetry for simplicity
+      // NEW: Add streaming chunk handler (safe - additive only)
+      onChunk: async (chunk) => {
+        // Log ALL chunk details to understand Gemini's structure
+        console.log(`📦 [${requestId}] GEMINI CHUNK RECEIVED:`, {
+          type: chunk.type,
+          streamId,
+          chunkKeys: Object.keys(chunk),
+          fullChunk: JSON.stringify(chunk, null, 2)
+        });
+
+        try {
+          // Handle different chunk types that Gemini might send
+          if (chunk.type === 'text-delta' && (chunk as any).textDelta) {
+            console.log(`💬 [${requestId}] GEMINI text-delta chunk:`, (chunk as any).textDelta.substring(0, 100));
+            
+            // For Gemini, treat all text-delta as answer content (no separate reasoning phase)
+            await safeStreamingManager.processAnswerChunk(streamId, (chunk as any).textDelta);
+            
+          } else if (chunk.type === 'reasoning-delta' && (chunk as any).reasoningDelta) {
+            console.log(`🧠 [${requestId}] GEMINI reasoning-delta chunk:`, (chunk as any).reasoningDelta.substring(0, 100));
+            await safeStreamingManager.processReasoningChunk(streamId, (chunk as any).reasoningDelta);
+            
+          } else if ((chunk as any).delta && typeof (chunk as any).delta === 'string') {
+            // Generic delta field
+            console.log(`📝 [${requestId}] GEMINI generic delta:`, (chunk as any).delta.substring(0, 100));
+            await safeStreamingManager.processAnswerChunk(streamId, (chunk as any).delta);
+            
+          } else if ((chunk as any).content && typeof (chunk as any).content === 'string') {
+            // Content field
+            console.log(`📄 [${requestId}] GEMINI content chunk:`, (chunk as any).content.substring(0, 100));
+            await safeStreamingManager.processAnswerChunk(streamId, (chunk as any).content);
+            
+          } else {
+            console.log(`❓ [${requestId}] GEMINI unknown chunk type:`, {
+              type: chunk.type,
+              availableFields: Object.keys(chunk),
+              sampleData: JSON.stringify(chunk).substring(0, 200)
+            });
+          }
+        } catch (streamError) {
+          console.warn('⚠️ GEMINI streaming error (non-critical):', streamError);
+          // Don't break the main flow if streaming fails
+        }
+      },
+      // EXISTING: Keep exactly the same (ensures DB consistency)
       onFinish: async (event) => {
         const { text, reasoning, sources } = event;
 
         console.log(`🤖 [${requestId}] AI response generated, saving: "${text.substring(0, 50)}..."`);
 
-        // Save AI response to thread
+        // Complete streaming session (safe - won't break if disabled)
+        try {
+          await safeStreamingManager.completeStream(streamId);
+        } catch (streamError) {
+          console.warn('⚠️ Stream completion error (non-critical):', streamError);
+        }
+
+        // EXISTING: Save AI response to thread (unchanged)
         const aiSaved = await saveRoomMessage(
           room.id,
           shareCode,
@@ -430,6 +491,13 @@ export async function POST(
       },
       onError: async (error) => {
         console.error('Error processing room chat:', error);
+        
+        // Handle streaming error (safe - won't break if disabled)
+        try {
+          await safeStreamingManager.errorStream(streamId, error.message);
+        } catch (streamError) {
+          console.warn('⚠️ Stream error handling failed (non-critical):', streamError);
+        }
       }
     });
 
