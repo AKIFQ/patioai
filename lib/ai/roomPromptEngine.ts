@@ -287,11 +287,11 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
     const activeThreshold = Math.max(2, flow.length / participants.length);
     
     return {
-      activeParticipants: Object.entries(speakerCounts)
+      activeParticipants: (Object.entries(speakerCounts) as [string, number][])
         .filter(([, count]) => count >= activeThreshold)
         .map(([name]) => name),
       quietParticipants: participants.filter(p => (speakerCounts[p] || 0) < activeThreshold),
-      conversationLeaders: Object.entries(speakerCounts)
+      conversationLeaders: (Object.entries(speakerCounts) as [string, number][])
         .sort(([,a], [,b]) => b - a)
         .slice(0, 2)
         .map(([name]) => name),
