@@ -91,13 +91,23 @@ interface CombinedDrawerProps {
 }
 
 // Function to fetch rooms
-const fetchRooms = async (): Promise<RoomPreview[]> => {
+const fetchRooms = async () => {
   const response = await fetch('/api/rooms');
   if (!response.ok) {
     throw new Error('Failed to fetch rooms');
   }
   const data = await response.json();
   return data.rooms || [];
+};
+
+// Function to fetch room chat data
+const fetchRoomChats = async () => {
+  const response = await fetch('/api/rooms?includeChats=true');
+  if (!response.ok) {
+    throw new Error('Failed to fetch room chats');
+  }
+  const data = await response.json();
+  return data.roomChatsData || [];
 };
 
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
@@ -118,6 +128,17 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     userInfo.email ? fetchRooms : () => Promise.resolve([]), // Conditional function instead of conditional key
     {
       fallbackData: rooms,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false
+    }
+  );
+
+  // Add SWR for room chat data with real-time updates
+  const { data: currentRoomChatsData, mutate: mutateRoomChats } = useSWR(
+    'roomChats',
+    userInfo.email ? fetchRoomChats : () => Promise.resolve([]),
+    {
+      fallbackData: roomChatsData,
       revalidateOnFocus: false,
       revalidateOnReconnect: false
     }
@@ -173,6 +194,26 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     mutateRooms();
   }, [mutateRooms]);
 
+  const handleThreadCreated = useCallback(() => {
+    // Refresh room chat data when a new thread is created
+    mutateRoomChats();
+  }, [mutateRoomChats]);
+
+  // Listen for room thread creation events from sidebar socket
+  React.useEffect(() => {
+    const handleRoomThreadCreated = () => {
+      console.log('Received room thread created event, refreshing room chat data');
+      mutateRoomChats();
+    };
+
+    // Listen for custom event from sidebar socket
+    window.addEventListener('roomThreadCreated', handleRoomThreadCreated);
+
+    return () => {
+      window.removeEventListener('roomThreadCreated', handleRoomThreadCreated);
+    };
+  }, [mutateRoomChats]);
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
@@ -195,7 +236,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       const threadLatestTimes = new Map();
 
       // Group room messages by thread_id and find the first user message for each thread
-      (roomChatsData || []).forEach((msg: any) => {
+      (currentRoomChatsData || []).forEach((msg: any) => {
         if (msg.thread_id && !msg.is_ai_response) {
           if (!threadFirstMessages.has(msg.thread_id)) {
             threadFirstMessages.set(msg.thread_id, msg);
@@ -256,7 +297,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
       if (currentRoom) {
         // Group room messages by thread_id for the current room
-        (roomChatsData || []).forEach((msg: any) => {
+        (currentRoomChatsData || []).forEach((msg: any) => {
           if (msg.room_id === currentRoom.id && msg.thread_id && !msg.is_ai_response) {
             if (!threadFirstMessages.has(msg.thread_id)) {
               threadFirstMessages.set(msg.thread_id, msg);
@@ -303,7 +344,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
       return roomThreads;
     }
-  }, [currentRoomShareCode, roomChatsData, currentRooms]);
+  }, [currentRoomShareCode, currentRoomChatsData, currentRooms]);
 
   // Minimized sidebar - Clean and minimal
   if (!sidebarOpen) {
@@ -536,7 +577,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                     {processedThreads.map((thread: any) => (
                       <Link
                         key={thread.id}
-                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                        href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
                         onClick={handleChatSelect}
                         className="block p-2.5 rounded-lg hover:bg-muted/60 transition-colors"
                       >

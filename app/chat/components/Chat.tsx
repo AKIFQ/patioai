@@ -91,6 +91,9 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
+  const [isRoomLoading, setIsRoomLoading] = useState(false);
+  const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
+  const streamingAssistantIdRef = useRef<string | null>(null);
 
   // State for reasoning display
   const [reasoningStates, setReasoningStates] = useState<Record<string, { isOpen: boolean; hasStartedStreaming: boolean }>>({});
@@ -111,7 +114,6 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Message deduplication and loading state for room chats
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRoomLoading, setIsRoomLoading] = useState(false);
 
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
@@ -289,7 +291,7 @@ const ChatComponent: React.FC<ChatProps> = ({
       if (roomContext) {
         if (triggerAI) {
           // For room chats with AI response: Direct API call with loading state
-          console.log('🏠 Room chat: Making direct API call (with AI response)');
+          console.log('🏠 Room chat: Persisting user message, streaming via Socket.IO');
           setIsRoomLoading(true);
 
           const response = await fetch(apiEndpoint, {
@@ -310,15 +312,36 @@ const ChatComponent: React.FC<ChatProps> = ({
               displayName: roomContext.displayName,
               option: optimisticOption,
               threadId: roomContext.chatSessionId,
-              triggerAI: true
+              triggerAI: false
             })
           });
 
           if (!response.ok) {
             throw new Error(`API call failed: ${response.status}`);
           }
+          // Then invoke streaming via socket
+          if (invokeAI && isConnected) {
+            // Prepare chat history for context (last 10 messages)
+            const chatHistory = realtimeMessages
+              .slice(-10) // Last 10 messages for context
+              .map(msg => ({
+                role: msg.role,
+                content: msg.senderName && msg.role === 'user' 
+                  ? `${msg.senderName}: ${msg.content}` 
+                  : msg.content
+              }));
 
-          console.log('✅ Room chat: Direct API call successful (with AI)');
+            invokeAI({
+              shareCode: roomContext.shareCode,
+              threadId: roomContext.chatSessionId!,
+              prompt: `${roomContext.displayName}: ${message}`,
+              roomName: roomContext.roomName,
+              participants: roomContext.participants.map(p => p.displayName),
+              modelId: optimisticOption,
+              chatHistory
+            });
+          }
+          console.log('✅ Room chat: User message persisted, AI stream invoked');
         } else {
           // For room chats without AI response: Use same endpoint but with triggerAI: false
           console.log('📤 Room chat: Sending user message only (no AI)');
@@ -374,7 +397,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             await append({
               role: 'user',
               content: message,
-              experimental_attachments: fileList.files
+              experimental_attachments: Array.from(fileList.files as any) as any
             });
           } else {
             await append({
@@ -384,19 +407,15 @@ const ChatComponent: React.FC<ChatProps> = ({
           }
         } else {
           // For individual chats without AI response: Just add user message
-          const userMessage = {
+          const userMessage: Message = {
             id: crypto.randomUUID(),
-            role: 'user' as const,
+            role: 'user',
             content: message,
             createdAt: new Date(),
             ...(attachments && attachments.length > 0 && {
-              experimental_attachments: (() => {
-                const fileList = new DataTransfer();
-                attachments.forEach(file => fileList.items.add(file));
-                return fileList.files;
-              })()
+              experimental_attachments: attachments as any
             })
-          };
+          } as any;
 
           setMessages(prevMessages => [...prevMessages, userMessage]);
           console.log('📤 Added user message without AI response');
@@ -462,6 +481,58 @@ const ChatComponent: React.FC<ChatProps> = ({
     setTypingUsers(users);
   }, []);
 
+  // Streaming UI glue: add a temporary assistant message and append chunks
+  const handleStreamStart = useCallback((threadId: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    const tempId = `ai-temp-${Date.now()}`;
+    streamingAssistantIdRef.current = tempId;
+    setStreamingAssistantId(tempId);
+    setRealtimeMessages(prev => ([
+      ...prev,
+      { 
+        id: tempId, 
+        role: 'assistant', 
+        content: '🤔 AI is thinking...', // Show thinking message instead of empty
+        createdAt: new Date() 
+      } as EnhancedMessage
+    ]));
+  }, [roomContext]);
+
+  const handleStreamChunk = useCallback((threadId: string, chunk: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    const currentId = streamingAssistantIdRef.current;
+    if (!currentId) return;
+    
+    setRealtimeMessages(prev => prev.map(m => {
+      if (m.id === currentId) {
+        // If this is the first chunk, replace the thinking message
+        const isFirstChunk = m.content === '🤔 AI is thinking...';
+        return { 
+          ...m, 
+          content: isFirstChunk ? chunk : `${m.content}${chunk}` 
+        };
+      }
+      return m;
+    }));
+  }, [roomContext]);
+
+  const handleStreamEnd = useCallback((threadId: string, text: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    const currentId = streamingAssistantIdRef.current;
+    if (!currentId) return;
+    
+    // Convert the temporary streaming message to a permanent one
+    setRealtimeMessages(prev => prev.map(m => 
+      m.id === currentId 
+        ? { ...m, id: `ai-final-${Date.now()}`, content: text } // Use final text and permanent ID
+        : m
+    ));
+    
+    // Clear streaming state
+    streamingAssistantIdRef.current = null;
+    setStreamingAssistantId(null);
+  }, [roomContext]);
+
   // Memoize realtime hook props to prevent unnecessary re-initializations
   const realtimeProps = useMemo(() => {
     if (!roomContext) return null;
@@ -470,17 +541,22 @@ const ChatComponent: React.FC<ChatProps> = ({
       displayName: roomContext.displayName,
       chatSessionId: roomContext.chatSessionId,
       onNewMessage: handleNewMessage,
-      onTypingUpdate: handleTypingUpdate
+      onTypingUpdate: handleTypingUpdate,
+      onStreamStart: handleStreamStart,
+      onStreamChunk: handleStreamChunk,
+      onStreamEnd: handleStreamEnd
     };
-  }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate]);
+  }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate, handleStreamStart, handleStreamChunk, handleStreamEnd]);
 
   // Initialize real-time hook with safe fallbacks
   const realtimeHook = realtimeProps ? useRoomSocket(realtimeProps) : null;
 
   const {
     isConnected = false,
-    broadcastTyping = undefined
-  } = realtimeHook || {};
+    broadcastTyping = undefined,
+    invokeAI,
+    isAIStreaming = false
+  } = (realtimeHook as any) || {};
 
   // Initialize realtime messages with current chat messages
   useEffect(() => {
@@ -906,9 +982,6 @@ const ChatComponent: React.FC<ChatProps> = ({
         {/*Separate message input component, to avoid re-rendering the chat messages when typing */}
         <MessageInput
           chatId={chatId}
-          apiEndpoint={apiEndpoint}
-          currentChat={roomContext ? realtimeMessages : messages}
-          option={optimisticOption}
           currentChatId={currentChatId}
           modelType={optimisticModelType}
           selectedOption={optimisticOption}
