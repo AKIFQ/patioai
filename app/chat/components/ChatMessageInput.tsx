@@ -382,7 +382,7 @@ const MessageInput = ({
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative max-w-[720px] mx-auto mb-1 backdrop-blur-sm rounded-2xl overflow-hidden border-1 shadow-sm flex flex-col transition-all duration-200 shadow-md dark:shadow-lg focus-within:shadow-lg dark:focus-within:shadow-xl hover:border-gray-300 dark:hover:border-gray-700 focus-within:border-gray-300 dark:focus-within:border-gray-700 cursor-text"
+        className="relative w-full mb-1 backdrop-blur-sm rounded-2xl overflow-hidden border-1 shadow-sm flex flex-col transition-all duration-200 shadow-md dark:shadow-lg focus-within:shadow-lg dark:focus-within:shadow-xl hover:border-gray-300 dark:hover:border-gray-700 focus-within:border-gray-300 dark:focus-within:border-gray-700 cursor-text"
       >
         <input
           type="file"
@@ -403,25 +403,25 @@ const MessageInput = ({
         />
 
         {/* Bottom controls row with buttons */}
-        <div className="flex px-2.5 pb-1 pt-1.5 items-center gap-2 justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex px-2 sm:px-2.5 pb-1 pt-1.5 items-center gap-1.5 sm:gap-2 justify-between min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
             {attachedFiles.length === 0 && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                className="h-8 cursor-pointer text-xs rounded-md flex items-center gap-1.5 hover:bg-primary/5 dark:hover:bg-primary/10"
+                className="h-7 sm:h-8 cursor-pointer text-xs rounded-md flex items-center gap-1.5 hover:bg-primary/5 dark:hover:bg-primary/10 flex-shrink-0"
                 disabled={isLoading}
               >
-                <Paperclip className="h-3.5 w-3.5" />
-                <span>Attach file</span>
+                <Paperclip className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                <span className="hidden sm:inline">Attach file</span>
               </Button>
             )}
 
-            <div className="flex-1 max-w-[160px]">
+            <div className="flex-1 max-w-[120px] sm:max-w-[160px] min-w-0">
               <Select value={modelType} onValueChange={handleModelTypeChange}>
-                <SelectTrigger className="w-full h-8 text-xs">
+                <SelectTrigger className="w-full h-7 sm:h-8 text-xs min-w-0">
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -439,13 +439,13 @@ const MessageInput = ({
             </div>
 
             {modelType === 'standart' && (
-              <div className="flex-1 ml-2">
+              <div className="flex-1 max-w-[120px] sm:max-w-[160px] min-w-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full h-8 justify-between text-xs"
+                      className="w-full h-7 sm:h-8 justify-between text-xs min-w-0"
                     >
                       <span className="truncate">{selectedOption}</span>
                       <ChevronDown className="h-3 w-3 ml-2 flex-shrink-0 opacity-70" />
@@ -481,7 +481,7 @@ const MessageInput = ({
             )}
 
             {selectedBlobs.length > 0 && (
-              <div className="hidden sm:flex items-center rounded-full text-xs px-2 h-8 bg-primary/10 border border-primary/30">
+              <div className="hidden sm:flex items-center rounded-full text-xs px-2 h-8 bg-primary/10 border border-primary/30 flex-shrink-0">
                 <Paperclip className="mr-1 h-4 w-4 text-primary" />
                 <span className="text-primary font-medium">
                   {selectedBlobs.length} file
@@ -492,7 +492,7 @@ const MessageInput = ({
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {/* Prompt button */}
             {!isLoading && (
               <Button
@@ -501,7 +501,7 @@ const MessageInput = ({
                 variant="ghost"
                 onClick={handlePromptSubmit}
                 disabled={!input.trim() && attachedFiles.length === 0}
-                className="h-8 w-8 sm:h-10 sm:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group"
+                className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group flex-shrink-0"
                 title="Send with AI response (Shift + Enter)"
               >
                 <Zap className="text-amber-500 w-4 h-4 sm:w-5 sm:h-5 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
@@ -510,10 +510,10 @@ const MessageInput = ({
 
             {/* Send button or spinner with matched sizing */}
             {isLoading ? (
-              <div className="h-8 w-8 sm:h-10 sm:w-10 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background">
+              <div className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background flex-shrink-0">
                 {/* Loading indicator */}
                 <div className="flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary animate-spin" />
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary animate-spin" />
                 </div>
               </div>
             ) : (
@@ -522,10 +522,10 @@ const MessageInput = ({
                 size="icon"
                 variant="ghost"
                 disabled={!input.trim() && attachedFiles.length === 0}
-                className="h-8 w-8 sm:h-10 sm:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-primary/30 rounded-lg cursor-pointer"
+                className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-primary/30 rounded-lg cursor-pointer flex-shrink-0"
                 title="Send message only (Enter)"
               >
-                <Send className="text-primary w-5 h-5 sm:w-8 sm:h-8" />
+                <Send className="text-primary w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </Button>
             )}
           </div>
@@ -534,7 +534,7 @@ const MessageInput = ({
         {/* File previews section with clear visual separation */}
         {attachedFiles.length > 0 && (
           <div className="overflow-hidden border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl">
-            <div className="flex flex-row overflow-x-auto gap-3 px-3.5 py-2.5">
+            <div className="flex flex-row overflow-x-auto gap-2 sm:gap-3 px-3 sm:px-3.5 py-2 sm:py-2.5">
               {attachedFiles.map((file, index) => (
                 <FilePreview
                   key={file.name + index}
