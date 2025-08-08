@@ -4,6 +4,7 @@ import { streamText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
+import { RoomPromptEngine } from '../ai/roomPromptEngine';
 
 interface AIResponseConfig {
   triggerWords: string[];
@@ -22,10 +23,12 @@ const defaultConfig: AIResponseConfig = {
 export class AIResponseHandler {
   private io: SocketIOServer;
   private config: AIResponseConfig;
+  private promptEngine: RoomPromptEngine;
 
   constructor(io: SocketIOServer, config: Partial<AIResponseConfig> = {}) {
     this.io = io;
     this.config = { ...defaultConfig, ...config };
+    this.promptEngine = new RoomPromptEngine();
   }
 
   // Centralized model mapping for consistency
@@ -159,20 +162,36 @@ export class AIResponseHandler {
       console.log(`🤖 Starting AI stream for room ${shareCode}, model: ${modelId}`);
       this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now() });
 
-      const system = `You are assisting a group in "${roomName}" with participants: ${participants.join(', ')}.`;
+      // Extract current user from prompt (format: "User: message")
+      const promptMatch = prompt.match(/^(.+?):\s*(.+)$/);
+      const currentUser = promptMatch ? promptMatch[1] : 'User';
+      const currentMessage = promptMatch ? promptMatch[2] : prompt;
 
-      // Build messages array with chat history + current prompt
-      const messages = [
-        ...chatHistory,
-        { role: 'user' as const, content: prompt }
-      ];
+      // Convert chat history to message format for prompt engine
+      const messages = chatHistory.map(msg => ({
+        id: `msg-${Date.now()}-${Math.random()}`,
+        sender_name: msg.role === 'assistant' ? 'AI Assistant' : currentUser,
+        content: msg.content,
+        is_ai_response: msg.role === 'assistant',
+        created_at: new Date().toISOString(),
+        thread_id: threadId
+      }));
 
-      console.log(`🧠 AI context: ${chatHistory.length} previous messages + current prompt`);
+      // Use sophisticated prompt engine for context-aware AI
+      const promptResult = this.promptEngine.generatePrompt(
+        messages,
+        roomName,
+        participants,
+        currentUser,
+        currentMessage
+      );
+
+      console.log(`🧠 AI context: ${chatHistory.length} previous messages + sophisticated analysis`);
 
       const { textStream } = streamText({
         model: this.getModel(modelId),
-        system,
-        messages
+        system: promptResult.system,
+        messages: promptResult.messages
       });
 
       let full = '';

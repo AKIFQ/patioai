@@ -1,60 +1,27 @@
-import { type NextRequest, NextResponse } from 'next/server';
-import type { Message } from 'ai';
-import { streamText, convertToCoreMessages } from 'ai';
-import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
-import { openai } from '@ai-sdk/openai';
-import type { AnthropicProviderOptions } from '@ai-sdk/anthropic';
-import { anthropic } from '@ai-sdk/anthropic';
-import { getSession } from '@/lib/server/supabase';
-import { websiteSearchTool } from '@/app/api/chat/tools/WebsiteSearchTool';
-import { google } from '@ai-sdk/google';
-import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
-import type { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
+import { NextRequest, NextResponse } from 'next/server';
+import { streamText, convertToCoreMessages, Message } from 'ai';
 import { createClient } from '@supabase/supabase-js';
+import { websiteSearchTool } from '@/app/api/chat/tools/WebsiteSearchTool';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
+import { AnthropicProviderOptions } from '@ai-sdk/anthropic';
+import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
+import { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
+import { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
+import { RoomPromptEngine } from '@/lib/ai/roomPromptEngine';
+import { openai } from '@ai-sdk/openai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { google } from '@ai-sdk/google';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const getRoomSystemPrompt = (roomName: string, participantNames: string[]) => {
-  const basePrompt = `You are a helpful AI assistant participating in a group chat room called "${roomName}". 
-
-IMPORTANT CONTEXT:
-- You are chatting with multiple participants: ${participantNames.join(', ')}
-- When responding, you can address participants by name when relevant
-- Be conversational and acknowledge the group nature of the chat
-- Messages are formatted as "DisplayName: message content" so you know who said what
-
-FORMATTING: Your responses are rendered using react-markdown with the following capabilities:
-- GitHub Flavored Markdown (GFM) support through remarkGfm plugin
-- Syntax highlighting for code blocks through rehypeHighlight plugin
-- All standard markdown formatting
-
-Answer questions to the best of your ability and use tools when necessary.`;
-
-  return basePrompt;
-};
-
-function errorHandler(error: unknown) {
-  if (error == null) {
-    return 'unknown error';
-  }
-
-  if (typeof error === 'string') {
-    return error;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return JSON.stringify(error);
-}
+// Initialize the centralized prompt engine
+const roomPromptEngine = new RoomPromptEngine();
 
 const getModel = (selectedModel: string) => {
   switch (selectedModel) {
@@ -75,6 +42,22 @@ const getModel = (selectedModel: string) => {
       return openai('gpt-4.1-2025-04-14');
   }
 };
+
+function errorHandler(error: unknown) {
+  if (error == null) {
+    return 'unknown error';
+  }
+
+  if (typeof error === 'object' && 'message' in error) {
+    return (error as Error).message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return 'unknown error';
+}
 
 // Removed unused getRoomMessages function - we load messages directly in the page
 
@@ -228,17 +211,8 @@ export async function POST(
     const { shareCode } = await params;
     console.log(`📝 [${requestId}] Share code: ${shareCode}`);
 
-    // Try to get session but don't fail if user is anonymous
-    let session = null;
-    try {
-      session = await getSession();
-    } catch (_error) {
-      // Anonymous users don't have sessions, this is expected
-      console.log('No authenticated session (anonymous user)');
-    }
-
-    // Note: Allow both authenticated and anonymous users for room chats
-    // Anonymous users are identified by sessionId
+    // Room chats work for both authenticated and anonymous users
+    // Anonymous users are identified by sessionId parameter
 
     const body = await req.json();
     const { messages, displayName, option, threadId, triggerAI = true } = body;
@@ -378,23 +352,16 @@ export async function POST(
       .select('display_name')
       .eq('room_id', room.id);
 
-    const participantNames = participants?.map(p => p.display_name) || [];
+    const participantNames = participants?.map((p: any) => p.display_name) || [];
 
-    // Format messages for AI context
-    const contextMessages: Message[] = (recentMessages || []).map(msg => ({
-      id: msg.id,
-      role: msg.is_ai_response ? 'assistant' : 'user',
-      content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
-      createdAt: new Date(msg.created_at)
-    }));
-
-    // Add the current message
-    contextMessages.push({
-      id: 'current',
-      role: 'user',
-      content: `${displayName}: ${message}`,
-      createdAt: new Date()
-    });
+    // Use the sophisticated prompt engine for advanced conversational AI
+    const promptResult = roomPromptEngine.generatePrompt(
+      recentMessages || [],
+      room.name,
+      participantNames,
+      displayName,
+      message
+    );
 
     const providerOptions: LanguageModelV1ProviderMetadata = {};
     if (selectedModel === 'claude-3.7-sonnet') {
@@ -420,8 +387,8 @@ export async function POST(
 
     const result = streamText({
       model: getModel(selectedModel),
-      system: getRoomSystemPrompt(room.name, participantNames),
-      messages: convertToCoreMessages(contextMessages),
+      system: promptResult.system,
+      messages: convertToCoreMessages(promptResult.messages),
       providerOptions,
       tools: {
         websiteSearchTool: websiteSearchTool
