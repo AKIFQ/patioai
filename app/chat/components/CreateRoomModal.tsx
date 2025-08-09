@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Copy, Check, Users, Clock } from 'lucide-react';
 import { toast } from 'sonner';
-import { useEffect } from 'react';
 
 interface Room {
   id: string;
@@ -38,15 +37,6 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
   const [createdRoom, setCreatedRoom] = useState<{ room: Room; shareableLink: string } | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  // Mobile detection
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
   const handleCreateRoom = async () => {
     if (!roomName.trim()) {
       toast.error('Please enter a room name');
@@ -61,7 +51,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: roomName.trim() }),
+        body: JSON.stringify({ name: roomName }),
       });
 
       if (!response.ok) {
@@ -71,7 +61,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
 
       const data = await response.json();
       setCreatedRoom(data);
-      toast.success('Room created successfully!');
+      
     } catch (error) {
       console.error('Error creating room:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create room');
@@ -117,11 +107,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className={`sm:max-w-md ${isMobile ? 'top-auto bottom-0 left-1/2 -translate-x-1/2 translate-y-0 w-[96vw] max-w-[360px] h-[88vh] rounded-t-xl overflow-y-auto p-0 gap-0' : ''}`}>
-        {isMobile && (
-          <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-2" />
-        )}
-        <div className={isMobile ? 'px-4 py-3' : ''}>
+      <DialogContent className="sm:max-w-md z-[200]">
         {!createdRoom ? (
           <>
             <DialogHeader>
@@ -179,7 +165,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                 <span className="sm:hidden">Share this link to invite others.</span>
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               <div className="bg-muted/30 p-4 rounded-lg space-y-3 border border-border/40">
                 <div>
@@ -203,16 +189,16 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                   </div>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Shareable Link</Label>
                 <div className="flex gap-2">
-                  <Input
-                    value={createdRoom.shareableLink}
-                    readOnly
+                  <Input 
+                    value={createdRoom.shareableLink} 
+                    readOnly 
                     className="font-mono text-sm h-9"
                   />
-                  <Button
+                  <Button 
                     variant="ghost"
                     size="sm"
                     onClick={handleCopyLink}
@@ -235,7 +221,6 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
             </DialogFooter>
           </>
         )}
-        </div>
       </DialogContent>
     </Dialog>
   );
