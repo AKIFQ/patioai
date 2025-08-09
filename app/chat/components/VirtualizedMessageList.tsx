@@ -94,7 +94,7 @@ const VirtualizedMessageList = memo(({
   
   // For non-virtualized lists (< 20 messages)
   const { scrollRef, isAtBottom: nonVirtualizedAtBottom, isAutoScrolling: nonVirtualizedAutoScrolling, scrollToBottom, enableAutoScroll: enableNonVirtualizedAutoScroll } = useAutoScroll({
-    threshold: 5, // Very small threshold to ensure complete messages are visible
+    threshold: 15, // Slightly increased for more comfortable spacing
     resumeDelay: 1500,
     enabled: true
   });
@@ -171,7 +171,7 @@ const VirtualizedMessageList = memo(({
           className="flex-1 overflow-y-auto"
           style={{ height: height > 0 ? `${height}px` : '100%' }}
         >
-          <ul className="w-full min-w-0 space-y-1" style={{ listStyle: 'none', paddingLeft: 0 }}>
+          <ul className="w-full min-w-0 space-y-1 pb-4" style={{ listStyle: 'none', paddingLeft: 0 }}>
             {messages.map((message, index) => {
               // For room chats, check if the message is from the current user by comparing sender names
               // For regular chats, fall back to role-based check

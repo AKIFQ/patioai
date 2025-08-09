@@ -72,7 +72,7 @@ export function useAutoScroll({
     programmaticScrollRef.current = true;
     
     // Scroll to bottom plus a small buffer to ensure complete message visibility
-    const extraBuffer = 50; // Extra pixels for complete message visibility
+    const extraBuffer = 80; // Increased buffer for more comfortable spacing
     scrollRef.current.scrollTo({
       top: scrollRef.current.scrollHeight + extraBuffer,
       behavior: 'smooth'
