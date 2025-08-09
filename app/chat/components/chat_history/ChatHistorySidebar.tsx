@@ -405,17 +405,24 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   // We render the sidebar only when open to avoid layout shift
   const mobileOverlay = isMobile ? (
     <div
-      className={`${isMobileSidebarOpen ? 'fixed' : 'hidden'} inset-0 z-[100] md:hidden`}
+      className={`fixed inset-0 z-[100] md:hidden transition-opacity duration-300 ease-out ${
+        isMobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
       aria-hidden={!isMobileSidebarOpen}
     >
-      <div className="absolute inset-0 bg-black/40" onClick={closeMobileSidebar} />
+      <div 
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ease-out ${
+          isMobileSidebarOpen ? 'opacity-100' : 'opacity-0'
+        }`} 
+        onClick={closeMobileSidebar} 
+      />
     </div>
   ) : null;
 
   // Minimized sidebar - Only show on desktop when collapsed
   if (!sidebarOpen && !isMobile) {
     return (
-      <div className="h-full border-r border-border w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2 hidden md:flex">
+      <div className="h-full border-r border-border w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2 hidden md:flex transform transition-all duration-300 ease-out">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -423,7 +430,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={toggleSidebar}
-                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
+                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-all duration-200 ease-out hover:scale-105 active:scale-95"
                 aria-label="Open sidebar"
               >
                 <Menu size={16} />
@@ -501,7 +508,13 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       {mobileOverlay}
       <Sidebar
         collapsible="none"
-        className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${isMobile ? (isMobileSidebarOpen ? 'fixed left-0 top-0 bottom-0 w-[280px] z-[101]' : 'hidden') : ''}`}
+        className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${
+          isMobile 
+            ? `fixed left-0 top-0 bottom-0 w-[280px] z-[101] mobile-sidebar sidebar-slide sidebar-transition transition-transform duration-300 ease-out ${
+                isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              }` 
+            : 'sidebar-slide'
+        }`}
       >
         <SidebarHeader className="px-3 sm:px-4 lg:px-5 py-3 sm:py-4 border-b border-border gap-0">
           {/* PatioAI Logo - Larger with more spacing */}
@@ -520,7 +533,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               variant="ghost"
               size="sm"
               onClick={toggleSidebar}
-              className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/70 transition-colors"
+              className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/70 transition-all duration-200 ease-out hover:scale-105 active:scale-95"
               aria-label="Close sidebar"
             >
               <PanelLeftIcon size={14} />
