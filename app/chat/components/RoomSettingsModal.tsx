@@ -156,20 +156,22 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
   // Shared header
   const SettingsHeader = (
-    <div className="flex items-center justify-between px-4 py-3">
-      <div className="flex items-center gap-2">
-        <Settings className="h-4 w-4 text-primary" />
-        <span className="text-lg font-semibold">Room Settings</span>
+    <DialogHeader className="flex-shrink-0 p-0 space-y-0">
+      <div className="flex items-center justify-between px-4 py-3">
+        <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+          <Settings className="h-4 w-4 text-primary" />
+          Room Settings
+        </DialogTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsOpen(false)}
+          className="h-8 w-8 p-0 hover:bg-muted/50"
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setIsOpen(false)}
-        className="h-8 w-8 p-0 hover:bg-muted/50"
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
+    </DialogHeader>
   );
 
   // Shared content
