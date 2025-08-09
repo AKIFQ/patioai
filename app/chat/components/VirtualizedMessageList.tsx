@@ -1,40 +1,28 @@
 'use client';
 
-import React, { memo, useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import React, { memo, useMemo, useRef, useEffect, useState } from 'react';
 import { FixedSizeList as List } from 'react-window';
+import { type Message } from '@ai-sdk/react';
 import ChatMessage from './ChatMessage';
 import AILoadingMessage from './AILoadingMessage';
-import ScrollToBottomButton from './ScrollToBottomButton';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useVirtualizedAutoScroll } from '../hooks/useVirtualizedAutoScroll';
-import { scrollVirtualizedToBottom } from '../utils/dynamicImports';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { RefreshCw } from 'lucide-react';
-
-export interface EnhancedMessage {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  created_at: string;
-  senderName?: string;
-  isOptimistic?: boolean;
-}
+import ScrollToBottomButton from './ScrollToBottomButton';
 
 interface VirtualizedMessageListProps {
-  messages: EnhancedMessage[];
+  messages: Message[];
   height: number;
   itemHeight?: number;
-  currentUserDisplayName?: string;
-  showLoading?: boolean;
-  isRoomChat?: boolean;
-  onRefresh?: () => Promise<void>;
+  currentUserDisplayName?: string; // For room chats to identify current user's messages
+  showLoading?: boolean; // Show AI loading indicator
+  isRoomChat?: boolean; // Whether this is a room chat (affects reasoning display)
 }
 
 interface MessageItemProps {
   index: number;
   style: React.CSSProperties;
   data: {
-    messages: EnhancedMessage[];
+    messages: Message[];
     currentUserDisplayName?: string;
     isRoomChat?: boolean;
   };
@@ -63,160 +51,106 @@ const MessageItem = memo(({ index, style, data }: MessageItemProps) => {
 
 MessageItem.displayName = 'MessageItem';
 
-// Pull to refresh hook for mobile
-const usePullToRefresh = (onRefresh?: () => Promise<void>) => {
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [startY, setStartY] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
-  const isMobile = useIsMobile();
-  
-  const maxPullDistance = 80;
-  const triggerDistance = 60;
-  
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isMobile || !onRefresh) return;
-    const scrollElement = e.currentTarget as HTMLElement;
-    if (scrollElement.scrollTop <= 0) {
-      setStartY(e.touches[0].clientY);
-      setIsPulling(true);
-    }
-  }, [isMobile, onRefresh]);
-  
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isPulling || isRefreshing) return;
-    
-    const currentY = e.touches[0].clientY;
-    const deltaY = currentY - startY;
-    
-    if (deltaY > 0) {
-      e.preventDefault();
-      const distance = Math.min(deltaY * 0.5, maxPullDistance);
-      setPullDistance(distance);
-    }
-  }, [isPulling, isRefreshing, startY, maxPullDistance]);
-  
-  const handleTouchEnd = useCallback(async () => {
-    if (!isPulling) return;
-    
-    setIsPulling(false);
-    
-    if (pullDistance >= triggerDistance && onRefresh && !isRefreshing) {
-      setIsRefreshing(true);
-      try {
-        await onRefresh();
-      } catch (error) {
-        console.error('Refresh failed:', error);
-      } finally {
-        setTimeout(() => {
-          setIsRefreshing(false);
-          setPullDistance(0);
-        }, 500);
-      }
-    } else {
-      setPullDistance(0);
-    }
-  }, [isPulling, pullDistance, triggerDistance, onRefresh, isRefreshing]);
-  
-  return {
-    pullDistance,
-    isRefreshing,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-    shouldShowIndicator: pullDistance > 0 || isRefreshing
-  };
-};
-
 const VirtualizedMessageList = memo(({ 
   messages, 
   height, 
   itemHeight = 80,
   currentUserDisplayName,
   showLoading = false,
-  isRoomChat = false,
-  onRefresh
+  isRoomChat = false
 }: VirtualizedMessageListProps) => {
-  const pullToRefresh = usePullToRefresh(onRefresh);
-  
-  const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<List>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [actualHeight, setActualHeight] = useState(0);
-
-  // Auto-scroll hook for non-virtualized list (fewer messages)
-  const { isAtBottom, enableAutoScroll } = useAutoScroll({
-    scrollRef,
-    threshold: 15, // Increased buffer for more comfortable spacing
-    enabled: messages.length < 20
-  });
-
-  // Auto-scroll hook for virtualized list
-  const { 
-    isAtBottom: isVirtualizedAtBottom, 
-    enableAutoScroll: enableVirtualizedAutoScroll 
-  } = useVirtualizedAutoScroll({
-    threshold: 0.5, // Ensure complete messages are visible
-    enabled: messages.length >= 20
-  });
-
-  // Measure container height when height is 0 (flexible layout)
+  const [actualHeight, setActualHeight] = useState(height || 600);
+  
+  // Measure actual container height when height is 0 (flexible layout)
   useEffect(() => {
-    if (height > 0) {
-      setActualHeight(height);
-      return;
-    }
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setActualHeight(entry.contentRect.height);
-      }
-    });
-
-    resizeObserver.observe(container);
-    return () => resizeObserver.disconnect();
-  }, [height]);
-
-  const effectiveHeight = height > 0 ? height : actualHeight;
-
-  // Auto-scroll logic with delays to ensure content is rendered
-  useEffect(() => {
-    if (messages.length < 20) {
-      // Non-virtualized auto-scroll
-      setTimeout(() => {
-        if (scrollRef.current && (isAtBottom || messages.length === 1)) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (height === 0 && containerRef.current) {
+      const resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+          const newHeight = entry.contentRect.height;
+          if (newHeight > 0) {
+            setActualHeight(newHeight);
+          }
         }
-      }, 150); // Increased delay for better reliability
+      });
       
-      // Additional scroll for new content
-      setTimeout(() => {
-        if (scrollRef.current && (isAtBottom || messages.length === 1)) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      }, 100);
-    } else {
-      // Virtualized auto-scroll
-      setTimeout(() => {
-        if (listRef.current && (isVirtualizedAtBottom || messages.length === 1)) {
-          listRef.current.scrollToItem(messages.length - 1, 'start');
-        }
-      }, 150); // Increased delay for better reliability
+      resizeObserver.observe(containerRef.current);
+      
+      // Initial measurement
+      const initialHeight = containerRef.current.clientHeight;
+      if (initialHeight > 0) {
+        setActualHeight(initialHeight);
+      }
+      
+      return () => resizeObserver.disconnect();
+    } else if (height > 0) {
+      setActualHeight(height);
     }
-  }, [messages, isAtBottom, isVirtualizedAtBottom]);
+  }, [height]);
+  
+  // Use actualHeight for all calculations
+  const effectiveHeight = actualHeight;
+  
+  // For non-virtualized lists (< 20 messages)
+  const { scrollRef, isAtBottom: nonVirtualizedAtBottom, isAutoScrolling: nonVirtualizedAutoScrolling, scrollToBottom, enableAutoScroll: enableNonVirtualizedAutoScroll } = useAutoScroll({
+    threshold: 15, // Slightly increased for more comfortable spacing
+    resumeDelay: 1500,
+    enabled: true
+  });
+  
+  // For virtualized lists (>= 20 messages)
+  const { 
+    isAtBottom: virtualizedAtBottom, 
+    isAutoScrolling: virtualizedAutoScrolling, 
+    scrollToBottom: scrollVirtualizedToBottom, 
+    enableAutoScroll: enableVirtualizedAutoScroll,
+    handleScroll: handleVirtualizedScroll,
+    updateDimensions
+  } = useVirtualizedAutoScroll({
+    threshold: 0.1, // Very small threshold for virtualized lists
+    resumeDelay: 1500,
+    enabled: true
+  });
+  
+  // Determine which scroll state to use
+  const isVirtualized = messages.length >= 20;
+  const isAtBottom = isVirtualized ? virtualizedAtBottom : nonVirtualizedAtBottom;
+  const isAutoScrolling = isVirtualized ? virtualizedAutoScrolling : nonVirtualizedAutoScrolling;
 
-  const enableNonVirtualizedAutoScroll = useCallback(() => {
-    enableAutoScroll();
-  }, [enableAutoScroll]);
-
-  const scrollToBottom = useCallback(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  // Update dimensions for virtualized scroll calculations
+  useEffect(() => {
+    if (isVirtualized) {
+      updateDimensions(messages.length, effectiveHeight, itemHeight);
     }
-  }, []);
+  }, [messages.length, effectiveHeight, itemHeight, isVirtualized, updateDimensions]);
+
+  // Auto-scroll to bottom when new messages arrive or content changes
+  useEffect(() => {
+    if (messages.length > 0 && isAutoScrolling) {
+      // Increased delay to ensure content is fully rendered, especially for AI streaming
+      const timeoutId = setTimeout(() => {
+        if (isVirtualized && listRef.current) {
+          // For virtualized list, scroll to last item
+          scrollVirtualizedToBottom(listRef);
+        } else {
+          // For non-virtualized list, use smooth scroll
+          scrollToBottom();
+        }
+        
+        // Additional scroll after a short delay to ensure complete visibility
+        setTimeout(() => {
+          if (isVirtualized && listRef.current) {
+            scrollVirtualizedToBottom(listRef);
+          } else {
+            scrollToBottom();
+          }
+        }, 100);
+      }, 150); // Increased delay for better content rendering
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages, isAutoScrolling, isVirtualized, scrollVirtualizedToBottom, scrollToBottom]); // Changed dependency from messages.length to messages to catch content updates
 
   const itemData = useMemo(() => ({
     messages,
@@ -232,31 +166,10 @@ const VirtualizedMessageList = memo(({
         className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 flex flex-col overflow-hidden"
         data-chat-container
       >
-        {/* Pull to refresh indicator for non-virtualized */}
-        {pullToRefresh.shouldShowIndicator && (
-          <div 
-            className="flex items-center justify-center py-2 transition-all duration-200"
-            style={{
-              transform: `translateY(${pullToRefresh.pullDistance - 40}px)`,
-              opacity: pullToRefresh.pullDistance / 60
-            }}
-          >
-            <RefreshCw 
-              className={`h-5 w-5 text-muted-foreground ${pullToRefresh.isRefreshing ? 'animate-spin' : ''}`}
-              style={{
-                transform: `rotate(${pullToRefresh.pullDistance * 4}deg)`
-              }}
-            />
-          </div>
-        )}
-        
         <div 
           ref={scrollRef}
           className="flex-1 overflow-y-auto scrollbar-hide"
           style={{ height: height > 0 ? `${height}px` : '100%' }}
-          onTouchStart={pullToRefresh.handleTouchStart}
-          onTouchMove={pullToRefresh.handleTouchMove}
-          onTouchEnd={pullToRefresh.handleTouchEnd}
         >
           <ul className="w-full min-w-0 space-y-1 pb-4" style={{ listStyle: 'none', paddingLeft: 0 }}>
             {messages.map((message, index) => {
@@ -287,7 +200,7 @@ const VirtualizedMessageList = memo(({
             scrollToBottom();
             enableNonVirtualizedAutoScroll();
           }}
-          hasNewMessages={!isAtBottom}
+          hasNewMessages={!isAutoScrolling}
         />
       </div>
     );
@@ -299,24 +212,6 @@ const VirtualizedMessageList = memo(({
       className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 flex flex-col overflow-hidden relative" 
       data-chat-container
     >
-      {/* Pull to refresh indicator for virtualized */}
-      {pullToRefresh.shouldShowIndicator && (
-        <div 
-          className="absolute top-0 left-1/2 transform -translate-x-1/2 flex items-center justify-center py-2 transition-all duration-200 z-10"
-          style={{
-            transform: `translate(-50%, ${pullToRefresh.pullDistance - 40}px)`,
-            opacity: pullToRefresh.pullDistance / 60
-          }}
-        >
-          <RefreshCw 
-            className={`h-5 w-5 text-muted-foreground ${pullToRefresh.isRefreshing ? 'animate-spin' : ''}`}
-            style={{
-              transform: `rotate(${pullToRefresh.pullDistance * 4}deg)`
-            }}
-          />
-        </div>
-      )}
-      
       <List
         ref={listRef}
         height={effectiveHeight}
@@ -326,21 +221,18 @@ const VirtualizedMessageList = memo(({
         itemData={itemData}
         overscanCount={5}
         onScroll={handleVirtualizedScroll}
-        onTouchStart={pullToRefresh.handleTouchStart}
-        onTouchMove={pullToRefresh.handleTouchMove}
-        onTouchEnd={pullToRefresh.handleTouchEnd}
       >
         {MessageItem}
       </List>
       
       {/* Scroll to bottom button for virtualized list */}
       <ScrollToBottomButton
-        show={!isVirtualizedAtBottom}
+        show={!isAtBottom}
         onClick={() => {
           scrollVirtualizedToBottom(listRef);
           enableVirtualizedAutoScroll();
         }}
-        hasNewMessages={!isVirtualizedAtBottom}
+        hasNewMessages={!isAutoScrolling}
       />
     </div>
   );

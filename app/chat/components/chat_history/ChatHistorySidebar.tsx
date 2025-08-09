@@ -1,5 +1,5 @@
 'use client';
-import React, { type FC, useState, useCallback, useEffect, createContext, useContext, useMemo, useRef } from 'react';
+import React, { type FC, useState, useCallback, useEffect, createContext, useContext } from 'react';
 import { fetchMoreChatPreviews } from '../../actions';
 import { useParams, useSearchParams } from 'next/navigation';
 import useSWRInfinite from 'swr/infinite';
@@ -34,10 +34,7 @@ import {
   Loader2,
   Users,
   Crown,
-  X,
-  Trash,
-  Search,
-  Settings
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import type { Tables } from '@/types/database';
@@ -50,12 +47,6 @@ import JoinRoomModal from '../JoinRoomModal';
 import ChatSidebarFooter from './SidebarFooter';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import GroupChatsSection from './GroupChatsSection';
-import RoomSettingsModal from '../RoomSettingsModal';
-import { mutate } from 'swr';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Input } from '@/components/ui/input';
 
 // Mobile Sidebar Context
 interface MobileSidebarContextType {
@@ -86,116 +77,6 @@ export const MobileSidebarProvider: FC<{ children: React.ReactNode }> = ({ child
     <MobileSidebarContext.Provider value={{ isOpen, open, close, toggle }}>
       {children}
     </MobileSidebarContext.Provider>
-  );
-};
-
-// Swipeable Room Thread Component for mobile delete
-const SwipeableRoomThread: FC<{
-  thread: any;
-  userInfo: any;
-  onChatSelect: () => void;
-  onDelete: (threadId: string) => void;
-  children: React.ReactNode;
-}> = ({ thread, userInfo, onChatSelect, onDelete, children }) => {
-  const [swipeX, setSwipeX] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const isMobile = useIsMobile();
-  
-  if (!isMobile) {
-    return <>{children}</>;
-  }
-  
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    setTouchStart({ x: touch.clientX, y: touch.clientY });
-    setIsDragging(false);
-  };
-  
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStart) return;
-    
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - touchStart.x;
-    const deltaY = Math.abs(touch.clientY - touchStart.y);
-    
-    // Only allow horizontal swipe if it's primarily horizontal movement
-    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > deltaY) {
-      setIsDragging(true);
-      e.preventDefault(); // Prevent scrolling
-      
-      // Only allow left swipe (negative deltaX) and limit to -80px
-      const swipeDistance = Math.max(Math.min(deltaX, 0), -80);
-      setSwipeX(swipeDistance);
-    }
-  };
-  
-  const handleTouchEnd = () => {
-    setTouchStart(null);
-    
-    if (swipeX < -40) {
-      // Show delete button
-      setSwipeX(-80);
-    } else {
-      // Snap back
-      setSwipeX(0);
-    }
-    
-    setTimeout(() => setIsDragging(false), 100);
-  };
-  
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      await onDelete(thread.id);
-      // Slide out animation before removal
-      setSwipeX(-300);
-      setTimeout(() => {
-        setIsDeleting(false);
-      }, 300);
-    } catch (error) {
-      setIsDeleting(false);
-      setSwipeX(0);
-      toast.error('Failed to delete thread');
-    }
-  };
-  
-  return (
-    <div className="relative overflow-hidden">
-      {/* Delete button background */}
-      <div 
-        className="absolute right-0 top-0 bottom-0 w-20 bg-red-500 flex items-center justify-center transition-all duration-200"
-        style={{
-          transform: `translateX(${swipeX < -40 ? '0px' : '20px'})`,
-          opacity: swipeX < -40 ? 1 : 0
-        }}
-      >
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleDelete}
-          disabled={isDeleting}
-          className="text-white hover:text-white hover:bg-red-600 h-full w-full"
-        >
-          <Trash className="h-4 w-4" />
-        </Button>
-      </div>
-      
-      {/* Thread item */}
-      <div
-        className="transition-transform duration-200 ease-out bg-background"
-        style={{
-          transform: `translateX(${swipeX}px)`,
-          opacity: isDeleting ? 0 : 1
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {children}
-      </div>
-    </div>
   );
 };
 
@@ -524,7 +405,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   // We render the sidebar only when open to avoid layout shift
   const mobileOverlay = isMobile ? (
     <div
-      className={`fixed inset-0 z-[100] md:hidden transition-opacity duration-300 ease-out ${isMobileSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      className={`${isMobileSidebarOpen ? 'fixed' : 'hidden'} inset-0 z-[100] md:hidden`}
       aria-hidden={!isMobileSidebarOpen}
     >
       <div className="absolute inset-0 bg-black/40" onClick={closeMobileSidebar} />
@@ -620,7 +501,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       {mobileOverlay}
       <Sidebar
         collapsible="none"
-        className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${isMobile ? 'fixed left-0 top-0 bottom-0 w-[280px] z-[101] transition-transform duration-300 ease-out' : ''} ${isMobile && !isMobileSidebarOpen ? '-translate-x-full' : ''}`}
+        className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${isMobile ? (isMobileSidebarOpen ? 'fixed left-0 top-0 bottom-0 w-[280px] z-[101]' : 'hidden') : ''}`}
       >
         <SidebarHeader className="px-3 sm:px-4 lg:px-5 py-3 sm:py-4 border-b border-border gap-0">
           {/* PatioAI Logo - Larger with more spacing */}
@@ -1152,34 +1033,22 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                     ) : (
                       <div className="space-y-1">
                         {processedThreads.map((thread: any) => (
-                          <SwipeableRoomThread
+                          <Link
                             key={thread.id}
-                            thread={thread}
-                            userInfo={userInfo}
-                            onChatSelect={handleChatSelect}
-                            onDelete={async (threadId) => {
-                              // This function will be implemented later to delete the thread
-                              // For now, we just log and show a toast
-                              console.log(`Deleting thread with ID: ${threadId}`);
-                              toast.info('Swipe to delete is not yet implemented');
-                            }}
+                            href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                            onClick={handleChatSelect}
+                            className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                           >
-                            <Link
-                              href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
-                              onClick={handleChatSelect}
-                              className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
-                            >
-                              <div className="text-xs text-muted-foreground/70 mb-1">
-                                {new Date(thread.created_at).toLocaleDateString([], {
-                                  month: 'short',
-                                  day: 'numeric'
-                                })} {thread.roomName && `• ${thread.roomName}`}
-                              </div>
-                              <div className="text-sm text-foreground font-medium truncate">
-                                {thread.firstMessage}
-                              </div>
-                            </Link>
-                          </SwipeableRoomThread>
+                            <div className="text-xs text-muted-foreground/70 mb-1">
+                              {new Date(thread.created_at).toLocaleDateString([], {
+                                month: 'short',
+                                day: 'numeric'
+                              })} {thread.roomName && `• ${thread.roomName}`}
+                            </div>
+                            <div className="text-sm text-foreground font-medium truncate">
+                              {thread.firstMessage}
+                            </div>
+                          </Link>
                         ))}
                       </div>
                     )}
@@ -1206,34 +1075,22 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                         </div>
                         <div className="space-y-1">
                           {processedThreads.map((thread: any) => (
-                            <SwipeableRoomThread
+                            <Link
                               key={thread.id}
-                              thread={thread}
-                              userInfo={userInfo}
-                              onChatSelect={handleChatSelect}
-                              onDelete={async (threadId) => {
-                                // This function will be implemented later to delete the thread
-                                // For now, we just log and show a toast
-                                console.log(`Deleting thread with ID: ${threadId}`);
-                                toast.info('Swipe to delete is not yet implemented');
-                              }}
+                              href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                              onClick={handleChatSelect}
+                              className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                             >
-                              <Link
-                                href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
-                                onClick={handleChatSelect}
-                                className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
-                              >
-                                <div className="text-xs text-muted-foreground/70 mb-1">
-                                  {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], {
-                                    month: 'short',
-                                    day: 'numeric'
-                                  })}
-                                </div>
-                                <div className="text-sm text-foreground font-medium truncate">
-                                  {thread.firstMessage}
-                                </div>
-                              </Link>
-                            </SwipeableRoomThread>
+                              <div className="text-xs text-muted-foreground/70 mb-1">
+                                {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], {
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </div>
+                              <div className="text-sm text-foreground font-medium truncate">
+                                {thread.firstMessage}
+                              </div>
+                            </Link>
                           ))}
                         </div>
                       </>
