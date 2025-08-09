@@ -355,7 +355,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             <Settings className="h-4 w-4" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="bottom" className="h-[92vh] p-0 gap-0 flex flex-col rounded-t-xl">
+        <SheetContent side="bottom" className="h-[75vh] p-0 gap-0 flex flex-col rounded-t-xl">
           {/* Drag handle */}
           <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-2 mb-1" />
           {SettingsHeader}
