@@ -63,7 +63,7 @@ const VirtualizedMessageList = memo(({
   
   // For non-virtualized lists (< 20 messages)
   const { scrollRef, isAtBottom: nonVirtualizedAtBottom, isAutoScrolling: nonVirtualizedAutoScrolling, scrollToBottom, enableAutoScroll: enableNonVirtualizedAutoScroll } = useAutoScroll({
-    threshold: 100,
+    threshold: 20, // Reduced from 100 to show complete messages
     resumeDelay: 1500,
     enabled: true
   });
@@ -77,7 +77,7 @@ const VirtualizedMessageList = memo(({
     handleScroll: handleVirtualizedScroll,
     updateDimensions
   } = useVirtualizedAutoScroll({
-    threshold: 2,
+    threshold: 0.5, // Reduced from 2 to show complete messages
     resumeDelay: 1500,
     enabled: true
   });
@@ -94,18 +94,23 @@ const VirtualizedMessageList = memo(({
     }
   }, [messages.length, height, itemHeight, isVirtualized, updateDimensions]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or content changes
   useEffect(() => {
     if (messages.length > 0 && isAutoScrolling) {
-      if (isVirtualized && listRef.current) {
-        // For virtualized list, scroll to last item
-        scrollVirtualizedToBottom(listRef);
-      } else {
-        // For non-virtualized list, use smooth scroll
-        scrollToBottom();
-      }
+      // Small delay to ensure content is rendered, especially for streaming messages
+      const timeoutId = setTimeout(() => {
+        if (isVirtualized && listRef.current) {
+          // For virtualized list, scroll to last item
+          scrollVirtualizedToBottom(listRef);
+        } else {
+          // For non-virtualized list, use smooth scroll
+          scrollToBottom();
+        }
+      }, 50); // Small delay to ensure DOM updates are complete
+
+      return () => clearTimeout(timeoutId);
     }
-  }, [messages.length, isAutoScrolling, isVirtualized, scrollVirtualizedToBottom, scrollToBottom]);
+  }, [messages, isAutoScrolling, isVirtualized, scrollVirtualizedToBottom, scrollToBottom]); // Changed dependency from messages.length to messages to catch content updates
 
   const itemData = useMemo(() => ({
     messages,

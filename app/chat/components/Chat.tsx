@@ -1035,7 +1035,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         )}
       </div>
 
-      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4">
+      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4 bg-transparent">
         {/*Separate message input component, to avoid re-rendering the chat messages when typing */}
         <MessageInput
           chatId={chatId}
