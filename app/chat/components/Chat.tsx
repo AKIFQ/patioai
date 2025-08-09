@@ -37,7 +37,7 @@ import { useViewportHeight } from '../hooks/useViewportHeight';
 import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
 
 // Icons from Lucide React
-import { User, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
+import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
 
 interface RoomContext {
   shareCode: string;
@@ -81,7 +81,10 @@ const ChatComponent: React.FC<ChatProps> = ({
   const param = useParams();
   const router = useRouter();
   const currentChatId = param.id as string;
-  const { open: openMobileSidebar } = useMobileSidebar();
+  const { open: openMobileSidebar, close: closeMobileSidebar, isOpen: isMobileSidebarOpen } = useMobileSidebar();
+  const touchAreaRef = useRef<HTMLDivElement | null>(null);
+  const [swipeProgress, setSwipeProgress] = useState(0); // 0-1 for animation progress
+  const [isSwipeActive, setIsSwipeActive] = useState(false);
 
   const [optimisticModelType, setOptimisticModelType] = useOptimistic<
     string,
@@ -651,8 +654,157 @@ const ChatComponent: React.FC<ChatProps> = ({
     }
   };
 
+  // Modern smooth finger-tracking swipe gestures
+  useEffect(() => {
+    const el = touchAreaRef.current;
+    if (!el) return;
+
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let isTracking = false;
+    let isHorizontal = false;
+    let swipeDirection: 'open' | 'close' | null = null;
+    
+    const SWIPE_THRESHOLD = 60; // Minimum distance to trigger action
+    const EDGE_ZONE = 20; // Touch detection zone from screen edges
+    const MAX_SWIPE_DISTANCE = 280; // Width of sidebar for progress calculation
+
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      currentX = startX;
+      
+      // Detect swipe zones
+      const isLeftEdge = startX <= EDGE_ZONE;
+      const isRightEdge = startX >= window.innerWidth - EDGE_ZONE;
+      const canOpenFromLeft = isLeftEdge && !isMobileSidebarOpen;
+      const canCloseFromRight = isRightEdge && isMobileSidebarOpen;
+      const canCloseFromAnywhere = isMobileSidebarOpen && startX <= MAX_SWIPE_DISTANCE;
+      
+      if (canOpenFromLeft || canCloseFromRight || canCloseFromAnywhere) {
+        isTracking = true;
+        setIsSwipeActive(true);
+        
+        if (canOpenFromLeft) swipeDirection = 'open';
+        else swipeDirection = 'close';
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isTracking) return;
+      
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = Math.abs(touch.clientY - startY);
+      currentX = touch.clientX;
+      
+      // Determine if this is a horizontal swipe
+      if (!isHorizontal && (Math.abs(deltaX) > 10 || deltaY > 10)) {
+        isHorizontal = Math.abs(deltaX) > deltaY;
+        if (!isHorizontal) {
+          // Vertical swipe detected, cancel tracking
+          isTracking = false;
+          setIsSwipeActive(false);
+          setSwipeProgress(0);
+          return;
+        }
+      }
+      
+      if (!isHorizontal) return;
+      
+      // Prevent page scrolling during horizontal swipe
+      e.preventDefault();
+      
+      let progress = 0;
+      
+      if (swipeDirection === 'open' && deltaX > 0) {
+        // Opening: progress from 0 to 1 as we swipe right
+        progress = Math.min(deltaX / MAX_SWIPE_DISTANCE, 1);
+      } else if (swipeDirection === 'close' && deltaX < 0) {
+        // Closing: progress from 1 to 0 as we swipe left
+        if (startX <= MAX_SWIPE_DISTANCE) {
+          // Started inside sidebar
+          progress = Math.max((startX + deltaX) / MAX_SWIPE_DISTANCE, 0);
+        } else {
+          // Started from right edge
+          progress = Math.max(1 + (deltaX / MAX_SWIPE_DISTANCE), 0);
+        }
+      }
+      
+      setSwipeProgress(progress);
+    };
+
+    const onTouchEnd = () => {
+      if (!isTracking) return;
+      
+      const deltaX = currentX - startX;
+      let shouldTrigger = false;
+      
+      if (swipeDirection === 'open' && deltaX > SWIPE_THRESHOLD) {
+        shouldTrigger = true;
+        openMobileSidebar();
+      } else if (swipeDirection === 'close' && Math.abs(deltaX) > SWIPE_THRESHOLD) {
+        shouldTrigger = true;
+        closeMobileSidebar();
+      }
+      
+      // Smooth animation to final state
+      if (shouldTrigger) {
+        setSwipeProgress(swipeDirection === 'open' ? 1 : 0);
+      } else {
+        // Snap back to original state
+        setSwipeProgress(isMobileSidebarOpen ? 1 : 0);
+      }
+      
+      // Reset state
+      setTimeout(() => {
+        setIsSwipeActive(false);
+        setSwipeProgress(0);
+      }, 300); // Match transition duration
+      
+      isTracking = false;
+      isHorizontal = false;
+      swipeDirection = null;
+    };
+
+    // Add listeners with proper options
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false }); // Not passive to prevent scroll
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart as any);
+      el.removeEventListener('touchmove', onTouchMove as any);
+      el.removeEventListener('touchend', onTouchEnd as any);
+    };
+  }, [openMobileSidebar, closeMobileSidebar, isMobileSidebarOpen]);
+
   return (
-    <div className="flex h-full w-full flex-col">
+    <div ref={touchAreaRef} className="flex h-full w-full flex-col relative">
+      {/* Swipe overlay indicator (only during active swipe) */}
+      {isSwipeActive && (
+        <div 
+          className="fixed inset-0 z-[100] pointer-events-none"
+          style={{
+            background: `linear-gradient(to right, rgba(0,0,0,${swipeProgress * 0.3}) 0%, transparent 50%)`
+          }}
+        />
+      )}
+      
+      {/* Swipe progress indicator */}
+      {isSwipeActive && swipeProgress > 0 && (
+        <div 
+          className="fixed left-0 top-0 bottom-0 z-[99] bg-background/10 backdrop-blur-sm pointer-events-none transition-all duration-100"
+          style={{
+            width: `${swipeProgress * 280}px`,
+            transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`,
+            opacity: swipeProgress
+          }}
+        />
+      )}
+
       {/* Mobile Header with Hamburger Menu */}
       <div className="sticky top-0 z-20 bg-background border-b border-border h-12 shadow-sm w-full md:hidden">
         <div className="flex items-center justify-between w-full h-full px-4">
@@ -661,7 +813,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             variant="ghost"
             size="icon"
             onClick={openMobileSidebar}
-            className="h-8 w-8 text-foreground hover:bg-muted/50 hover:text-primary transition-colors bg-primary/10 border border-primary/20 shadow-sm"
+            className="h-8 w-8 text-foreground hover:bg-transparent transition-colors bg-transparent border-0 shadow-none"
             aria-label="Open sidebar"
           >
             <Menu className="h-5 w-5" />
@@ -674,8 +826,16 @@ const ChatComponent: React.FC<ChatProps> = ({
             </h1>
           </div>
 
-          {/* Right side - New Chat Button */}
+          {/* Right side - New Chat Button + compact settings (mobile only) */}
           <div className="flex items-center gap-2">
+            {roomContext && (
+              <RoomSettingsModal
+                roomContext={roomContext}
+                isCreator={roomContext.createdBy !== undefined}
+                expiresAt={roomContext.expiresAt}
+                onRoomUpdate={() => router.refresh()}
+              />
+            )}
             <Button
               variant="ghost"
               size="sm"
