@@ -193,3 +193,14 @@ body:has([data-chat-page]) footer {
 [data-chat-page] .sidebar-container {
   height: 100vh !important;
 }
+
+/* Hide scrollbar utility - maintains scrolling functionality */
+.scrollbar-hide {
+  /* For Webkit browsers (Chrome, Safari, Edge) */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer and Edge */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Webkit browsers */
+}

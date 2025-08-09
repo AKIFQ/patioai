@@ -168,7 +168,7 @@ const VirtualizedMessageList = memo(({
       >
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 overflow-y-auto scrollbar-hide"
           style={{ height: height > 0 ? `${height}px` : '100%' }}
         >
           <ul className="w-full min-w-0 space-y-1 pb-4" style={{ listStyle: 'none', paddingLeft: 0 }}>
