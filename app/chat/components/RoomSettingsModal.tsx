@@ -175,7 +175,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   // Shared content
   const SettingsContent = (
     <div 
-      className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 min-h-0"
+      className="flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-6 min-h-0"
       style={{ WebkitOverflowScrolling: 'touch' }}
     >
       <div className="space-y-4">
@@ -185,7 +185,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             <Crown className="h-4 w-4" />
             Room Information
           </div>
-
+          
           {/* Room Name */}
           <div className="space-y-1">
             <div className="text-xs font-medium text-muted-foreground">Name</div>
@@ -362,7 +362,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             <Settings className="h-4 w-4" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="bottom" className="h-[88vh] p-0 gap-0 flex flex-col rounded-t-xl">
+        <SheetContent side="bottom" className="h-[92vh] p-0 gap-0 flex flex-col rounded-t-xl">
           {/* Drag handle */}
           <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-2 mb-1" />
           {SettingsHeader}
@@ -393,9 +393,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
         onPointerDownOutside={() => setIsOpen(false)}
         onEscapeKeyDown={() => setIsOpen(false)}
       >
-        <DialogHeader className="flex-shrink-0 sticky top-0 z-10 bg-background border-b px-4 py-3">
-          {SettingsHeader}
-        </DialogHeader>
+        {SettingsHeader}
         {SettingsContent}
       </DialogContent>
     </Dialog>
