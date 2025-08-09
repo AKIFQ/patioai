@@ -181,14 +181,14 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
       <DialogContent 
         className={`${isMobile 
-          ? 'w-[96vw] max-w-[340px] h-[90vh] max-h-[600px] m-0 p-0 rounded-xl' 
-          : 'sm:max-w-[500px] max-h-[85vh]'
+          ? 'w-[96vw] max-w-[340px] h-[90vh] max-h-[600px] m-0 p-0 gap-0 flex flex-col rounded-xl' 
+          : 'sm:max-w-[500px] max-h-[85vh] p-0 gap-0 flex flex-col'
         } overflow-hidden`}
         onPointerDownOutside={() => setIsOpen(false)}
         onEscapeKeyDown={() => setIsOpen(false)}
       >
         {/* Fixed Header */}
-        <DialogHeader className="sticky top-0 z-10 bg-background border-b px-4 py-3">
+        <DialogHeader className="flex-shrink-0 sticky top-0 z-10 bg-background border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4 text-primary" />
@@ -207,10 +207,10 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
         {/* Scrollable Content */}
         <div 
-          className="overflow-y-auto flex-1 px-4 py-2"
+          className={`flex-1 overflow-y-auto overscroll-contain px-4 py-3 ${isMobile ? 'min-h-0' : ''}`}
           style={{ 
-            height: isMobile ? 'calc(100vh - 120px)' : 'auto',
-            WebkitOverflowScrolling: 'touch'
+            WebkitOverflowScrolling: 'touch',
+            scrollBehavior: 'smooth'
           }}
         >
           <div className="space-y-4">
