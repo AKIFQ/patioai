@@ -69,7 +69,7 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
   const reasoningParts: any[] = [];
 
   return (
-    <li key={message.id} className="mb-1.5 last:mb-0 group" data-message-id={message.id}>
+    <li key={message.id} className="mb-1.5 last:mb-0 group" data-message-id={message.id} style={{ listStyle: 'none', paddingLeft: 0, marginLeft: 0 }}>
       <div className={`flex gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'}`} role={message.role}>
         {/* Avatar - only show on left side for non-current-user messages */}
         {!isUserMessage && (

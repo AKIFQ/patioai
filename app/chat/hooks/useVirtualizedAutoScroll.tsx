@@ -66,7 +66,8 @@ export function useVirtualizedAutoScroll({
   const scrollToBottom = useCallback((listRef: React.RefObject<List>) => {
     if (!listRef.current || itemCountRef.current === 0) return;
     
-    listRef.current.scrollToItem(itemCountRef.current - 1, 'end');
+    // Use 'start' instead of 'end' to ensure the complete message is visible
+    listRef.current.scrollToItem(itemCountRef.current - 1, 'start');
   }, []);
 
   // Enable auto-scroll

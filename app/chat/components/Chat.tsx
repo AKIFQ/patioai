@@ -779,10 +779,10 @@ const ChatComponent: React.FC<ChatProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex-1 w-full min-w-0 overflow-hidden">
+          <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
             <VirtualizedMessageList
               messages={roomContext ? realtimeMessages : messages}
-              height={viewportHeight - 160} // More accurate height calculation
+              height={0} // Will be calculated by the flexible container using CSS
               itemHeight={80}
               currentUserDisplayName={roomContext?.displayName}
               showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
