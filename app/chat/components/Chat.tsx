@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
 import { v4 as uuidv4 } from 'uuid';
 import { ChatScrollAnchor } from '../hooks/chat-scroll-anchor';
+import { Menu } from 'lucide-react';
 import { setModelSettings } from '../actions';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -33,7 +34,7 @@ import TypingIndicator from './TypingIndicator';
 import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
-
+import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2 } from 'lucide-react';
@@ -64,6 +65,8 @@ interface ChatProps {
   initialModelType: string;
   initialSelectedOption: string;
   roomContext?: RoomContext;
+  userData?: any;
+  sidebarData?: any;
 }
 
 const ChatComponent: React.FC<ChatProps> = ({
@@ -71,11 +74,14 @@ const ChatComponent: React.FC<ChatProps> = ({
   chatId,
   initialModelType,
   initialSelectedOption,
-  roomContext
+  roomContext,
+  userData,
+  sidebarData
 }) => {
   const param = useParams();
   const router = useRouter();
   const currentChatId = param.id as string;
+  const { open: openMobileSidebar } = useMobileSidebar();
 
   const [optimisticModelType, setOptimisticModelType] = useOptimistic<
     string,
@@ -374,7 +380,7 @@ const ChatComponent: React.FC<ChatProps> = ({
 
           console.log('✅ Room chat: User message sent (no AI)');
         }
-        
+
         // Clear the input field immediately for better UX
         handleInputChange({ target: { value: '' } } as any);
         // Real-time will handle showing the messages
@@ -647,17 +653,57 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Sticky Chat Header with New Chat Button */}
-      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-3">
+      {/* Mobile Header with Hamburger Menu */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border h-12 shadow-sm w-full md:hidden">
+        <div className="flex items-center justify-between w-full h-full px-4">
+          {/* Hamburger Menu Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={openMobileSidebar}
+            className="h-8 w-8 text-foreground hover:bg-muted/50 hover:text-primary transition-colors bg-primary/10 border border-primary/20 shadow-sm"
+            aria-label="Open sidebar"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+
+          {/* Chat Title - Centered */}
+          <div className="flex items-center justify-center flex-1">
+            <h1 className="text-base font-medium tracking-tight truncate">
+              {roomContext ? roomContext.roomName : 'Chat with AI'}
+            </h1>
+          </div>
+
+          {/* Right side - New Chat Button */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNewChat}
+              disabled={isCreatingNewChat}
+              className="h-8 px-2 text-sm font-medium hover:bg-muted/50 transition-colors"
+            >
+              {isCreatingNewChat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Chat Header */}
+      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-2 sm:py-3 md:py-4 flex-shrink-0 hidden md:block">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
               <>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <h1 className="text-xl font-medium tracking-tight">{roomContext.roomName}</h1>
+                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                  <h1 className="text-base sm:text-lg md:text-xl font-medium tracking-tight truncate overflow-hidden">{roomContext.roomName}</h1>
                 </div>
-                <div className="hidden sm:flex items-center text-sm text-muted-foreground/80">
+                <div className="hidden sm:flex items-center text-xs sm:text-sm text-muted-foreground/80 flex-shrink-0">
                   <span>{roomContext.participants.length} online</span>
                   {/* Typing indicator in header */}
                   {typingUsers.length > 0 && (
@@ -672,13 +718,22 @@ const ChatComponent: React.FC<ChatProps> = ({
                     </>
                   )}
                 </div>
+                {/* Mobile typing indicator */}
+                {typingUsers.length > 0 && (
+                  <div className="sm:hidden text-xs text-muted-foreground/60 animate-pulse flex-shrink-0">
+                    {typingUsers.length === 1
+                      ? `${typingUsers[0]} typing...`
+                      : `${typingUsers.length} typing...`
+                    }
+                  </div>
+                )}
               </>
             ) : (
-              <h1 className="text-xl font-medium tracking-tight">Chat with AI</h1>
+              <h1 className="text-base sm:text-lg md:text-xl font-medium tracking-tight truncate overflow-hidden">Chat with AI</h1>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0 ml-1 sm:ml-2">
             {roomContext && (
               <RoomSettingsModal
                 roomContext={roomContext}
@@ -693,14 +748,14 @@ const ChatComponent: React.FC<ChatProps> = ({
               size="sm"
               onClick={handleNewChat}
               disabled={isCreatingNewChat}
-              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+              className="h-7 sm:h-8 px-1.5 sm:px-2 md:px-3 text-xs sm:text-sm font-medium hover:bg-muted/50 transition-colors flex-shrink-0"
             >
               {isCreatingNewChat ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
               )}
-              <span className="hidden sm:inline ml-2">
+              <span className="hidden sm:inline ml-1 sm:ml-2">
                 {isCreatingNewChat ? 'Creating...' : 'New Chat'}
               </span>
             </Button>
@@ -709,35 +764,37 @@ const ChatComponent: React.FC<ChatProps> = ({
       </div>
 
       {/* Scrollable Chat Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 w-full min-w-0">
         {/* Use realtime messages for room chats, regular messages for individual chats */}
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
-          <div className="flex flex-col justify-center items-center min-h-full text-center px-4">
+          <div className="flex flex-col justify-center items-center min-h-full text-center px-2 sm:px-4">
             {roomContext ? (
-              <h2 className="text-xl font-medium text-muted-foreground">
+              <h2 className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
                 Welcome to {roomContext.roomName} — let's collaborate!
               </h2>
             ) : (
-              <h2 className="text-xl font-medium text-muted-foreground">
+              <h2 className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
                 Ready to chat? Ask me anything!
               </h2>
             )}
           </div>
         ) : (
-          <VirtualizedMessageList
-            messages={roomContext ? realtimeMessages : messages}
-            height={viewportHeight - 200} // Account for header and input area
-            itemHeight={80}
-            currentUserDisplayName={roomContext?.displayName}
-            showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
-            isRoomChat={!!roomContext}
-          />
+          <div className="w-full h-full min-w-0">
+            <VirtualizedMessageList
+              messages={roomContext ? realtimeMessages : messages}
+              height={viewportHeight - 200} // Account for header and input area
+              itemHeight={80}
+              currentUserDisplayName={roomContext?.displayName}
+              showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
+              isRoomChat={!!roomContext}
+            />
+          </div>
         )}
 
         {/* Keep the original rendering as fallback - remove this section later */}
         {false && (
-          <div>
-            <ul className="w-full mx-auto max-w-[1000px] px-0 md:px-1 lg:px-4 py-4">
+          <div className="w-full h-full min-w-0">
+            <ul className="w-full px-1 sm:px-2 md:px-4 lg:px-6 py-2 sm:py-4 min-w-0">
               {(roomContext ? realtimeMessages : messages).map((message, index) => {
 
 
@@ -978,7 +1035,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         )}
       </div>
 
-      <div className="sticky bottom-0 mt-auto max-w-[720px] mx-auto w-full z-5 pb-2">
+      <div className="sticky bottom-0 mt-auto w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4">
         {/*Separate message input component, to avoid re-rendering the chat messages when typing */}
         <MessageInput
           chatId={chatId}
@@ -995,6 +1052,8 @@ const ChatComponent: React.FC<ChatProps> = ({
           setInput={(value: string) => handleInputChange({ target: { value } } as any)}
         />
       </div>
+
+      {/* No separate MobileSidebar component. We reuse the same sidebar and open it via context. */}
     </div>
   );
 };

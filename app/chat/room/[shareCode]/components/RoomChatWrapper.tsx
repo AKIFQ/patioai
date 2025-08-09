@@ -28,6 +28,8 @@ interface RoomChatWrapperProps {
   initialMessages: Message[];
   initialModelType: string;
   initialSelectedOption: string;
+  userData?: any;
+  sidebarData?: any;
 }
 
 export default function RoomChatWrapper({
@@ -35,7 +37,9 @@ export default function RoomChatWrapper({
   roomInfo,
   initialMessages,
   initialModelType,
-  initialSelectedOption
+  initialSelectedOption,
+  userData,
+  sidebarData
 }: RoomChatWrapperProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -134,6 +138,8 @@ export default function RoomChatWrapper({
           initialModelType={initialModelType}
           initialSelectedOption={initialSelectedOption}
           roomContext={roomContext}
+          userData={userData}
+          sidebarData={sidebarData}
         />
       </div>
     </div>

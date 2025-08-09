@@ -45,20 +45,20 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
   return (
     <>
       {/* Desktop navigation */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border h-12 hidden md:flex shadow-sm w-full md:w-[calc(100%-240px)] lg:w-[calc(100%-280px)] m-auto">
-        <div className="flex items-center w-full h-full px-8 mx-auto">
-          <div className="flex items-center mr-8">
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border h-12 hidden md:flex shadow-sm w-full">
+        <div className="flex items-center justify-between w-full h-full px-4 lg:px-8 max-w-7xl mx-auto">
+          <div className="flex items-center">
             <Link href="/" passHref>
               <Sitemark />
             </Link>
           </div>
 
-          <div className="flex items-center justify-end flex-1">
+          <div className="flex items-center justify-center flex-1">
             {navigationItems.map((item) => (
               <Button
                 key={item.href}
                 variant={isActive(item.href) ? 'secondary' : 'ghost'}
-                className={`font-semibold text-base mx-1 rounded-md ${
+                className={`font-semibold text-sm lg:text-base mx-1 rounded-md ${
                   isActive(item.href)
                     ? 'text-primary font-bold bg-primary/10'
                     : 'text-foreground hover:bg-muted'
@@ -71,13 +71,15 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
                 </Link>
               </Button>
             ))}
+          </div>
 
+          <div className="flex items-center gap-2">
             {isLoggedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="font-semibold text-base mx-1 rounded-md"
+                    className="font-semibold text-sm lg:text-base mx-1 rounded-md"
                   >
                     Profile <ChevronDown className="ml-1 h-4 w-4" />
                   </Button>
@@ -91,7 +93,7 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
             ) : (
               <Button
                 variant={isActive('/signin') ? 'secondary' : 'ghost'}
-                className={`font-semibold text-base mx-1 rounded-md ${
+                className={`font-semibold text-sm lg:text-base mx-1 rounded-md ${
                   isActive('/signin')
                     ? 'text-primary font-bold bg-primary/10'
                     : 'text-foreground'
@@ -113,22 +115,17 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
       </header>
 
       {/* Mobile navigation */}
+      {/* Mobile navigation is removed as per edit hint */}
+
+      {/* Mobile Settings Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="fixed top-4 right-4 z-50 md:hidden bg-background/90 rounded-full"
-            aria-label="Menu"
-          >
-            <Menu className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0">
+        <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0">
           <div className="flex flex-col h-full">
-            <div className="flex justify-between items-center p-6">
+            <div className="flex justify-between items-center p-4 border-b">
               <Link href="/" className="cursor-pointer">
-                <Sitemark />
+                <div className="scale-75 origin-left">
+                  <Sitemark />
+                </div>
               </Link>
               {/* Theme Toggle Button - Mobile */}
               <ModeToggle />
@@ -137,13 +134,13 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
             <Separator />
 
             <nav className="flex-1 overflow-auto">
-              <ul className="py-0 w-full">
+              <ul className="py-2 w-full">
                 {navigationItems.map((item, index) => (
                   <React.Fragment key={item.href}>
                     <li>
                       <Link
                         href={item.href}
-                        className={`flex py-4 px-6 font-semibold text-lg ${
+                        className={`flex py-3 px-4 font-semibold text-base ${
                           isActive(item.href)
                             ? 'bg-muted text-primary'
                             : 'hover:bg-muted/50'
@@ -161,7 +158,7 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
                 {isLoggedIn && (
                   <>
                     <Separator />
-                    <li className="py-4 px-6">
+                    <li className="py-3 px-4">
                       <SignOut />
                     </li>
                   </>
@@ -173,7 +170,7 @@ const Header: React.FC<HeaderProps> = ({ session }) => {
                     <li>
                       <Link
                         href="/signin"
-                        className="flex py-4 px-6 font-semibold text-lg hover:bg-muted/50"
+                        className="flex py-3 px-4 font-semibold text-base hover:bg-muted/50"
                         onClick={() => setSheetOpen(false)}
                         prefetch={false}
                       >

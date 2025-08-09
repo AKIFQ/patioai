@@ -9,6 +9,7 @@ import { unstable_noStore as noStore } from 'next/cache';
 
 interface PageProps {
   searchParams: Promise<Record<string, string>>;
+  sidebarData?: any;
 }
 
 export default async function ChatPage(props: PageProps) {
@@ -22,6 +23,9 @@ export default async function ChatPage(props: PageProps) {
   // Use a timestamp-based approach to ensure stability during the same session
   const createChatId = uuidv4();
 
+  // Get user data for mobile sidebar
+  const userData = await getUserInfo();
+
   return (
     <div className="flex w-full h-full overflow-hidden">
       <div className="flex-1">
@@ -30,6 +34,8 @@ export default async function ChatPage(props: PageProps) {
           chatId={createChatId}
           initialModelType={modelType}
           initialSelectedOption={selectedOption}
+          userData={userData}
+          sidebarData={props.sidebarData}
         />
       </div>
       {searchParams.url ? (

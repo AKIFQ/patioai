@@ -245,8 +245,8 @@ export default async function Layout(props: { children: React.ReactNode }) {
   const userData = await fetchUserData();
 
   return (
-    <div className="h-screen bg-background" data-chat-page>
-      <SidebarProvider className="h-full flex">
+    <div className="h-screen w-full bg-background overflow-hidden" data-chat-page>
+      <SidebarProvider className="h-full w-full flex">
         <SidebarSocketWrapper
           userId={userData?.id || ''}
           userRooms={(userData?.rooms || []).map(room => ({
@@ -266,13 +266,29 @@ export default async function Layout(props: { children: React.ReactNode }) {
             rooms={userData?.rooms || []}
             roomChatsData={userData?.roomChatsData || []}
           />
-          <main className="flex-1 overflow-hidden">
+          <main className="flex-1 w-full min-w-0 overflow-hidden md:ml-0">
             <UploadProvider userId={userData?.id || ''}>
-              {props.children}
+              {React.cloneElement(props.children as React.ReactElement, {
+                sidebarData: {
+                  userInfo: {
+                    id: userData?.id || '',
+                    full_name: userData?.full_name || '',
+                    email: userData?.email || ''
+                  },
+                  initialChatPreviews: userData?.allChatPreviews || [],
+                  categorizedChats: categorizeChats(userData?.allChatPreviews || []),
+                  documents: userData?.documents || [],
+                  rooms: userData?.rooms || [],
+                  roomChatsData: userData?.roomChatsData || []
+                }
+              })}
             </UploadProvider>
           </main>
         </SidebarSocketWrapper>
       </SidebarProvider>
+      
+      {/* Mobile Sidebar - Rendered separately for mobile control */}
+      {/* The MobileSidebar component is now rendered directly in the Chat component */}
     </div>
   );
 }

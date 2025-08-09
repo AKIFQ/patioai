@@ -6,6 +6,7 @@ import { getSession } from '@/lib/server/supabase';
 import NavBar from '@/app/components/ui/Navbar/TopBar';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
+import { MobileSidebarProvider } from '@/app/chat/components/chat_history/ChatHistorySidebar';
 
 import './globals.css';
 
@@ -15,6 +16,7 @@ const inter = Inter({
   adjustFontFallback: false,
   variable: '--font-Inter'
 });
+
 export const metadata: Metadata = {
   metadataBase: new URL('http://localhost:3000/'),
   title: {
@@ -26,6 +28,12 @@ export const metadata: Metadata = {
   authors: [{ name: 'PatioAI' }],
   creator: 'PatioAI',
   publisher: 'PatioAI',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
@@ -75,19 +83,24 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+      </head>
+      <body className={`${inter.className} min-h-screen w-full overflow-x-hidden`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          {/* We pass the promise here and resolve it with react.use in the child to prevent the async request from blocking the UI */}
-          <NavBar session={getSession()} />
-          <main>{children}</main>
-          <Toaster />
-          {modal}
-          <Footer />
+          <MobileSidebarProvider>
+            {/* We pass the promise here and resolve it with react.use in the child to prevent the async request from blocking the UI */}
+            <NavBar session={getSession()} />
+            <main className="w-full min-w-0">{children}</main>
+            <Toaster />
+            {modal}
+            <Footer />
+          </MobileSidebarProvider>
         </ThemeProvider>
       </body>
     </html>

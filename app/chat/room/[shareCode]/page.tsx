@@ -63,6 +63,7 @@ async function ensureUserInRoom(shareCode: string, displayName: string, userId?:
 export default async function RoomChatPage(props: {
     params: Promise<{ shareCode: string }>;
     searchParams: Promise<{ displayName?: string; sessionId?: string; threadId?: string; loadHistory?: string; chatSession?: string }>;
+    sidebarData?: any;
 }) {
     const params = await props.params;
     const searchParams = await props.searchParams;
@@ -141,6 +142,8 @@ export default async function RoomChatPage(props: {
             initialMessages={roomMessages}
             initialModelType={modelType}
             initialSelectedOption={selectedOption}
+            userData={userInfo}
+            sidebarData={props.sidebarData}
         />
     );
 }
