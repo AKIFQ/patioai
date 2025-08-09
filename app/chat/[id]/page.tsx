@@ -21,6 +21,9 @@ export default async function ChatPage(props: {
   const selectedOption =
     cookieStore.get('selectedOption')?.value ?? 'gpt-3.5-turbo-1106';
 
+  // Get user data for mobile sidebar
+  const userData = await getUserInfo();
+
   let formattedMessages = undefined;
   let attachmentUrl = undefined;
 
@@ -55,6 +58,7 @@ export default async function ChatPage(props: {
           chatId={id}
           initialModelType={modelType}
           initialSelectedOption={selectedOption}
+          userData={userData}
         />
       </div>
       {attachmentUrl ? (
