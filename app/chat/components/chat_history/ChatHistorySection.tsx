@@ -1,23 +1,14 @@
-import React, { type FC, useState, startTransition } from 'react';
-import { deleteChatData, updateChatTitle } from '../../actions';
-import { useRouter } from 'next/navigation';
-import { MoreHorizontal, Share, Edit, Trash, Users } from 'lucide-react';
+import React, { FC, useState, useCallback, useTransition } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { MoreHorizontal, Trash, Edit, ExternalLink, Share, Users } from 'lucide-react';
+import { deleteChatData, updateChatTitle } from '../../actions';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -27,7 +18,6 @@ import {
   SidebarMenuButton,
   SidebarMenuAction
 } from '@/components/ui/sidebar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ChatPreview {
   id: string;
@@ -38,23 +28,126 @@ interface ChatPreview {
   shareCode?: string;
 }
 
-interface CategorizedChats {
-  today: ChatPreview[];
-  yesterday: ChatPreview[];
-  last7Days: ChatPreview[];
-  last30Days: ChatPreview[];
-  last2Months: ChatPreview[];
-  older: ChatPreview[];
-}
-
 interface ChatHistorySectionProps {
   initialChatPreviews: ChatPreview[];
-  categorizedChats: CategorizedChats;
-  currentChatId: string | undefined;
+  categorizedChats: {
+    today: ChatPreview[];
+    yesterday: ChatPreview[];
+    last7Days: ChatPreview[];
+    last30Days: ChatPreview[];
+    last2Months: ChatPreview[];
+    older: ChatPreview[];
+  };
+  currentChatId?: string;
   searchParams: URLSearchParams;
   onChatSelect: () => void;
   mutateChatPreviews: () => Promise<any>;
 }
+
+// Mobile swipe-to-delete component
+const SwipeableChat: FC<{
+  chat: ChatPreview;
+  currentChatId?: string;
+  searchParams: URLSearchParams;
+  onChatSelect: () => void;
+  onDelete: (chatId: string) => void;
+  children: React.ReactNode;
+}> = ({ chat, currentChatId, searchParams, onChatSelect, onDelete, children }) => {
+  const [swipeX, setSwipeX] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
+    setIsDragging(false);
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+    
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStart.x;
+    const deltaY = Math.abs(touch.clientY - touchStart.y);
+    
+    // Only allow horizontal swipe if it's primarily horizontal movement
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > deltaY) {
+      setIsDragging(true);
+      e.preventDefault(); // Prevent scrolling
+      
+      // Only allow left swipe (negative deltaX) and limit to -80px
+      const swipeDistance = Math.max(Math.min(deltaX, 0), -80);
+      setSwipeX(swipeDistance);
+    }
+  };
+  
+  const handleTouchEnd = () => {
+    setTouchStart(null);
+    
+    if (swipeX < -40) {
+      // Show delete button
+      setSwipeX(-80);
+    } else {
+      // Snap back
+      setSwipeX(0);
+    }
+    
+    setTimeout(() => setIsDragging(false), 100);
+  };
+  
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await onDelete(chat.id);
+      // Slide out animation before removal
+      setSwipeX(-300);
+      setTimeout(() => {
+        setIsDeleting(false);
+      }, 300);
+    } catch (error) {
+      setIsDeleting(false);
+      setSwipeX(0);
+    }
+  };
+  
+  return (
+    <div className="relative overflow-hidden">
+      {/* Delete button background */}
+      <div 
+        className="absolute right-0 top-0 bottom-0 w-20 bg-red-500 flex items-center justify-center transition-all duration-200"
+        style={{
+          transform: `translateX(${swipeX < -40 ? '0px' : '20px'})`,
+          opacity: swipeX < -40 ? 1 : 0
+        }}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="text-white hover:text-white hover:bg-red-600 h-full w-full"
+        >
+          <Trash className="h-4 w-4" />
+        </Button>
+      </div>
+      
+      {/* Chat item */}
+      <div
+        className="transition-transform duration-200 ease-out bg-background"
+        style={{
+          transform: `translateX(${swipeX}px)`,
+          opacity: isDeleting ? 0 : 1
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
 
 const ChatHistorySection: FC<ChatHistorySectionProps> = ({
   initialChatPreviews,
@@ -64,47 +157,54 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
   onChatSelect,
   mutateChatPreviews
 }) => {
+  const isMobile = useIsMobile();
+  const [isPending, startTransition] = useTransition();
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingChatId, setEditingChatId] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState('');
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [chatToRename, setChatToRename] = useState<{ id: string; currentName: string } | null>(null);
+  const [newChatName, setNewChatName] = useState('');
 
-  const router = useRouter();
-
-  const handleDeleteClick = (id: string) => {
-    setChatToDelete(id);
-    setDeleteConfirmationOpen(true);
-  };
+  const handleDeleteClick = useCallback((chatId: string) => {
+    if (isMobile) {
+      // On mobile, direct delete after swipe gesture
+      handleDeleteConfirmation(chatId);
+    } else {
+      // On desktop, show confirmation dialog
+      setChatToDelete(chatId);
+      setDeleteConfirmationOpen(true);
+    }
+  }, []);
 
   const handleOpenRename = (chatId: string) => {
-    setEditingChatId(chatId);
-    const chat = initialChatPreviews.find((chat) => chat.id === chatId);
-    if (chat) setNewTitle(chat.firstMessage);
-    setEditDialogOpen(true);
+    setChatToRename({ id: chatId, currentName: '' }); // Placeholder, will be updated with actual name
+    setNewChatName('');
+    setRenameDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
-    setEditDialogOpen(false);
-    setEditingChatId(null);
-    setNewTitle('');
+    setRenameDialogOpen(false);
+    setChatToRename(null);
+    setNewChatName('');
   };
 
-  const handleDeleteConfirmation = async () => {
-    if (chatToDelete) {
-      try {
-        await deleteChatData(chatToDelete);
-        await mutateChatPreviews();
+  const handleDeleteConfirmation = async (chatId?: string) => {
+    const idToDelete = chatId || chatToDelete;
+    if (!idToDelete) return;
 
-        if (chatToDelete === currentChatId) {
-          router.push('/chat');
-        }
+    startTransition(async () => {
+      try {
+        await deleteChatData(idToDelete);
+        await mutateChatPreviews();
+        toast.success('Chat deleted successfully');
       } catch (error) {
-        console.error('Failed to delete the chat:', error);
+        console.error('Failed to delete chat:', error);
+        toast.error('Failed to delete chat');
+      } finally {
+        setDeleteConfirmationOpen(false);
+        setChatToDelete(null);
       }
-    }
-    setDeleteConfirmationOpen(false);
-    setChatToDelete(null);
+    });
   };
 
   return (
@@ -184,7 +284,7 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirmation}>
+            <Button variant="destructive" onClick={() => chatToDelete && handleDeleteConfirmation(chatToDelete)}>
               Delete
             </Button>
           </DialogFooter>
@@ -192,7 +292,7 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
       </Dialog>
 
       <Dialog
-        open={editDialogOpen}
+        open={renameDialogOpen}
         onOpenChange={(open) => !open && handleCloseDialog()}
       >
         <DialogContent className="p-3 max-w-[90vw] sm:max-w-[350px]">
@@ -210,7 +310,7 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
               handleCloseDialog();
             }}
           >
-            <input type="hidden" name="chatId" value={editingChatId || ''} />
+            <input type="hidden" name="chatId" value={chatToRename?.id || ''} />
 
             <div className="space-y-2 py-2">
               <Input
@@ -219,8 +319,8 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
                 placeholder="New title"
                 type="text"
                 required
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
+                value={newChatName}
+                onChange={(e) => setNewChatName(e.target.value)}
                 className="w-full"
               />
             </div>
@@ -263,6 +363,8 @@ const RenderChatSectionWithSidebar: FC<RenderChatSectionProps> = ({
   onChatSelect,
   searchParams
 }) => {
+  const isMobile = useIsMobile();
+  
   if (chats.length === 0) return null;
 
   return (
@@ -278,8 +380,8 @@ const RenderChatSectionWithSidebar: FC<RenderChatSectionProps> = ({
               ? `/room/${shareCode}`
               : `/chat/${id}${currentParams.toString() ? '?' + currentParams.toString() : ''}`;
 
-            return (
-              <SidebarMenuItem key={id}>
+            const chatContent = (
+              <>
                 <SidebarMenuButton
                   asChild
                   isActive={type !== 'room' && currentChatId === id}
@@ -302,7 +404,7 @@ const RenderChatSectionWithSidebar: FC<RenderChatSectionProps> = ({
                   </a>
                 </SidebarMenuButton>
 
-                {type !== 'room' && (
+                {type !== 'room' && !isMobile && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <SidebarMenuAction>
@@ -333,6 +435,24 @@ const RenderChatSectionWithSidebar: FC<RenderChatSectionProps> = ({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                )}
+              </>
+            );
+
+            return (
+              <SidebarMenuItem key={id}>
+                {isMobile && type !== 'room' ? (
+                  <SwipeableChat
+                    chat={{ id, firstMessage, created_at: '', type, roomName, shareCode }}
+                    currentChatId={currentChatId}
+                    searchParams={searchParams}
+                    onChatSelect={onChatSelect}
+                    onDelete={handleDeleteClick}
+                  >
+                    {chatContent}
+                  </SwipeableChat>
+                ) : (
+                  chatContent
                 )}
               </SidebarMenuItem>
             );
