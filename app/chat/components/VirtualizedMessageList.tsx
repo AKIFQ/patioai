@@ -118,11 +118,11 @@ const VirtualizedMessageList = memo(({
     return (
       <div 
         ref={scrollRef}
-        className="w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 py-2 overflow-y-auto"
+        className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 overflow-y-auto"
         style={{ height }}
         data-chat-container
       >
-        <ul className="w-full min-w-0">
+        <ul className="w-full min-w-0 space-y-1">
           {messages.map((message, index) => {
             // For room chats, check if the message is from the current user by comparing sender names
             // For regular chats, fall back to role-based check
@@ -157,7 +157,7 @@ const VirtualizedMessageList = memo(({
   }
 
   return (
-    <div className="w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 py-2 relative" data-chat-container>
+    <div className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 relative" data-chat-container>
       <List
         ref={listRef}
         height={height}

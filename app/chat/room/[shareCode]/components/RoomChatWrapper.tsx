@@ -41,8 +41,9 @@ export default function RoomChatWrapper({
   userData,
   sidebarData
 }: RoomChatWrapperProps) {
-  const router = useRouter();
+  
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [isInitialized, setIsInitialized] = useState(false);
   const [roomContext, setRoomContext] = useState<RoomContext | null>(null);
 

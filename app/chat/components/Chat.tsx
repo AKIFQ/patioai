@@ -764,10 +764,10 @@ const ChatComponent: React.FC<ChatProps> = ({
       </div>
 
       {/* Scrollable Chat Content */}
-      <div className="flex-1 w-full min-w-0">
+      <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
         {/* Use realtime messages for room chats, regular messages for individual chats */}
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
-          <div className="flex flex-col justify-center items-center min-h-full text-center px-2 sm:px-4">
+          <div className="flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4">
             {roomContext ? (
               <h2 className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
                 Welcome to {roomContext.roomName} — let's collaborate!
@@ -779,10 +779,10 @@ const ChatComponent: React.FC<ChatProps> = ({
             )}
           </div>
         ) : (
-          <div className="w-full h-full min-w-0">
+          <div className="flex-1 w-full min-w-0 overflow-hidden">
             <VirtualizedMessageList
               messages={roomContext ? realtimeMessages : messages}
-              height={viewportHeight - 200} // Account for header and input area
+              height={viewportHeight - 160} // More accurate height calculation
               itemHeight={80}
               currentUserDisplayName={roomContext?.displayName}
               showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
@@ -1035,7 +1035,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         )}
       </div>
 
-      <div className="sticky bottom-0 mt-auto w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4">
+      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4">
         {/*Separate message input component, to avoid re-rendering the chat messages when typing */}
         <MessageInput
           chatId={chatId}
