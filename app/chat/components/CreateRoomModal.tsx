@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Copy, Check, Users, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { useEffect } from 'react';
 
 interface Room {
   id: string;
@@ -36,6 +37,15 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
   const [isCreating, setIsCreating] = useState(false);
   const [createdRoom, setCreatedRoom] = useState<{ room: Room; shareableLink: string } | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const handleCreateRoom = async () => {
     if (!roomName.trim()) {
@@ -107,7 +117,11 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={`sm:max-w-md ${isMobile ? 'top-auto bottom-0 left-1/2 -translate-x-1/2 translate-y-0 w-[96vw] max-w-[360px] h-[88vh] rounded-t-xl overflow-y-auto p-0 gap-0' : ''}`}>
+        {isMobile && (
+          <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-2" />
+        )}
+        <div className={isMobile ? 'px-4 py-3' : ''}>
         {!createdRoom ? (
           <>
             <DialogHeader>
@@ -221,6 +235,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
             </DialogFooter>
           </>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );

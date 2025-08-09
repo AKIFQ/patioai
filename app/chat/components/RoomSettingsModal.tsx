@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -81,7 +82,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
       setIsCopied(true);
       toast.success('Share link copied to clipboard');
       setTimeout(() => setIsCopied(false), 2000);
-    } catch (error) {
+    } catch {
       toast.error('Failed to copy share link');
     }
   };
@@ -102,15 +103,13 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           body: JSON.stringify({ name: newRoomName.trim() })
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to update room name');
-        }
+        if (!response.ok) throw new Error('Failed to update room name');
 
         toast.success('Room name updated successfully');
         setEditingName(false);
         onRoomUpdate?.();
         router.refresh();
-      } catch (error) {
+      } catch {
         toast.error('Failed to update room name');
         setNewRoomName(roomContext.roomName);
       }
@@ -128,14 +127,12 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           body: JSON.stringify({ sessionId })
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to remove user');
-        }
+        if (!response.ok) throw new Error('Failed to remove user');
 
         toast.success(`${displayName} removed from room`);
         onRoomUpdate?.();
         router.refresh();
-      } catch (error) {
+      } catch {
         toast.error('Failed to remove user');
       } finally {
         setRemovingUser(null);
@@ -147,35 +144,244 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const handleDeleteRoom = async () => {
     startTransition(async () => {
       try {
-        const response = await fetch(`/api/rooms/${roomContext.shareCode}`, {
-          method: 'DELETE'
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to delete room');
-        }
-
+        const response = await fetch(`/api/rooms/${roomContext.shareCode}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete room');
         toast.success('Room deleted successfully');
         router.push('/chat');
-      } catch (error) {
+      } catch {
         toast.error('Failed to delete room');
       }
     });
   };
+
+  // Shared header
+  const SettingsHeader = (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center gap-2">
+        <Settings className="h-4 w-4 text-primary" />
+        <span className="text-lg font-semibold">Room Settings</span>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsOpen(false)}
+        className="h-8 w-8 p-0 hover:bg-muted/50"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  // Shared content
+  const SettingsContent = (
+    <div 
+      className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 min-h-0"
+      style={{ WebkitOverflowScrolling: 'touch' }}
+    >
+      <div className="space-y-4">
+        {/* Room Information */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Crown className="h-4 w-4" />
+            Room Information
+          </div>
+
+          {/* Room Name */}
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-muted-foreground">Name</div>
+            {editingName ? (
+              <div className="flex gap-1">
+                <Input
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleUpdateRoomName();
+                    if (e.key === 'Escape') {
+                      setEditingName(false);
+                      setNewRoomName(roomContext.roomName);
+                    }
+                  }}
+                  className="flex-1 h-8 text-sm"
+                  autoFocus
+                />
+                <Button size="sm" onClick={handleUpdateRoomName} className="h-8 px-2">
+                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => {
+                    setEditingName(false);
+                    setNewRoomName(roomContext.roomName);
+                  }}
+                  className="h-8 px-2"
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <div className="flex-1 text-sm font-medium px-2 py-1 bg-muted/30 rounded">
+                  {roomContext.roomName}
+                </div>
+                {isCreator && (
+                  <Button size="sm" variant="outline" onClick={() => setEditingName(true)} className="h-8 px-2">
+                    Edit
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Share Link */}
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-muted-foreground">Share Link</div>
+            <div className="flex gap-1">
+              <div className="flex-1 text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded font-mono break-all">
+                {`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
+              </div>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={handleCopyShareLink}
+                className={`h-8 w-8 p-0 ${isCopied ? 'text-green-600' : ''}`}
+              >
+                {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Room Stats */}
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span><span className="font-medium">Participants:</span> {roomContext.participants.length}/{roomContext.maxParticipants}</span>
+            <span><span className="font-medium">Tier:</span> {roomContext.tier}</span>
+          </div>
+        </div>
+
+        {/* Participants */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Users className="h-4 w-4" />
+            Participants ({roomContext.participants.length})
+          </div>
+          
+          <div className="space-y-2">
+            {roomContext.participants.map((participant, index) => (
+              <div key={index} className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-medium text-xs flex items-center justify-center">
+                    {participant.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium">{participant.displayName}</span>
+                  {participant.displayName === roomContext.createdBy && (
+                    <Crown className="h-3 w-3 text-yellow-500" />
+                  )}
+                </div>
+                {isCreator && participant.displayName !== roomContext.createdBy && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleRemoveUser(participant.sessionId || '', participant.displayName)}
+                    disabled={removingUser === participant.displayName}
+                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                  >
+                    {removingUser === participant.displayName ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <X className="h-3 w-3" />
+                    )}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Danger Zone */}
+        {isCreator && (
+          <div className="space-y-3 pb-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-red-600">
+              <Trash2 className="h-4 w-4" />
+              Danger Zone
+            </div>
+            
+            {!showDeleteConfirm ? (
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full h-9"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Room
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-red-600 font-medium">
+                  Are you sure? This action cannot be undone.
+                </p>
+                <div className="flex gap-1">
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteRoom}
+                    disabled={isPending}
+                    className="flex-1 h-9"
+                  >
+                    {isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 mr-2" />
+                    )}
+                    {isPending ? 'Deleting...' : 'Yes, Delete'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 h-9"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 px-1 hover:bg-muted/50 transition-colors"
+            aria-label="Room settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="bottom" className="h-[88vh] p-0 gap-0 flex flex-col rounded-t-xl">
+          {/* Drag handle */}
+          <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-2 mb-1" />
+          {SettingsHeader}
+          {SettingsContent}
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          size={isMobile ? "sm" : "icon"}
-          className={`${isMobile 
-            ? 'h-8 w-8 px-1 hover:bg-muted/50 transition-colors' 
-            : 'h-7 sm:h-8 w-7 sm:w-8 hover:bg-muted/50 transition-colors flex-shrink-0'
-          }`}
+          size="icon"
+          className="h-7 sm:h-8 w-7 sm:w-8 hover:bg-muted/50 transition-colors flex-shrink-0"
           aria-label="Room settings"
         >
-          <Settings className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3 sm:h-4 sm:w-4'}`} />
+          <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
       </DialogTrigger>
 
@@ -187,201 +393,10 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
         onPointerDownOutside={() => setIsOpen(false)}
         onEscapeKeyDown={() => setIsOpen(false)}
       >
-        {/* Fixed Header */}
         <DialogHeader className="flex-shrink-0 sticky top-0 z-10 bg-background border-b px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Settings className="h-4 w-4 text-primary" />
-              <DialogTitle className="text-lg font-semibold">Room Settings</DialogTitle>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8 p-0 hover:bg-muted/50"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          {SettingsHeader}
         </DialogHeader>
-
-        {/* Scrollable Content */}
-        <div 
-          className={`flex-1 overflow-y-auto overscroll-contain px-4 py-3 ${isMobile ? 'min-h-0' : ''}`}
-          style={{ 
-            WebkitOverflowScrolling: 'touch',
-            scrollBehavior: 'smooth'
-          }}
-        >
-          <div className="space-y-4">
-            {/* Room Information */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Crown className="h-4 w-4" />
-                Room Information
-              </div>
-              
-              {/* Room Name */}
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-muted-foreground">Name</div>
-                {editingName ? (
-                  <div className="flex gap-1">
-                    <Input
-                      value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleUpdateRoomName();
-                        if (e.key === 'Escape') {
-                          setEditingName(false);
-                          setNewRoomName(roomContext.roomName);
-                        }
-                      }}
-                      className="flex-1 h-8 text-sm"
-                      autoFocus
-                    />
-                    <Button size="sm" onClick={handleUpdateRoomName} className="h-8 px-2">
-                      {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingName(false);
-                        setNewRoomName(roomContext.roomName);
-                      }}
-                      className="h-8 px-2"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <div className="flex-1 text-sm font-medium px-2 py-1 bg-muted/30 rounded">
-                      {roomContext.roomName}
-                    </div>
-                    {isCreator && (
-                      <Button size="sm" variant="outline" onClick={() => setEditingName(true)} className="h-8 px-2">
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Share Link */}
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-muted-foreground">Share Link</div>
-                <div className="flex gap-1">
-                  <div className="flex-1 text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded font-mono break-all">
-                    {`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
-                  </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={handleCopyShareLink}
-                    className={`h-8 w-8 p-0 ${isCopied ? 'text-green-600' : ''}`}
-                  >
-                    {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Room Stats */}
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span><span className="font-medium">Participants:</span> {roomContext.participants.length}/{roomContext.maxParticipants}</span>
-                <span><span className="font-medium">Tier:</span> {roomContext.tier}</span>
-              </div>
-            </div>
-
-            {/* Participants */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Users className="h-4 w-4" />
-                Participants ({roomContext.participants.length})
-              </div>
-              
-              <div className="space-y-2">
-                {roomContext.participants.map((participant, index) => (
-                  <div key={index} className="flex items-center justify-between py-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-medium text-xs flex items-center justify-center">
-                        {participant.displayName.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium">{participant.displayName}</span>
-                      {participant.displayName === roomContext.createdBy && (
-                        <Crown className="h-3 w-3 text-yellow-500" />
-                      )}
-                    </div>
-                    {isCreator && participant.displayName !== roomContext.createdBy && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRemoveUser(participant.sessionId || '', participant.displayName)}
-                        disabled={removingUser === participant.displayName}
-                        className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                      >
-                        {removingUser === participant.displayName ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <X className="h-3 w-3" />
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Danger Zone */}
-            {isCreator && (
-              <div className="space-y-3 pb-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-red-600">
-                  <Trash2 className="h-4 w-4" />
-                  Danger Zone
-                </div>
-                
-                {!showDeleteConfirm ? (
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full h-9"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Room
-                  </Button>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm text-red-600 font-medium">
-                      Are you sure? This action cannot be undone.
-                    </p>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="destructive"
-                        onClick={handleDeleteRoom}
-                        disabled={isPending}
-                        className="flex-1 h-9"
-                      >
-                        {isPending ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 mr-2" />
-                        )}
-                        {isPending ? 'Deleting...' : 'Yes, Delete'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowDeleteConfirm(false)}
-                        className="flex-1 h-9"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        {SettingsContent}
       </DialogContent>
     </Dialog>
   );

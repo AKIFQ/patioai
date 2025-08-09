@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,6 +25,15 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
   const [roomLink, setRoomLink] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const router = useRouter();
+
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const extractShareCodeFromLink = (link: string): string | null => {
     try {
@@ -126,81 +135,84 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Join Room</DialogTitle>
-          <DialogDescription>
-            Enter a room link or share code to join an existing chat room.
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="roomLink" className="text-sm font-medium">
-              <span className="hidden sm:inline">Room Link or Share Code</span>
-              <span className="sm:hidden">Room Link</span>
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="roomLink"
-                placeholder="e.g., A1B2C3D4E5F6 or https://yourapp.com/room/123456789ABC"
-                value={roomLink}
-                onChange={(e) => setRoomLink(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !isJoining) {
-                    handleJoinRoom();
-                  }
-                }}
-                className="font-mono text-sm h-9"
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handlePaste}
-                className="shrink-0 h-9 hover:bg-muted/70 transition-colors"
-              >
-                Paste
-              </Button>
+      <DialogContent className={`sm:max-w-md ${isMobile ? 'top-auto bottom-0 left-1/2 -translate-x-1/2 translate-y-0 w-[96vw] max-w-[360px] h-[88vh] rounded-t-xl overflow-y-auto p-0 gap-0' : ''}`}>
+        {isMobile && <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-2" />}
+        <div className={isMobile ? 'px-4 py-3' : ''}>
+          <DialogHeader>
+            <DialogTitle>Join Room</DialogTitle>
+            <DialogDescription>
+              Enter a room link or share code to join an existing chat room.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="roomLink" className="text-sm font-medium">
+                <span className="hidden sm:inline">Room Link or Share Code</span>
+                <span className="sm:hidden">Room Link</span>
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="roomLink"
+                  placeholder="e.g., A1B2C3D4E5F6 or https://yourapp.com/room/123456789ABC"
+                  value={roomLink}
+                  onChange={(e) => setRoomLink(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isJoining) {
+                      handleJoinRoom();
+                    }
+                  }}
+                  className="font-mono text-sm h-9"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePaste}
+                  className="shrink-0 h-9 hover:bg-muted/70 transition-colors"
+                >
+                  Paste
+                </Button>
+              </div>
+              
+              {/* Show extracted share code preview */}
+              {roomLink.trim() && (
+                <div className="text-xs text-muted-foreground/80">
+                  {extractShareCodeFromLink(roomLink) ? (
+                    <span className="text-green-600 font-medium">
+                      ✓ Share code: {extractShareCodeFromLink(roomLink)}
+                    </span>
+                  ) : (
+                    <span className="text-red-600 font-medium">
+                      ✗ Invalid format - please check the link
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             
-            {/* Show extracted share code preview */}
-            {roomLink.trim() && (
-              <div className="text-xs text-muted-foreground/80">
-                {extractShareCodeFromLink(roomLink) ? (
-                  <span className="text-green-600 font-medium">
-                    ✓ Share code: {extractShareCodeFromLink(roomLink)}
-                  </span>
-                ) : (
-                  <span className="text-red-600 font-medium">
-                    ✗ Invalid format - please check the link
-                  </span>
-                )}
+            <div className="bg-muted/30 p-3 rounded-lg space-y-2 border border-border/40">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
+                <ExternalLink className="h-4 w-4" />
+                <span className="hidden sm:inline">You can paste the full room link or just the share code</span>
+                <span className="sm:hidden">Paste full link or share code</span>
               </div>
-            )}
-          </div>
-          
-          <div className="bg-muted/30 p-3 rounded-lg space-y-2 border border-border/40">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
-              <ExternalLink className="h-4 w-4" />
-              <span className="hidden sm:inline">You can paste the full room link or just the share code</span>
-              <span className="sm:hidden">Paste full link or share code</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">You'll be asked for a display name when joining</span>
-              <span className="sm:hidden">Display name required</span>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">You'll be asked for a display name when joining</span>
+                <span className="sm:hidden">Display name required</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleJoinRoom} disabled={isJoining || !roomLink.trim()}>
-            {isJoining ? 'Joining...' : 'Join Room'}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleJoinRoom} disabled={isJoining || !roomLink.trim()}>
+              {isJoining ? 'Joining...' : 'Join Room'}
+            </Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

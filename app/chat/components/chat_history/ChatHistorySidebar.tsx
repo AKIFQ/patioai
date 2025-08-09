@@ -499,16 +499,6 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   return (
     <>
       {mobileOverlay}
-      <CreateRoomModal
-        isOpen={isCreateGroupModalOpen}
-        onClose={() => setIsCreateGroupModalOpen(false)}
-        onRoomCreated={handleRoomCreated}
-      />
-
-      <JoinRoomModal
-        isOpen={isJoinRoomModalOpen}
-        onClose={() => setIsJoinRoomModalOpen(false)}
-      />
       <Sidebar
         collapsible="none"
         className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${isMobile ? (isMobileSidebarOpen ? 'fixed left-0 top-0 bottom-0 w-[280px] z-[101]' : 'hidden') : ''}`}
@@ -557,7 +547,9 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           {/* Room Action Buttons - Compact */}
           <div className="flex gap-1 sm:gap-2 ml-1 sm:ml-2">
             <Button
-              onClick={() => setIsCreateGroupModalOpen(true)}
+              onClick={() => {
+                setIsCreateGroupModalOpen(true);
+              }}
               className="flex-1 h-7 text-xs font-medium"
               size="sm"
               variant="ghost"
@@ -566,7 +558,9 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               New
             </Button>
             <Button
-              onClick={() => setIsJoinRoomModalOpen(true)}
+              onClick={() => {
+                setIsJoinRoomModalOpen(true);
+              }}
               className="flex-1 h-7 text-xs font-medium"
               size="sm"
               variant="outline"
@@ -599,7 +593,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               </div>
             ) : (
               <div className="space-y-1">
-                {currentRooms.map((room) => (
+                {currentRooms.map((room: any) => (
                   <Link
                     key={room.id}
                     href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
@@ -629,35 +623,77 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           </div>
         </div>
 
-        {/* Chat History - Clean bottom section */}
-        <div className="h-[40%] flex flex-col">
-          <div className="px-3 sm:px-4 py-1.5 border-b border-border bg-muted/20">
-            <h3 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide ml-1 sm:ml-2">
-              {currentRoomShareCode ? 'Room Threads' : 'Recent Chats'}
-            </h3>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {currentRoomShareCode ? (
-              <div className="px-3 sm:px-4 py-2">
-                {processedThreads.length === 0 ? (
-                  <div className="text-center py-4 sm:py-6">
-                    <p className="text-sm text-muted-foreground/80">No chat threads yet</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Start a new conversation!</p>
+        {/* Room Threads Section - Scrollable threads for the active room */}
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-2">
+          {/* Switch between Room Threads and Personal Chat History */}
+          {currentRoomShareCode ? (
+            <div>
+              <div className="mb-2">
+                <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
+                  Room Threads
+                </h4>
+              </div>
+              {processedThreads.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground/80">No chat threads yet</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Start a new conversation!</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {processedThreads.map((thread: any) => (
+                    <Link
+                      key={thread.id}
+                      href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                      onClick={handleChatSelect}
+                      className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
+                    >
+                      <div className="text-xs text-muted-foreground/70 mb-1">
+                        {new Date(thread.created_at).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric'
+                        })} {thread.roomName && `• ${thread.roomName}`}
+                      </div>
+                      <div className="text-sm text-foreground font-medium truncate">
+                        {thread.firstMessage}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              {/* Personal Chats */}
+              <ChatHistorySection
+                initialChatPreviews={initialChatPreviews}
+                categorizedChats={categorizedChats}
+                currentChatId={currentChatId}
+                searchParams={searchParams}
+                onChatSelect={handleChatSelect}
+                mutateChatPreviews={async () => { return; }}
+              />
+
+              {/* Room Threads */}
+              {processedThreads.length > 0 && (
+                <>
+                  <div className="mt-4 mb-2">
+                    <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
+                      Room Threads
+                    </h4>
                   </div>
-                ) : (
                   <div className="space-y-1">
                     {processedThreads.map((thread: any) => (
                       <Link
                         key={thread.id}
-                        href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                        href={`/chat/room/${thread.roomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
                         onClick={handleChatSelect}
-                        className="block p-2 sm:p-2.5 rounded-lg hover:bg-muted/60 transition-colors"
+                        className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                       >
                         <div className="text-xs text-muted-foreground/70 mb-1">
                           {new Date(thread.created_at).toLocaleDateString([], {
                             month: 'short',
                             day: 'numeric'
-                          })} {thread.roomName && `• ${thread.roomName}`}
+                          })} • {thread.roomName}
                         </div>
                         <div className="text-sm text-foreground font-medium truncate">
                           {thread.firstMessage}
@@ -665,58 +701,36 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                       </Link>
                     ))}
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="px-3 sm:px-4 py-2">
-                {/* Personal Chats */}
-                <ChatHistorySection
-                  initialChatPreviews={initialChatPreviews}
-                  categorizedChats={categorizedChats}
-                  currentChatId={currentChatId}
-                  searchParams={searchParams}
-                  onChatSelect={handleChatSelect}
-                  mutateChatPreviews={mutateChatPreviews}
-                />
-
-                {/* Room Threads */}
-                {processedThreads.length > 0 && (
-                  <>
-                    <div className="mt-4 mb-1 ml-1 sm:ml-2">
-                      <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
-                        Room Threads
-                      </h4>
-                    </div>
-                    <div className="space-y-1">
-                      {processedThreads.map((thread: any) => (
-                        <Link
-                          key={thread.id}
-                          href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
-                          onClick={handleChatSelect}
-                          className="block p-2 sm:p-2.5 rounded-lg hover:bg-muted/60 transition-colors"
-                        >
-                          <div className="text-xs text-muted-foreground/70 mb-1">
-                            {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], {
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </div>
-                          <div className="text-sm text-foreground font-medium truncate">
-                            {thread.firstMessage}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Settings Footer - Like ChatGPT */}
         <ChatSidebarFooter userInfo={userInfo} />
       </Sidebar>
+
+      {/* Modals outside sidebar so they stay visible when sidebar closes */}
+      <CreateRoomModal
+        isOpen={isCreateGroupModalOpen}
+        onClose={() => {
+          setIsCreateGroupModalOpen(false);
+          if (isMobile) {
+            closeMobileSidebar();
+          }
+        }}
+        onRoomCreated={handleRoomCreated}
+      />
+
+      <JoinRoomModal
+        isOpen={isJoinRoomModalOpen}
+        onClose={() => {
+          setIsJoinRoomModalOpen(false);
+          if (isMobile) {
+            closeMobileSidebar();
+          }
+        }}
+      />
     </>
   );
 };
@@ -1048,7 +1062,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                       currentChatId={currentChatId}
                       searchParams={searchParams}
                       onChatSelect={handleChatSelect}
-                      mutateChatPreviews={() => {}}
+                      mutateChatPreviews={async () => {}}
                     />
 
                     {/* Room Threads */}
