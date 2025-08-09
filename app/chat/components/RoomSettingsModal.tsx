@@ -390,22 +390,22 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     <div key={index} className={`flex items-center justify-between ${isMobile ? 'py-2' : 'py-3'} ${index !== roomContext.participants.length - 1 ? 'border-b border-border/20' : ''}`}>
                       <div className="flex items-center gap-2">
                         <div className={`flex items-center justify-center ${isMobile ? 'w-7 h-7' : 'w-8 h-8'} rounded-full bg-primary/10 text-primary font-semibold ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                          {participant.charAt(0).toUpperCase()}
+                          {participant.displayName.charAt(0).toUpperCase()}
                         </div>
-                        <span className={`${isMobile ? 'text-sm' : ''} font-medium`}>{participant}</span>
-                        {participant === roomContext.createdBy && (
+                        <span className={`${isMobile ? 'text-sm' : ''} font-medium`}>{participant.displayName}</span>
+                        {participant.displayName === roomContext.createdBy && (
                           <Crown className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'} text-yellow-500`} />
                         )}
                       </div>
-                      {isCreator && participant !== roomContext.createdBy && (
+                      {isCreator && participant.displayName !== roomContext.createdBy && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleRemoveUser(roomContext.sessionId || '', participant)}
-                          disabled={removingUser === participant}
+                          onClick={() => handleRemoveUser(participant.sessionId || '', participant.displayName)}
+                          disabled={removingUser === participant.displayName}
                           className={`${isMobile ? 'h-7 w-7 p-0' : ''} text-red-600 hover:text-red-700 hover:bg-red-50`}
                         >
-                          {removingUser === participant ? (
+                          {removingUser === participant.displayName ? (
                             <Loader2 className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'} animate-spin`} />
                           ) : (
                             <X className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'}`} />
