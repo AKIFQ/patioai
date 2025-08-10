@@ -553,8 +553,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           </Button>
 
           {/* ROOMS Header - Compact */}
-          <div className="flex items-center justify-between mb-1 ml-1 sm:ml-2">
-            <h2 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Rooms</h2>
+          <div className="mb-1 border-b border-border/50 pb-2 ml-1 sm:ml-2">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rooms</h2>
           </div>
 
           {/* Room Action Buttons - Compact */}
@@ -677,7 +677,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           {/* Switch between Room Threads and Personal Chat History */}
           {currentRoomShareCode ? (
             <div>
-              <div className="mb-3 border-b border-border/50 pb-2">
+              <div className="mb-1 border-b border-border/50 pb-2">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Room Threads
                 </h4>
@@ -1111,9 +1111,11 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
               {/* Chat History */}
               <div className="px-4 py-2 border-t">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  {currentRoomShareCode ? 'Room Threads' : 'Personal Chat'}
-                </h3>
+                <div className="mb-1 border-b border-border/50 pb-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {currentRoomShareCode ? 'Room Threads' : 'Personal Chat'}
+                  </h3>
+                </div>
                 
                 {currentRoomShareCode ? (
                   <div>
