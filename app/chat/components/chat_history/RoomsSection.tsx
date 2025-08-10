@@ -126,7 +126,7 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
     <SidebarGroup>
       <SidebarGroupLabel>Your Rooms ({rooms.length})</SidebarGroupLabel>
       <SidebarGroupContent>
-        <ScrollArea className="h-[400px]">
+        <ScrollArea className="h-32">
           <SidebarMenu>
             {rooms.map((room) => {
               const isActive = currentRoomShareCode === room.shareCode;
