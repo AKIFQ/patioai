@@ -9,7 +9,7 @@ interface AvatarProps {
   /** Size of the avatar */
   size?: number;
   /** Avatar style - choose the aesthetic that fits your app */
-  style?: 'miniavs' | 'lorelei' | 'personas' | 'micah' | 'adventurer' | 'initials';
+  style?: 'thumbs' | 'miniavs' | 'lorelei' | 'personas' | 'micah' | 'adventurer' | 'shapes' | 'initials';
   /** Custom className */
   className?: string;
   /** Alt text for accessibility */
@@ -23,7 +23,7 @@ interface AvatarProps {
 export function Avatar({ 
   seed, 
   size = 40, 
-  style = 'miniavs', 
+  style = 'thumbs', // Default to thumbs for ultra-minimalist look
   className,
   alt = 'User avatar'
 }: AvatarProps) {
@@ -36,7 +36,7 @@ export function Avatar({
   return (
     <div 
       className={cn(
-        "relative inline-flex items-center justify-center overflow-hidden rounded-full bg-muted",
+        "relative inline-flex items-center justify-center overflow-hidden rounded-full bg-muted/50",
         className
       )}
       style={{ width: size, height: size }}
@@ -46,8 +46,9 @@ export function Avatar({
         alt={alt}
         width={size}
         height={size}
-        className="w-full h-full object-cover"
+        className="w-full h-full"
         loading="lazy"
+        style={{ objectFit: 'contain' }}
       />
     </div>
   );
@@ -110,7 +111,7 @@ export function SmartAvatar({
   user,
   size = 40,
   className,
-  style = 'miniavs'
+  style = 'thumbs' // Default to thumbs for all users
 }: {
   user: {
     email?: string;

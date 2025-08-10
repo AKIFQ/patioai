@@ -38,7 +38,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
             <SmartAvatar 
               user={userInfo} 
               size={32}
-              style="miniavs"
+              style="thumbs"
             />
             <div className="flex flex-col items-start flex-1 min-w-0">
               <span className="text-sm font-medium truncate w-full">
@@ -62,7 +62,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
               <SmartAvatar 
                 user={userInfo} 
                 size={32}
-                style="miniavs"
+                style="thumbs"
               />
               <div className="flex flex-col flex-1 min-w-0">
                 <span className="text-sm font-medium truncate">
