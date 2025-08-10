@@ -30,8 +30,28 @@ export function Avatar({
   // Sanitize the seed to ensure consistent results
   const sanitizedSeed = encodeURIComponent(seed.toLowerCase().trim());
   
-  // Build the Dicebear URL
-  const avatarUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${sanitizedSeed}&size=${size}`;
+  // Build the Dicebear URL with PatioAI brand colors
+  // Using golden/amber tones for shapes with light contrasting backgrounds
+  const shapeColors = [
+    'f59e0b', // Bright amber
+    'fbbf24', // Golden yellow
+    'fcd34d', // Light amber
+    'eab308', // Pure gold
+    'facc15', // Bright gold
+    'fde047'  // Light yellow
+  ];
+  
+  const backgroundColors = [
+    'f8fafc', // Very light blue-gray
+    'f1f5f9', // Light slate
+    'fefefe', // Almost white
+    'f9fafb', // Light gray
+    'f0f9ff', // Very light blue
+    'fffbeb'  // Very light amber
+  ];
+  
+  const colorParams = `&backgroundColor=${backgroundColors.join(',')}&shapeColor=${shapeColors.join(',')}`;
+  const avatarUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${sanitizedSeed}&size=${size}${colorParams}`;
 
   return (
     <div 
