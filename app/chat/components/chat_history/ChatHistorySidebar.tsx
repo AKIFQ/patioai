@@ -713,7 +713,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           ) : (
             <div>
               {/* Personal Chats Header */}
-              <div className="mb-3 border-b border-border/50 pb-2">
+              <div className="mb-1 border-b border-border/50 pb-2">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Personal Chat
                 </h4>
