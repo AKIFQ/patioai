@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Check, X } from 'lucide-react';
 import ForgotPassword from '../ForgotPassword';
 import { GoogleIcon } from '../CustomIcons';
-import { signup } from '../action';
+import { signup } from '@/app/(auth)/action';
 import { useFormStatus } from 'react-dom';
 import { signInWithGoogle } from '@/lib/auth/oauth';
 import Link from 'next/link';

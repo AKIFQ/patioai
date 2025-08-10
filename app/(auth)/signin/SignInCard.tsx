@@ -1,6 +1,5 @@
 'use client';
 import React, { useState, useCallback } from 'react';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -61,7 +60,7 @@ export default function SignInCard() {
         } else {
           localStorage.removeItem('rememberedEmail');
         }
-        router.back();
+        router.push('/chat');
       }
     }
   };
@@ -78,7 +77,7 @@ export default function SignInCard() {
     }
     if (!password.trim()) {
       setPasswordError(true);
-      setPasswordErrorMessage('Error in password');
+      setPasswordErrorMessage('Password is required');
       isValid = false;
     } else {
       setPasswordError(false);
@@ -88,70 +87,75 @@ export default function SignInCard() {
   }, [email, password]);
 
   return (
-    <Card className="flex flex-col self-center w-full sm:w-[450px] p-4 sm:p-6 gap-4 shadow-[0px_5px_15px_rgba(0,0,0,0.05),0px_15px_35px_-5px_rgba(25,28,33,0.05),0px_0px_0px_1px_rgba(0,0,0,0.05)]">
-      <h1 className="text-[clamp(2rem,10vw,2.15rem)] font-bold">Sign In</h1>
+    <div className="w-full max-w-sm bg-background/80 backdrop-blur-md border border-border/40 rounded-lg p-6 space-y-6 shadow-lg">
+      <div className="text-center space-y-2">
+        <h2 className="text-xl font-medium">Welcome back</h2>
+        <p className="text-sm text-muted-foreground/80">Sign in to continue to your chats</p>
+      </div>
 
       <form
         action={handleSubmit}
         noValidate
-        className="flex flex-col w-full gap-4"
+        className="space-y-4"
       >
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            name="email"
-            placeholder="your@email.com"
-            autoComplete="email"
-            required
-            aria-label="email"
-            className={emailError ? 'border-destructive' : ''}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          {emailError && (
-            <p className="text-sm text-destructive">{emailErrorMessage}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Button
-              type="button"
-              variant="link"
-              onClick={handleClickOpen}
-              className="p-0 h-auto"
-            >
-              Forgot your password?
-            </Button>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              name="email"
+              placeholder="Enter your email"
+              autoComplete="email"
+              required
+              className={`h-9 ${emailError ? 'border-destructive' : 'border-border/40'}`}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            {emailError && (
+              <p className="text-xs text-destructive/80">{emailErrorMessage}</p>
+            )}
           </div>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="••••••"
-            autoComplete="current-password"
-            required
-            className={passwordError ? 'border-destructive' : ''}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {passwordError && (
-            <p className="text-sm text-destructive">{passwordErrorMessage}</p>
-          )}
+
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleClickOpen}
+                className="h-auto p-0 text-xs text-muted-foreground/80 hover:text-foreground"
+              >
+                Forgot password?
+              </Button>
+            </div>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              required
+              className={`h-9 ${passwordError ? 'border-destructive' : 'border-border/40'}`}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {passwordError && (
+              <p className="text-xs text-destructive/80">{passwordErrorMessage}</p>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <Checkbox
             id="remember-me"
             checked={rememberMe}
             onCheckedChange={(checked) => setRememberMe(checked === true)}
+            className="h-4 w-4"
           />
           <Label
             htmlFor="remember-me"
-            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            className="text-xs text-muted-foreground/80"
           >
             Remember me
           </Label>
@@ -162,45 +166,48 @@ export default function SignInCard() {
         <SubmitButton />
 
         {alertMessage.type && (
-          <div className="w-full mb-1">
-            <Alert
-              variant={
-                alertMessage.type === 'error' ? 'destructive' : 'default'
-              }
-            >
-              <AlertDescription>{alertMessage.message}</AlertDescription>
-            </Alert>
-          </div>
+          <Alert
+            variant={
+              alertMessage.type === 'error' ? 'destructive' : 'default'
+            }
+            className="py-2"
+          >
+            <AlertDescription className="text-xs">{alertMessage.message}</AlertDescription>
+          </Alert>
         )}
-
-        <Button asChild variant="outline" className="self-center">
-          <Link href="/signup" replace>
-            Don&apos;t have an account? Sign up
-          </Link>
-        </Button>
       </form>
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <Separator className="w-full" />
+          <Separator className="w-full opacity-40" />
         </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or</span>
+        <div className="relative flex justify-center text-xs">
+          <span className="bg-background px-3 text-muted-foreground/60">or</span>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => signInWithGoogle()}
-          className="w-full"
-        >
-          <GoogleIcon />
-          Sign in with Google
-        </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => signInWithGoogle()}
+        className="w-full h-9 gap-2 border-border/40"
+      >
+        <GoogleIcon />
+        <span className="text-sm">Continue with Google</span>
+      </Button>
+
+      <div className="text-center">
+        <span className="text-xs text-muted-foreground/80">
+          Don't have an account?{' '}
+          <Link 
+            href="/signup" 
+            className="font-medium text-foreground hover:text-primary transition-colors"
+          >
+            Sign up
+          </Link>
+        </span>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -208,8 +215,15 @@ function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" className="w-full mb-1" disabled={pending}>
-      {pending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Sign In'}
+    <Button type="submit" className="w-full h-9" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          <span className="text-sm">Signing in...</span>
+        </>
+      ) : (
+        <span className="text-sm font-medium">Sign in</span>
+      )}
     </Button>
   );
 }

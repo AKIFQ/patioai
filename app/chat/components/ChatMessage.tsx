@@ -7,7 +7,12 @@ import { Copy, Check, User, Bot } from 'lucide-react';
 import Image from 'next/image';
 import MemoizedMarkdown from './tools/MemoizedMarkdown';
 import SourceView from './tools/SourceView';
-import RoomReasoningBlock from './RoomReasoningBlock';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion';
 
 // Enhanced message interface for room chats with reasoning support
 interface EnhancedMessage extends Message {
@@ -96,11 +101,23 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
             {/* Reasoning Block - Show at top for AI messages in room chats */}
             {!isUserMessage && isRoomChat && message.role === 'assistant' && message.reasoning && (
               <div className="w-full mb-2">
-                <RoomReasoningBlock
-                  reasoning={message.reasoning}
-                  messageId={message.id}
-                  isStreaming={false} // Room messages are complete when received
-                />
+                <div className="mb-4">
+                  <Accordion type="single" defaultValue="reasoning" collapsible className="w-full">
+                    <AccordionItem value="reasoning" className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg overflow-hidden border border-blue-200 dark:border-blue-800/50 shadow-sm">
+                      <AccordionTrigger className="font-medium text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200 py-2 px-3 cursor-pointer text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                          Reasoning Process
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="bg-blue-50/30 dark:bg-blue-950/10 p-3 text-sm text-foreground/90 overflow-x-auto max-h-[300px] overflow-y-auto border-t border-blue-200/50 dark:border-blue-800/30">
+                        <div className="reasoning-content prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2">
+                          <MemoizedMarkdown content={message.reasoning} id={`room-reasoning-${message.id}`} />
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
               </div>
             )}
 

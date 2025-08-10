@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { ModeToggle } from '@/components/ui/toggleButton';
-import SignOut from '@/app/components/ui/Navbar/SignOut';
+import SignOut from '@/components/layout/SignOut';
 
 interface SidebarFooterProps {
   userInfo: {

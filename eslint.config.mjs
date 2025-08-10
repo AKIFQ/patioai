@@ -10,7 +10,7 @@ const compat = new FlatCompat({
 
 const config = tseslint.config(
   {
-    ignores: ['.next', 'node_modules', '**/*.d.ts', 'components/**/*']
+    ignores: ['.next', 'node_modules', 'dist', '**/*.d.ts', 'components/**/*']
   },
   // Base configs
   js.configs.recommended,
