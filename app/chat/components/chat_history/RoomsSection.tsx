@@ -14,7 +14,7 @@ import {
   SidebarMenuButton
 } from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Users, Crown, Clock, MessageSquare, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Users, Crown, Clock, MessageSquare, Plus, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import { fetchRoomChatSessions } from '../../room/[shareCode]/fetch';
 
 interface RoomChatSession {
@@ -33,66 +33,58 @@ interface RoomPreview {
   maxParticipants: number;
   tier: 'free' | 'pro';
   expiresAt: string;
-  createdAt: string;
-  isCreator: boolean;
+  isCreator?: boolean;
 }
 
 interface RoomsSectionProps {
   rooms: RoomPreview[];
-  onRoomSelect: () => void;
-  userInfo?: {
+  onRoomSelect?: () => void;
+  userInfo: {
     id: string;
-    full_name?: string;
-    email?: string;
+    full_name: string;
+    email: string;
   };
 }
 
 export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSectionProps) {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
-  const currentChatSession = searchParams.get('chatSession');
   
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
   const [roomSessions, setRoomSessions] = useState<Record<string, RoomChatSession[]>>({});
   const [loadingSessions, setLoadingSessions] = useState<Record<string, boolean>>({});
+  
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
 
-  const formatTimeRemaining = (expiresAt: string) => {
-    const now = new Date();
-    const expires = new Date(expiresAt);
-    const diffHours = Math.ceil((expires.getTime() - now.getTime()) / (1000 * 60 * 60));
-    
-    if (diffHours < 24) {
-      return `${diffHours}h`;
-    } else {
-      const diffDays = Math.ceil(diffHours / 24);
-      return `${diffDays}d`;
-    }
-  };
-
-  const toggleRoomExpansion = async (roomShareCode: string) => {
+  const toggleRoomExpansion = async (shareCode: string) => {
     const newExpanded = new Set(expandedRooms);
     
-    if (newExpanded.has(roomShareCode)) {
-      newExpanded.delete(roomShareCode);
+    if (expandedRooms.has(shareCode)) {
+      newExpanded.delete(shareCode);
     } else {
-      newExpanded.add(roomShareCode);
+      newExpanded.add(shareCode);
       
-      // Load chat sessions for this room if not already loaded
-      if (!roomSessions[roomShareCode] && userInfo) {
-        setLoadingSessions(prev => ({ ...prev, [roomShareCode]: true }));
+      // Load chat sessions if not already loaded
+      if (!roomSessions[shareCode] && !loadingSessions[shareCode]) {
+        setLoadingSessions(prev => ({ ...prev, [shareCode]: true }));
         try {
-          const sessions = await fetchRoomChatSessions(roomShareCode, userInfo.id);
-          setRoomSessions(prev => ({ ...prev, [roomShareCode]: sessions }));
+          const sessions = await fetchRoomChatSessions(shareCode);
+          setRoomSessions(prev => ({ ...prev, [shareCode]: sessions }));
         } catch (error) {
-          console.error('Error loading room sessions:', error);
+          console.error('Failed to load room sessions:', error);
+          setRoomSessions(prev => ({ ...prev, [shareCode]: [] }));
         } finally {
-          setLoadingSessions(prev => ({ ...prev, [roomShareCode]: false }));
+          setLoadingSessions(prev => ({ ...prev, [shareCode]: false }));
         }
       }
     }
     
     setExpandedRooms(newExpanded);
+  };
+
+  const handleRoomClick = (e: React.MouseEvent, shareCode: string) => {
+    e.preventDefault();
+    onRoomSelect?.();
   };
 
   const getDisplayName = () => {
@@ -101,6 +93,19 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
 
   const getSessionId = () => {
     return userInfo ? `auth_${userInfo.id}` : '';
+  };
+
+  // Helper function to check if room is expired
+  const isRoomExpired = (expiresAt: string) => {
+    return new Date() > new Date(expiresAt);
+  };
+
+  // Helper function to check if room is expiring soon (within 24 hours)
+  const isRoomExpiringSoon = (expiresAt: string) => {
+    const expiresTime = new Date(expiresAt).getTime();
+    const now = Date.now();
+    const hoursUntilExpiry = (expiresTime - now) / (1000 * 60 * 60);
+    return hoursUntilExpiry > 0 && hoursUntilExpiry < 24;
   };
 
   if (rooms.length === 0) {
@@ -126,133 +131,117 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
             {rooms.map((room) => {
               const isActive = currentRoomShareCode === room.shareCode;
               const isExpanded = expandedRooms.has(room.shareCode);
-              const isExpiringSoon = new Date(room.expiresAt).getTime() - Date.now() < 24 * 60 * 60 * 1000;
+              const isExpired = isRoomExpired(room.expiresAt);
+              const isExpiringSoon = !isExpired && isRoomExpiringSoon(room.expiresAt);
               const sessions = roomSessions[room.shareCode] || [];
               const isLoadingSessions = loadingSessions[room.shareCode];
               
               return (
                 <SidebarMenuItem key={room.id}>
-                  <div className="w-full">
+                  <div className="space-y-1">
                     {/* Room Header */}
-                    <div className="flex items-center gap-1">
+                    <div className={`flex items-center gap-1 ${isExpired ? 'opacity-50' : ''}`}>
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="p-1 h-6 w-6"
                         onClick={() => toggleRoomExpansion(room.shareCode)}
-                        className="p-1 h-6 w-6 flex-shrink-0"
                       >
-                        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                        {isExpanded ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
+                        )}
                       </Button>
                       
-                      <SidebarMenuButton 
-                        asChild 
-                        className={`flex-1 ${isActive && !currentChatSession ? 'bg-accent text-accent-foreground' : ''}`}
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        className={`flex-1 ${isExpired ? 'pointer-events-none' : ''}`}
                       >
-                        <Link 
-                          href={userInfo ? 
-                            `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${crypto.randomUUID()}` :
-                            `/room/${room.shareCode}`
-                          }
-                          onClick={onRoomSelect}
-                          className="flex flex-col items-start gap-1 p-2"
+                        <Link
+                          href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${crypto.randomUUID()}`}
+                          onClick={(e) => {
+                            if (isExpired) {
+                              e.preventDefault();
+                              return;
+                            }
+                            handleRoomClick(e, room.shareCode);
+                          }}
+                          className={`flex items-center gap-2 w-full ${isExpired ? 'line-through decoration-2' : ''}`}
                         >
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {room.isCreator && (
-                                <Crown className="h-3 w-3 text-yellow-500 flex-shrink-0" />
-                              )}
-                              <span className="font-medium text-sm truncate">
-                                {room.name}
-                              </span>
-                            </div>
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs flex items-center gap-1 flex-shrink-0"
-                            >
-                              <Users className="h-2 w-2" />
-                              {room.participantCount}/{room.maxParticipants}
-                            </Badge>
-                          </div>
-                          
-                          <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
-                            <span className="font-mono">{room.shareCode}</span>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
-                                {room.tier}
+                          {isExpired ? (
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                          ) : (
+                            <Users className="h-4 w-4" />
+                          )}
+                          <span className={`truncate ${isExpired ? 'text-muted-foreground' : ''}`}>
+                            {room.name}
+                          </span>
+                          <div className="flex items-center gap-1 ml-auto">
+                            {room.isCreator && (
+                              <Crown className="h-3 w-3 text-amber-500" />
+                            )}
+                            {isExpired && (
+                              <Badge variant="destructive" className="text-xs px-1 py-0">
+                                Expired
                               </Badge>
-                              <div className={`flex items-center gap-1 ${isExpiringSoon ? 'text-orange-500' : ''}`}>
-                                <Clock className="h-2 w-2" />
-                                {formatTimeRemaining(room.expiresAt)}
-                              </div>
-                            </div>
+                            )}
+                            {isExpiringSoon && (
+                              <Badge variant="outline" className="text-xs px-1 py-0 border-amber-300 text-amber-600">
+                                <Clock className="h-2 w-2 mr-1" />
+                                Soon
+                              </Badge>
+                            )}
                           </div>
                         </Link>
                       </SidebarMenuButton>
                     </div>
 
-                    {/* Room Chat Sessions */}
+                    {/* Room Details */}
+                    <div className={`ml-7 text-xs text-muted-foreground flex items-center gap-2 ${isExpired ? 'opacity-50' : ''}`}>
+                      <span>{room.participantCount}/{room.maxParticipants}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {room.tier}
+                      </Badge>
+                    </div>
+
+                    {/* Expanded Sessions */}
                     {isExpanded && (
-                      <div className="ml-4 mt-0.5 space-y-0.5">
-                        {/* New Chat Button */}
-                        <Button
-                          asChild
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start text-xs h-6 py-1"
-                        >
-                          <Link 
-                            href={userInfo ? 
-                              `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${crypto.randomUUID()}` :
-                              `/room/${room.shareCode}`
-                            }
-                            onClick={onRoomSelect}
-                          >
-                            <Plus className="h-2.5 w-2.5 mr-1" />
-                            New Chat
-                          </Link>
-                        </Button>
-
-                        {/* Loading State */}
-                        {isLoadingSessions && (
-                          <div className="text-xs text-muted-foreground px-2 py-1">
-                            Loading chats...
+                      <div className="ml-7 space-y-1">
+                        {isLoadingSessions ? (
+                          <div className="text-xs text-muted-foreground py-2">
+                            Loading sessions...
                           </div>
-                        )}
-
-                        {/* Chat Sessions */}
-                        {sessions.map((session) => {
-                          const isSessionActive = currentChatSession === session.id;
-                          const title = session.chat_title || 'Untitled Chat';
-                          
-                          return (
-                            <Link
+                        ) : sessions.length > 0 ? (
+                          sessions.map((session) => (
+                            <SidebarMenuButton
                               key={session.id}
-                              href={userInfo ? 
-                                `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&chatSession=${session.id}` :
-                                `/room/${room.shareCode}`
-                              }
-                              onClick={onRoomSelect}
-                              className={`block w-full text-left px-2 py-1 rounded text-xs transition-colors border-l-2 ${
-                                isSessionActive 
-                                  ? 'bg-accent text-accent-foreground border-l-accent-foreground' 
-                                  : 'hover:bg-accent/50 border-l-transparent'
-                              }`}
+                              asChild
+                              size="sm"
+                              className={`text-xs ${isExpired ? 'pointer-events-none opacity-50' : ''}`}
                             >
-                              <div className="flex items-center gap-1">
-                                <MessageSquare className="h-2.5 w-2.5 flex-shrink-0" />
-                                <span className="truncate">{title}</span>
-                              </div>
-                              <div className="text-muted-foreground text-xs mt-0.5">
-                                {new Date(session.updated_at).toLocaleDateString()}
-                              </div>
-                            </Link>
-                          );
-                        })}
-
-                        {/* No Sessions Message */}
-                        {!isLoadingSessions && sessions.length === 0 && (
-                          <div className="text-xs text-muted-foreground px-2 py-1">
-                            No chats yet
+                              <Link
+                                href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${session.id}`}
+                                onClick={(e) => {
+                                  if (isExpired) {
+                                    e.preventDefault();
+                                    return;
+                                  }
+                                  handleRoomClick(e, room.shareCode);
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <MessageSquare className="h-3 w-3" />
+                                <span className="truncate">
+                                  {session.chat_title || `Chat with ${session.display_name}`}
+                                </span>
+                              </Link>
+                            </SidebarMenuButton>
+                          ))
+                        ) : (
+                          <div className="text-xs text-muted-foreground py-2">
+                            No conversations yet
                           </div>
                         )}
                       </div>

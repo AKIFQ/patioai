@@ -606,31 +606,65 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               </div>
             ) : (
               <div className="space-y-1">
-                {currentRooms.map((room: any) => (
-                  <Link
-                    key={room.id}
-                    href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
-                    onClick={handleRoomSelect}
-                    className={`block w-full text-left p-2 sm:p-3 rounded-lg transition-colors ${currentRoomShareCode === room.shareCode
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-muted/60'
-                      }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="font-medium text-sm truncate">{room.name}</span>
-                      {room.isCreator && (
-                        <Crown className="h-3 w-3 text-amber-500 ml-auto" />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground/70">
-                      <span>{room.participantCount} online</span>
-                      <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
-                        {room.tier}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+                {currentRooms.map((room: any) => {
+                  const isExpired = new Date() > new Date(room.expiresAt);
+                  const isExpiringSoon = !isExpired && (new Date(room.expiresAt).getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+                  
+                  return (
+                    <Link
+                      key={room.id}
+                      href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
+                      onClick={(e) => {
+                        if (isExpired) {
+                          e.preventDefault();
+                          return;
+                        }
+                        handleRoomSelect();
+                      }}
+                      className={`block w-full text-left p-2 sm:p-3 rounded-lg transition-colors ${
+                        isExpired 
+                          ? 'opacity-50 pointer-events-none' 
+                          : currentRoomShareCode === room.shareCode
+                          ? 'bg-primary/10 text-primary'
+                          : 'hover:bg-muted/60'
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${
+                          isExpired 
+                            ? 'bg-destructive' 
+                            : isExpiringSoon 
+                            ? 'bg-amber-500 animate-pulse' 
+                            : 'bg-emerald-500 animate-pulse'
+                        }`} />
+                        <span className={`font-medium text-sm truncate ${isExpired ? 'line-through text-muted-foreground' : ''}`}>
+                          {room.name}
+                        </span>
+                        <div className="flex items-center gap-1 ml-auto">
+                          {room.isCreator && (
+                            <Crown className="h-3 w-3 text-amber-500" />
+                          )}
+                          {isExpired && (
+                            <span className="px-1.5 py-0.5 bg-destructive/20 text-destructive rounded text-xs font-medium">
+                              Expired
+                            </span>
+                          )}
+                          {isExpiringSoon && (
+                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-600 rounded text-xs font-medium">
+                              Soon
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                        <span>{room.participantCount} online</span>
+                        <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
+                          {room.tier}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1001,31 +1035,65 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {rooms.map((room) => (
-                      <Link
-                        key={room.id}
-                        href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
-                        onClick={handleRoomSelect}
-                        className={`block w-full text-left p-2 rounded-lg transition-colors ${currentRoomShareCode === room.shareCode
-                          ? 'bg-primary/10 text-primary'
-                          : 'hover:bg-muted/60'
-                          }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="font-medium text-sm truncate">{room.name}</span>
-                          {room.isCreator && (
-                            <Crown className="h-3 w-3 text-amber-500 ml-auto" />
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground/70">
-                          <span>{room.participantCount} online</span>
-                          <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
-                            {room.tier}
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
+                    {rooms.map((room) => {
+                      const isExpired = new Date() > new Date(room.expiresAt);
+                      const isExpiringSoon = !isExpired && (new Date(room.expiresAt).getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+                      
+                      return (
+                        <Link
+                          key={room.id}
+                          href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
+                          onClick={(e) => {
+                            if (isExpired) {
+                              e.preventDefault();
+                              return;
+                            }
+                            handleRoomSelect();
+                          }}
+                          className={`block w-full text-left p-2 rounded-lg transition-colors ${
+                            isExpired 
+                              ? 'opacity-50 pointer-events-none' 
+                              : currentRoomShareCode === room.shareCode
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-muted/60'
+                            }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className={`w-2 h-2 rounded-full ${
+                              isExpired 
+                                ? 'bg-destructive' 
+                                : isExpiringSoon 
+                                ? 'bg-amber-500 animate-pulse' 
+                                : 'bg-emerald-500 animate-pulse'
+                            }`} />
+                            <span className={`font-medium text-sm truncate ${isExpired ? 'line-through text-muted-foreground' : ''}`}>
+                              {room.name}
+                            </span>
+                            <div className="flex items-center gap-1 ml-auto">
+                              {room.isCreator && (
+                                <Crown className="h-3 w-3 text-amber-500" />
+                              )}
+                              {isExpired && (
+                                <span className="px-1 py-0.5 bg-destructive/20 text-destructive rounded text-xs font-medium">
+                                  Expired
+                                </span>
+                              )}
+                              {isExpiringSoon && (
+                                <span className="px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-xs font-medium">
+                                  Soon
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                            <span>{room.participantCount} online</span>
+                            <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
+                              {room.tier}
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>
