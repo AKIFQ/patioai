@@ -33,9 +33,7 @@ app.prepare().then(() => {
   // Initialize Socket.IO with production-ready configuration
   const io = new SocketIOServer(server, {
     cors: {
-      origin: dev 
-        ? ["http://localhost:3000", "http://localhost:3001"] 
-        : [config.socketIO.clientUrl],
+      origin: [config.socketIO.clientUrl],
       methods: ["GET", "POST"],
       credentials: true
     },

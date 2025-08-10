@@ -3,6 +3,7 @@ import { AuthenticatedSocket } from '../../types/socket';
 import { createAIResponseHandler, AIResponseHandler } from './aiResponseHandler';
 import { SocketDatabaseService } from '../database/socketQueries';
 import { PerformanceMonitor, measurePerformance } from '../monitoring/performanceMonitor';
+import { SocketMonitor } from '../monitoring/socketMonitor';
 
 export interface SocketHandlers {
   handleConnection: (socket: AuthenticatedSocket) => void;
@@ -20,6 +21,12 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   const handleConnection = (socket: AuthenticatedSocket) => {
     console.log(`Socket connected: ${socket.id} (User: ${socket.userId})`);
     performanceMonitor.updateConnectionMetrics('connect');
+    // Track with SocketMonitor
+    try {
+      SocketMonitor.getInstance().onConnect(socket.userId, socket.id);
+    } catch (e) {
+      console.warn('SocketMonitor onConnect error:', e);
+    }
     
     // Set up event handlers
     handleRoomEvents(socket);
@@ -36,6 +43,12 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   const handleDisconnection = async (socket: AuthenticatedSocket, reason: string) => {
     console.log(`Socket disconnected: ${socket.id} (User: ${socket.userId}) - Reason: ${reason}`);
     performanceMonitor.updateConnectionMetrics('disconnect');
+    // Track with SocketMonitor
+    try {
+      SocketMonitor.getInstance().onDisconnect(socket.userId, socket.id, reason);
+    } catch (e) {
+      console.warn('SocketMonitor onDisconnect error:', e);
+    }
     
     try {
       // Snapshot room names without mutating the socket

@@ -26,6 +26,7 @@ export class SocketMonitor {
   private connectionHistory: ConnectionEvent[] = [];
   private connectionTimes: Map<string, Date> = new Map();
   private io: SocketIOServer | null = null;
+  private readonly MAX_HISTORY = 10000;
 
   private constructor() {
     this.metrics = {
@@ -76,6 +77,9 @@ export class SocketMonitor {
       timestamp: now,
       event: 'connect'
     });
+    if (this.connectionHistory.length > this.MAX_HISTORY) {
+      this.connectionHistory = this.connectionHistory.slice(-this.MAX_HISTORY);
+    }
 
     this.connectionTimes.set(socketId, now);
     this.metrics.totalConnections++;
@@ -108,6 +112,9 @@ export class SocketMonitor {
       reason,
       duration
     });
+    if (this.connectionHistory.length > this.MAX_HISTORY) {
+      this.connectionHistory = this.connectionHistory.slice(-this.MAX_HISTORY);
+    }
 
     this.connectionTimes.delete(socketId);
     this.metrics.activeConnections = Math.max(0, this.metrics.activeConnections - 1);
@@ -282,5 +289,37 @@ export class SocketMonitor {
       health,
       alerts
     };
+  }
+
+  // === Added: Safe cleanup APIs ===
+
+  /**
+   * Trim connection history to last N entries
+   */
+  public trimHistoryTo(limit: number): number {
+    if (limit <= 0) {
+      const removed = this.connectionHistory.length;
+      this.connectionHistory = [];
+      return removed;
+    }
+    if (this.connectionHistory.length <= limit) return 0;
+    const removed = this.connectionHistory.length - limit;
+    this.connectionHistory = this.connectionHistory.slice(-limit);
+    return removed;
+  }
+
+  /**
+   * Remove connection times older than cutoffMs
+   */
+  public removeStaleConnectionTimes(cutoffMs: number): number {
+    const cutoff = Date.now() - cutoffMs;
+    let removed = 0;
+    for (const [socketId, time] of this.connectionTimes.entries()) {
+      if (time.getTime() < cutoff) {
+        this.connectionTimes.delete(socketId);
+        removed++;
+      }
+    }
+    return removed;
   }
 }

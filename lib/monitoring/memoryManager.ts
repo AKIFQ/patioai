@@ -194,22 +194,12 @@ export class MemoryManager {
       const socketMonitor = SocketMonitor.getInstance();
       
       if (aggressive) {
-        // Clear all connection history except last 50 events
-        const history = socketMonitor.getConnectionHistory(50);
-        (socketMonitor as any).connectionHistory = history;
-        
-        // Clear old connection times
-        const cutoff = Date.now() - (10 * 60 * 1000); // 10 minutes
-        for (const [socketId, time] of (socketMonitor as any).connectionTimes.entries()) {
-          if (time.getTime() < cutoff) {
-            (socketMonitor as any).connectionTimes.delete(socketId);
-          }
-        }
+        // Trim history and prune stale connection times via public APIs
+        socketMonitor.trimHistoryTo(50);
+        socketMonitor.removeStaleConnectionTimes(10 * 60 * 1000); // 10 minutes
       } else {
         // Just clean up old data (older than 1 hour)
-        const cutoff = Date.now() - (60 * 60 * 1000);
-        (socketMonitor as any).connectionHistory = (socketMonitor as any).connectionHistory
-          .filter((event: any) => event.timestamp.getTime() >= cutoff);
+        socketMonitor.removeStaleConnectionTimes(60 * 60 * 1000);
       }
     } catch (error) {
       console.error('Error cleaning socket data:', error);
@@ -221,15 +211,12 @@ export class MemoryManager {
       const errorTracker = ErrorTracker.getInstance();
       
       if (aggressive) {
-        // Clear all but last 20 errors
-        (errorTracker as any).errors = (errorTracker as any).errors.slice(-20);
-        (errorTracker as any).errorsByCategory.clear();
-        (errorTracker as any).errorsByLevel.clear();
+        // Use safe APIs instead of touching internals
+        errorTracker.trimErrorsTo(20);
+        errorTracker.clearAggregates();
       } else {
         // Clean up errors older than 1 hour
-        const cutoff = Date.now() - (60 * 60 * 1000);
-        (errorTracker as any).errors = (errorTracker as any).errors
-          .filter((error: any) => error.timestamp.getTime() >= cutoff);
+        errorTracker.removeErrorsOlderThan(60 * 60 * 1000);
       }
     } catch (error) {
       console.error('Error cleaning error data:', error);
@@ -241,9 +228,13 @@ export class MemoryManager {
       const performanceMonitor = PerformanceMonitor.getInstance();
       
       if (aggressive) {
-        // Clear all performance metrics except recent ones
-        (performanceMonitor as any).performanceMetrics = [];
-        (performanceMonitor as any).operationTimes.clear();
+        // Use safe APIs
+        performanceMonitor.clearAllMetrics();
+        performanceMonitor.trimMetricsTo(100); // keep a small tail just in case
+        performanceMonitor.resetOperationMaps();
+      } else {
+        // Moderate cleanup: drop metrics older than 1 hour
+        performanceMonitor.clearOldMetrics(1);
       }
     } catch (error) {
       console.error('Error cleaning performance data:', error);

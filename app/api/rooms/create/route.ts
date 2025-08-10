@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Return room details with shareable link
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000';
     const shareableLink = `${baseUrl}/room/${shareCode}`;
 
     // Emit Socket.IO event for room creation
