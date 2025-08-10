@@ -587,9 +587,6 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         {/* Rooms List - Clean scrollable section */}
         <div className="border-b border-border">
           <div className="px-3 sm:px-4 py-2">
-            <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide mb-2">
-              Rooms
-            </h4>
             {!userInfo.email ? (
               <div className="text-center py-4 sm:py-6 space-y-2 sm:space-y-3">
                 <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
@@ -715,6 +712,13 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             </div>
           ) : (
             <div>
+              {/* Personal Chats Header */}
+              <div className="mb-3 border-b border-border/50 pb-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Personal Chat
+                </h4>
+              </div>
+              
               {/* Personal Chats */}
               <ChatHistorySection
                 initialChatPreviews={initialChatPreviews}
@@ -728,8 +732,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               {/* Room Threads */}
               {processedThreads.length > 0 && (
                 <>
-                  <div className="mt-4 mb-2">
-                    <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
+                  <div className="mt-6 mb-3 border-b border-border/50 pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Room Threads
                     </h4>
                   </div>
@@ -1026,9 +1030,6 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
               {/* Rooms List */}
               <div className="px-4 py-2 border-b border-border">
-                <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide mb-2">
-                  Rooms
-                </h4>
                 {!userInfo.email ? (
                   <div className="text-center py-4 space-y-2">
                     <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
@@ -1110,8 +1111,8 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
               {/* Chat History */}
               <div className="px-4 py-2 border-t">
-                <h3 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide mb-2">
-                  {currentRoomShareCode ? 'Room Threads' : 'Recent Chats'}
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  {currentRoomShareCode ? 'Room Threads' : 'Personal Chat'}
                 </h3>
                 
                 {currentRoomShareCode ? (
