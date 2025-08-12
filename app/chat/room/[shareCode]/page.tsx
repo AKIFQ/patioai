@@ -161,10 +161,12 @@ export default async function RoomChatPage(props: {
             roomMessages = threadMessages.map((msg: any) => ({
                 id: msg.id,
                 role: msg.is_ai_response ? 'assistant' : 'user',
-                content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+                content: msg.content || '',
                 createdAt: new Date(msg.created_at),
                 // Preserve sender information for proper message alignment
-                ...(msg.sender_name && { senderName: msg.sender_name })
+                ...(msg.sender_name && { senderName: msg.sender_name }),
+                ...(msg.reasoning && { reasoning: msg.reasoning }),
+                ...(msg.sources && { sources: typeof msg.sources === 'string' ? JSON.parse(msg.sources) : msg.sources })
             }));
             
             console.log(`Loaded messages for thread ${chatSessionId}:`, roomMessages.length);

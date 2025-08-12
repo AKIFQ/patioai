@@ -26,6 +26,24 @@ const StreamingReasoningUI: React.FC<StreamingReasoningUIProps> = ({
     const scrollRef = useRef<HTMLDivElement>(null);
     const lastTextLength = useRef(0);
 
+    // Persisted expand/collapse per message
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const key = `reasoning-ui:${messageId}:expanded`;
+        const saved = window.localStorage.getItem(key);
+        if (saved === '1') {
+            setIsMinimized(false);
+            setUserExpanded(true);
+            setShouldAutoMinimize(false);
+        } else {
+            // On refresh/initial load, keep minimized by default when not streaming
+            if (!isStreaming && (isComplete || reasoningText.length > 0)) {
+                setIsMinimized(true);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messageId]);
+
     // Auto-scroll to bottom when new reasoning text arrives
     useEffect(() => {
         if (isStreaming && reasoningText.length > lastTextLength.current && scrollRef.current) {
@@ -62,10 +80,15 @@ const StreamingReasoningUI: React.FC<StreamingReasoningUIProps> = ({
     const toggleMinimized = () => {
         const next = !isMinimized;
         setIsMinimized(next);
-        // If user expands, disable auto-minimize for this message
+        const key = `reasoning-ui:${messageId}:expanded`;
         if (!next) {
+            // Expanded
+            window.localStorage.setItem(key, '1');
             setUserExpanded(true);
             setShouldAutoMinimize(false);
+        } else {
+            // Minimized
+            window.localStorage.removeItem(key);
         }
     };
 
