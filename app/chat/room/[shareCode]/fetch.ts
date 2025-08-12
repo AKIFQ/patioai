@@ -147,9 +147,9 @@ export async function fetchRoomMessages(shareCode: string, chatSessionId?: strin
       .select('*')
       .eq('room_id', roomInfo.room.id);
 
-    // If chatSessionId is provided, filter by it
+    // If chatSessionId is provided, filter by it (correct column is thread_id)
     if (chatSessionId) {
-      query = query.eq('room_chat_session_id', chatSessionId);
+      query = query.eq('thread_id', chatSessionId);
     }
 
     const { data: messages, error } = await query
@@ -160,13 +160,17 @@ export async function fetchRoomMessages(shareCode: string, chatSessionId?: strin
       return [];
     }
 
-    // Convert room messages to Message format
+    // Convert room messages to Enhanced Message format (with senderName/reasoning/sources)
     return (messages || []).map((msg: any) => ({
       id: msg.id,
       role: msg.is_ai_response ? 'assistant' : 'user',
-      content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
-      createdAt: new Date(msg.created_at)
-    }));
+      content: msg.content || '',
+      createdAt: new Date(msg.created_at),
+      // Extra fields consumed by the room UI
+      ...(msg.sender_name && { senderName: msg.sender_name }),
+      ...(msg.reasoning && { reasoning: msg.reasoning }),
+      ...(msg.sources && { sources: typeof msg.sources === 'string' ? JSON.parse(msg.sources) : msg.sources })
+    })) as unknown as Message[];
   } catch (error) {
     console.error('Error in fetchRoomMessages:', error);
     return [];

@@ -34,18 +34,29 @@ export class AIResponseHandler {
   // Centralized model mapping for consistency
   private getModel(selectedModel: string) {
     switch (selectedModel) {
+      case 'claude-3.7-sonnet':
+        return anthropic('claude-4-sonnet-20250514');
       case 'claude-3.5-sonnet':
         return anthropic('claude-3-5-sonnet-20241022');
+      case 'gpt-4.1':
+        return openai('gpt-4.1-2025-04-14');
+      case 'gpt-4.1-mini':
+        return openai('gpt-4.1-mini');
+      case 'o3':
+        return openai('o3-2025-04-16');
       case 'gpt-4o':
         return openai('gpt-4o');
       case 'gpt-4o-mini':
         return openai('gpt-4o-mini');
       case 'gpt-3.5-turbo-1106':
         return openai('gpt-3.5-turbo');
+      case 'gemini-2.5-pro':
+        return google('gemini-2.5-pro');
+      case 'gemini-2.5-flash':
+        return google('gemini-2.5-flash');
       case 'gemini-1.5-pro':
         return google('gemini-1.5-pro-latest');
       case 'gemini-2.0-flash':
-      case 'gemini-2.5-pro': // Map the UI model name to the correct API model
         return google('gemini-2.0-flash-exp');
       default:
         console.warn('Unknown model, defaulting to gpt-4o:', selectedModel);
@@ -148,7 +159,7 @@ export class AIResponseHandler {
     }
   }
 
-  // Streaming AI over Socket.IO
+  // Streaming AI over Socket.IO with reasoning support
   async streamAIResponse(
     shareCode: string,
     threadId: string,
@@ -188,19 +199,160 @@ export class AIResponseHandler {
 
       console.log(`🧠 AI context: ${chatHistory.length} previous messages + sophisticated analysis`);
 
-      const { textStream } = streamText({
-        model: this.getModel(modelId),
-        system: promptResult.system,
-        messages: promptResult.messages
-      });
-
-      let full = '';
-      for await (const chunk of textStream) {
-        full += chunk;
-        this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', { threadId, chunk, timestamp: Date.now() });
+      // Configure provider options for reasoning
+      const providerOptions: any = {};
+      if (modelId === 'claude-3.7-sonnet' || modelId === 'claude-3.5-sonnet') {
+        providerOptions.anthropic = {
+          thinking: { type: 'enabled', budgetTokens: 12000 }
+        };
+      }
+      if (modelId === 'gemini-2.5-pro' || modelId === 'gemini-2.5-flash' || modelId === 'gemini-2.0-flash' || modelId === 'gemini-1.5-pro') {
+        providerOptions.google = {
+          thinkingConfig: {
+            // Enable internal thinking for better reasoning
+            thinkingBudget: 4096,
+            // Enable user-facing thoughts (reasoning shown to user)
+            includeThoughts: true
+          }
+        };
+      }
+      if (modelId === 'o3') {
+        providerOptions.openai = {
+          reasoningEffort: 'high'
+        };
       }
 
-      this.io.to(`room:${shareCode}`).emit('ai-stream-end', { threadId, text: full, timestamp: Date.now() });
+      const result = streamText({
+        model: this.getModel(modelId),
+        system: promptResult.system,
+        messages: promptResult.messages,
+        providerOptions
+      });
+
+      let fullText = '';
+      let fullReasoning = '';
+      let hasReasoningStarted = false;
+
+      console.log(`🧠 Starting AI stream for model: ${modelId}`);
+
+      // Use AI SDK's proper streaming interface
+      for await (const delta of result.fullStream) {
+        console.log(`🔍 Delta type received: ${delta.type}`, JSON.stringify(delta, null, 2));
+        
+        if (delta.type === 'text-delta') {
+          const chunk = delta.textDelta;
+          fullText += chunk;
+          
+          // Stream main content
+          this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', { 
+            threadId, 
+            chunk, 
+            timestamp: Date.now() 
+          });
+        } 
+        else if (delta.type === 'reasoning') {
+          // Handle reasoning/thought content across providers
+          const deltaAny = delta as any;
+          const chunk =
+            deltaAny.textDelta ?? // Gemini reasoning delta
+            deltaAny.reasoning ??
+            deltaAny.reasoningDelta ??
+            deltaAny.thinkingDelta ??
+            deltaAny.thoughtDelta ??
+            '';
+
+          if (typeof chunk === 'string' && chunk.length > 0) {
+            fullReasoning += chunk;
+
+            // Start reasoning if not already started
+            if (!hasReasoningStarted) {
+              hasReasoningStarted = true;
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
+                threadId, 
+                timestamp: Date.now() 
+              });
+            }
+
+            // Stream cumulative reasoning for smooth UI updates
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
+              threadId, 
+              reasoning: fullReasoning, 
+              timestamp: Date.now() 
+            });
+          }
+        }
+
+        // Handle other delta types that might contain reasoning/thought content
+        else {
+          // Log all delta types to understand what we're receiving
+          console.log(`🔍 Delta type: ${delta.type}`, JSON.stringify(delta, null, 2));
+          
+          // Check if this delta contains thought-like content (flexible detection)
+          const deltaAny = delta as any;
+          
+          // Check for various thought/reasoning properties
+          const thoughtContent = 
+            deltaAny.thoughts || 
+            deltaAny.thought || 
+            deltaAny.thoughtDelta ||
+            deltaAny.thinking || 
+            deltaAny.thinkingDelta ||
+            deltaAny.reasoning ||
+            deltaAny.reasoningDelta ||
+            '';
+            
+          if (thoughtContent) {
+            console.log(`💭 Found thought content in ${delta.type}:`, thoughtContent);
+            
+            // For delta types, append; for complete types, replace
+            if (delta.type.includes('delta') || delta.type.includes('chunk')) {
+              fullReasoning += thoughtContent;
+            } else {
+              fullReasoning = thoughtContent;
+            }
+            
+            // Start reasoning if not already started
+            if (!hasReasoningStarted) {
+              hasReasoningStarted = true;
+              console.log(`🧠 Thoughts started for ${modelId} (${delta.type})`);
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
+                threadId, 
+                timestamp: Date.now() 
+              });
+            }
+            
+            // Stream thought content
+            console.log(`💭 Sending thought from ${delta.type}:`, fullReasoning);
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
+              threadId, 
+              reasoning: fullReasoning, 
+              timestamp: Date.now() 
+            });
+          }
+        }
+      }
+
+      // End reasoning if it was started
+      if (hasReasoningStarted && fullReasoning) {
+        this.io.to(`room:${shareCode}`).emit('ai-reasoning-end', { 
+          threadId, 
+          reasoning: fullReasoning, 
+          timestamp: Date.now() 
+        });
+      }
+
+      // Signal that main content is starting
+      this.io.to(`room:${shareCode}`).emit('ai-content-start', { 
+        threadId, 
+        timestamp: Date.now() 
+      });
+
+      this.io.to(`room:${shareCode}`).emit('ai-stream-end', { 
+        threadId, 
+        text: fullText, 
+        reasoning: fullReasoning || undefined,
+        timestamp: Date.now() 
+      });
 
       // NOTE: Don't emit room-message-created here as it causes duplicates
       // The client handles the final message via ai-stream-end event
@@ -222,8 +374,9 @@ export class AIResponseHandler {
             roomId: roomValidation.room.id, // Use actual room UUID
             threadId,
             senderName: 'AI Assistant',
-            content: full,
-            isAiResponse: true
+            content: fullText,
+            isAiResponse: true,
+            reasoning: fullReasoning || undefined
           });
           
           if (!result.success) {
@@ -240,6 +393,8 @@ export class AIResponseHandler {
       this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
     }
   }
+
+  // Reasoning is now handled properly through AI SDK's built-in streaming interface
 
   // Generate contextual AI response
   private generateAIResponse(

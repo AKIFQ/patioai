@@ -62,8 +62,7 @@ export async function POST(
         p_room_id: room.id,
         p_session_id: sessionId,
         p_display_name: displayName.trim(),
-        p_user_id: userId,
-        p_max_participants: room.max_participants
+        p_user_id: userId
       });
 
     if (upsertError) {
@@ -81,6 +80,13 @@ export async function POST(
         { error: 'Failed to join room' },
         { status: 500 }
       );
+    }
+
+    // Handle function JSON response (it returns { success, error? })
+    if (result && result.success === false) {
+      const err = (result as any).error || 'Failed to join room';
+      const status = err === 'Room is full' ? 409 : 400;
+      return NextResponse.json({ error: err }, { status });
     }
 
     // Get updated participant list

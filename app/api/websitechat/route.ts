@@ -153,6 +153,7 @@ export async function POST(req: NextRequest) {
   });
 
   return result.toDataStreamResponse({
+    sendReasoning: true, // Enable reasoning streaming
     sendSources: true
   });
 }

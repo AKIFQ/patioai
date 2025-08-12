@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
   result.consumeStream(); // We consume the stream if the server is discnnected from the client to ensure the onFinish callback is called
 
   return result.toDataStreamResponse({
-    sendReasoning: false,
+    sendReasoning: true, // Enable reasoning streaming for Gemini models
     sendSources: true,
     getErrorMessage: errorHandler
   });

@@ -15,7 +15,12 @@ interface RoomSocketHookProps {
   onParticipantChange?: (participants: any[]) => void;
   onStreamStart?: (threadId: string) => void;
   onStreamChunk?: (threadId: string, chunk: string) => void;
-  onStreamEnd?: (threadId: string, text: string) => void;
+  onStreamEnd?: (threadId: string, text: string, reasoning?: string) => void;
+  // New reasoning events
+  onReasoningStart?: (threadId: string) => void;
+  onReasoningChunk?: (threadId: string, reasoning: string) => void;
+  onReasoningEnd?: (threadId: string, reasoning: string) => void;
+  onContentStart?: (threadId: string) => void;
 }
 
 export function useRoomSocket({
@@ -27,7 +32,11 @@ export function useRoomSocket({
   onParticipantChange,
   onStreamStart,
   onStreamChunk,
-  onStreamEnd
+  onStreamEnd,
+  onReasoningStart,
+  onReasoningChunk,
+  onReasoningEnd,
+  onContentStart
 }: RoomSocketHookProps) {
   const { socket, isConnected } = useSocket(displayName);
   const [connectionStatus, setConnectionStatus] = useState<string>('DISCONNECTED');
@@ -212,16 +221,40 @@ export function useRoomSocket({
           setIsAIStreaming(true);
           onStreamStart?.(threadId);
         });
+        
+        // Reasoning events
+        socket.on('ai-reasoning-start', (payload: { threadId: string; timestamp?: number }) => {
+          const { threadId } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          onReasoningStart?.(threadId);
+        });
+        socket.on('ai-reasoning-chunk', (payload: { threadId: string; reasoning: string; timestamp?: number }) => {
+          const { threadId, reasoning } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          onReasoningChunk?.(threadId, reasoning);
+        });
+        socket.on('ai-reasoning-end', (payload: { threadId: string; reasoning: string; timestamp?: number }) => {
+          const { threadId, reasoning } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          onReasoningEnd?.(threadId, reasoning);
+        });
+        
+        // Content events
+        socket.on('ai-content-start', (payload: { threadId: string; timestamp?: number }) => {
+          const { threadId } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          onContentStart?.(threadId);
+        });
         socket.on('ai-stream-chunk', (payload: { threadId: string; chunk: string; timestamp?: number }) => {
           const { threadId, chunk } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           onStreamChunk?.(threadId, chunk);
         });
-        socket.on('ai-stream-end', (payload: { threadId: string; text: string; timestamp?: number }) => {
-          const { threadId, text } = payload;
+        socket.on('ai-stream-end', (payload: { threadId: string; text: string; reasoning?: string; timestamp?: number }) => {
+          const { threadId, text, reasoning } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(false);
-          onStreamEnd?.(threadId, text);
+          onStreamEnd?.(threadId, text, reasoning);
         });
 
         // Connection status updates
@@ -264,6 +297,10 @@ export function useRoomSocket({
         socket.off('user-left-room', handleParticipantChange);
         socket.off('room-deleted', handleRoomDeleted);
         socket.off('ai-stream-start');
+        socket.off('ai-reasoning-start');
+        socket.off('ai-reasoning-chunk');
+        socket.off('ai-reasoning-end');
+        socket.off('ai-content-start');
         socket.off('ai-stream-chunk');
         socket.off('ai-stream-end');
         socket.off('room-joined');

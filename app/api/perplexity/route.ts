@@ -92,7 +92,10 @@ export async function POST(req: NextRequest) {
     });
 
     // Return the streaming response
-    return result.toDataStreamResponse({ sendSources: true });
+    return result.toDataStreamResponse({ 
+      sendReasoning: true, // Enable reasoning streaming
+      sendSources: true 
+    });
   } catch (error) {
     console.error('Error processing Perplexity response:', error);
     return new NextResponse('Internal Server Error', { status: 500 });

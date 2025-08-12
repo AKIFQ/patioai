@@ -35,6 +35,7 @@ import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
 import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
+import { useReasoningStream } from '../hooks/useReasoningStream';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
@@ -103,6 +104,19 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [isRoomLoading, setIsRoomLoading] = useState(false);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const streamingAssistantIdRef = useRef<string | null>(null);
+  
+  // Room reasoning streaming state
+  const [roomReasoningState, setRoomReasoningState] = useState<{
+    messageId: string | null;
+    reasoning: string;
+    isStreaming: boolean;
+    isComplete: boolean;
+  }>({
+    messageId: null,
+    reasoning: '',
+    isStreaming: false,
+    isComplete: false
+  });
 
   // State for reasoning display
   const [reasoningStates, setReasoningStates] = useState<Record<string, { isOpen: boolean; hasStartedStreaming: boolean }>>({});
@@ -224,6 +238,7 @@ const ChatComponent: React.FC<ChatProps> = ({
       chatId: chatId,
       option: optimisticOption
     },
+
     onFinish: async () => {
       if (!roomContext) {
         console.log(`✅ CHAT: onFinish called for ${stableChatId}`);
@@ -255,6 +270,9 @@ const ChatComponent: React.FC<ChatProps> = ({
       }
     }
   });
+
+  // Use reasoning stream hook for individual chats (after useChat hook)
+  const reasoningStream = useReasoningStream(messages, status);
 
   // Debug: Log streaming behavior
   useEffect(() => {
@@ -525,21 +543,82 @@ const ChatComponent: React.FC<ChatProps> = ({
     }));
   }, [roomContext]);
 
-  const handleStreamEnd = useCallback((threadId: string, text: string) => {
+  const handleStreamEnd = useCallback((threadId: string, text: string, reasoning?: string) => {
     if (!roomContext || threadId !== roomContext.chatSessionId) return;
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
     
+    const newPermanentId = `ai-final-${Date.now()}`;
+    
     // Convert the temporary streaming message to a permanent one
     setRealtimeMessages(prev => prev.map(m => 
       m.id === currentId 
-        ? { ...m, id: `ai-final-${Date.now()}`, content: text } // Use final text and permanent ID
+        ? { 
+            ...m, 
+            id: newPermanentId, 
+            content: text,
+            reasoning: reasoning || undefined
+          }
         : m
     ));
+    
+    // Update reasoning state to use the new permanent message ID
+    setRoomReasoningState(prev => ({
+      ...prev,
+      messageId: newPermanentId,
+      isStreaming: false,
+      isComplete: true
+    }));
     
     // Clear streaming state
     streamingAssistantIdRef.current = null;
     setStreamingAssistantId(null);
+  }, [roomContext]);
+
+  // New reasoning handlers for room chats
+  const handleReasoningStart = useCallback((threadId: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    const currentId = streamingAssistantIdRef.current;
+    if (!currentId) return;
+    
+    console.log('🧠 Reasoning started for room chat:', threadId);
+    setRoomReasoningState({
+      messageId: currentId,
+      reasoning: '',
+      isStreaming: true,
+      isComplete: false
+    });
+  }, [roomContext]);
+
+  const handleReasoningChunk = useCallback((threadId: string, reasoning: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    const currentId = streamingAssistantIdRef.current;
+    if (!currentId) return;
+    
+    console.log('🧠 Reasoning chunk received:', { threadId, reasoning: reasoning.substring(0, 100), currentId });
+    setRoomReasoningState(prev => ({
+      ...prev,
+      reasoning
+    }));
+  }, [roomContext]);
+
+  const handleReasoningEnd = useCallback((threadId: string, reasoning: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    
+    console.log('🧠 Reasoning ended for room chat:', threadId);
+    setRoomReasoningState(prev => ({
+      ...prev,
+      reasoning,
+      isStreaming: false,
+      isComplete: true
+    }));
+  }, [roomContext]);
+
+  const handleContentStart = useCallback((threadId: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    
+    console.log('📝 Content started for room chat:', threadId);
+    // Reasoning UI should auto-minimize when content starts
   }, [roomContext]);
 
   // Memoize realtime hook props to prevent unnecessary re-initializations
@@ -553,9 +632,26 @@ const ChatComponent: React.FC<ChatProps> = ({
       onTypingUpdate: handleTypingUpdate,
       onStreamStart: handleStreamStart,
       onStreamChunk: handleStreamChunk,
-      onStreamEnd: handleStreamEnd
+      onStreamEnd: handleStreamEnd,
+      onReasoningStart: handleReasoningStart,
+      onReasoningChunk: handleReasoningChunk,
+      onReasoningEnd: handleReasoningEnd,
+      onContentStart: handleContentStart
     };
-  }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate, handleStreamStart, handleStreamChunk, handleStreamEnd]);
+  }, [
+    roomContext?.shareCode, 
+    roomContext?.displayName, 
+    roomContext?.chatSessionId, 
+    handleNewMessage, 
+    handleTypingUpdate, 
+    handleStreamStart, 
+    handleStreamChunk, 
+    handleStreamEnd,
+    handleReasoningStart,
+    handleReasoningChunk,
+    handleReasoningEnd,
+    handleContentStart
+  ]);
 
   // Initialize real-time hook with safe fallbacks
   const realtimeHook = realtimeProps ? useRoomSocket(realtimeProps) : null;
@@ -947,6 +1043,10 @@ const ChatComponent: React.FC<ChatProps> = ({
               currentUserDisplayName={roomContext?.displayName}
               showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
               isRoomChat={!!roomContext}
+              streamingMessageId={(roomContext ? roomReasoningState.messageId : reasoningStream.streamingMessageId) || undefined}
+              streamingReasoning={roomContext ? roomReasoningState.reasoning : reasoningStream.streamingReasoning}
+              isReasoningStreaming={roomContext ? roomReasoningState.isStreaming : status === 'streaming'}
+              isReasoningComplete={roomContext ? roomReasoningState.isComplete : reasoningStream.isReasoningComplete}
             />
           </div>
         )}

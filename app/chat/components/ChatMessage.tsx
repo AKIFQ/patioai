@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { SmartAvatar } from '@/components/ui/Avatar';
 import MemoizedMarkdown from './tools/MemoizedMarkdown';
 import SourceView from './tools/SourceView';
+import StreamingReasoningUI from './StreamingReasoningUI';
 import {
   Accordion,
   AccordionContent,
@@ -27,9 +28,22 @@ interface ChatMessageProps {
   index: number;
   isUserMessage: boolean;
   isRoomChat?: boolean;
+  isStreaming?: boolean;
+  streamingReasoning?: string;
+  isReasoningStreaming?: boolean;
+  isReasoningComplete?: boolean;
 }
 
-const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }: ChatMessageProps) => {
+const ChatMessage = memo(({ 
+  message, 
+  index, 
+  isUserMessage, 
+  isRoomChat = false, 
+  isStreaming = false, 
+  streamingReasoning,
+  isReasoningStreaming = false,
+  isReasoningComplete = false
+}: ChatMessageProps) => {
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopy = useCallback((content: string) => {
@@ -104,27 +118,22 @@ const ChatMessage = memo(({ message, index, isUserMessage, isRoomChat = false }:
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 
-            {/* Reasoning Block - Show at top for AI messages in room chats */}
-            {!isUserMessage && isRoomChat && message.role === 'assistant' && message.reasoning && (
-              <div className="w-full mb-2">
-                <div className="mb-4">
-                  <Accordion type="single" defaultValue="reasoning" collapsible className="w-full">
-                    <AccordionItem value="reasoning" className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg overflow-hidden border border-blue-200 dark:border-blue-800/50 shadow-sm">
-                      <AccordionTrigger className="font-medium text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200 py-2 px-3 cursor-pointer text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                          Reasoning Process
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="bg-blue-50/30 dark:bg-blue-950/10 p-3 text-sm text-foreground/90 overflow-x-auto max-h-[300px] overflow-y-auto border-t border-blue-200/50 dark:border-blue-800/30">
-                        <div className="reasoning-content prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2">
-                          <MemoizedMarkdown content={message.reasoning} id={`room-reasoning-${message.id}`} />
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </div>
-              </div>
+            {/* Streaming Reasoning UI - Show for AI messages when reasoning is available OR streaming */}
+            {!isUserMessage && message.role === 'assistant' && (
+              streamingReasoning || 
+              message.reasoning || 
+              (isRoomChat && (isReasoningStreaming || isReasoningComplete)) ||
+              (!isRoomChat && isStreaming)
+            ) && (
+              <StreamingReasoningUI
+                messageId={message.id}
+                reasoningText={streamingReasoning || message.reasoning || ''}
+                isStreaming={isRoomChat ? isReasoningStreaming : (isStreaming && !!streamingReasoning)}
+                isComplete={isRoomChat ? isReasoningComplete : (isReasoningComplete || (!isStreaming && !!message.reasoning))}
+                onMinimize={() => {
+                  // Handle reasoning minimization if needed
+                }}
+              />
             )}
 
             <div 
