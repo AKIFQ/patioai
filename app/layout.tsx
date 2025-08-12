@@ -1,9 +1,7 @@
 import React, { type ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Footer from '@/app/components/ui/Footer/Footer';
 import { getSession } from '@/lib/server/supabase';
-import NavBar from '@/app/components/ui/Navbar/TopBar';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { MobileSidebarProvider } from '@/app/chat/components/chat_history/ChatHistorySidebar';
@@ -18,7 +16,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('http://localhost:3000/'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000/'),
   title: {
     default: 'PatioAI',
     template: '%s | PatioAI'
@@ -53,7 +51,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'http://localhost:3000/',
+    url: process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000/',
     title: 'PatioAI',
     description: 'Experience the power of AI-driven conversations with PatioAI',
     siteName: 'PatioAI',
@@ -94,12 +92,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <MobileSidebarProvider>
-            {/* We pass the promise here and resolve it with react.use in the child to prevent the async request from blocking the UI */}
-            <NavBar session={getSession()} />
             <main className="w-full min-w-0">{children}</main>
             <Toaster />
             {modal}
-            <Footer />
           </MobileSidebarProvider>
         </ThemeProvider>
       </body>

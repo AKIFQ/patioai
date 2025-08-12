@@ -6,11 +6,40 @@ import { getUserInfo } from '@/lib/server/supabase';
 import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import RoomChatWrapper from './components/RoomChatWrapper';
+import ExpiredRoomHandler from './components/ExpiredRoomHandler';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+// Check if room is expired
+async function checkRoomExpiration(shareCode: string) {
+    try {
+        const { data: room, error } = await supabase
+            .from('rooms')
+            .select('name, expires_at, created_by')
+            .eq('share_code', shareCode)
+            .single();
+
+        if (error || !room) {
+            return { expired: false, notFound: true };
+        }
+
+        const now = new Date();
+        const expiresAt = new Date(room.expires_at);
+        const isExpired = now > expiresAt;
+
+        return {
+            expired: isExpired,
+            notFound: false,
+            roomName: room.name,
+            createdBy: room.created_by
+        };
+    } catch (error) {
+        return { expired: false, notFound: true };
+    }
+}
 
 // Ensure user is properly added to room with correct user_id
 async function ensureUserInRoom(shareCode: string, displayName: string, userId?: string) {
@@ -72,6 +101,26 @@ export default async function RoomChatPage(props: {
     // Check if user has joined the room
     if (!searchParams.displayName) {
         redirect(`/room/${shareCode}`);
+    }
+
+    // Check if room is expired first
+    const expirationCheck = await checkRoomExpiration(shareCode);
+    
+    if (expirationCheck.notFound) {
+        redirect(`/chat`);
+    }
+
+    if (expirationCheck.expired) {
+        const userInfo = await getUserInfo();
+        const isCreator = userInfo && expirationCheck.createdBy === userInfo.id;
+        
+        return (
+            <ExpiredRoomHandler 
+                shareCode={shareCode}
+                roomName={expirationCheck.roomName || 'Unknown Room'}
+                isCreator={isCreator || false}
+            />
+        );
     }
 
     // Get thread ID from URL (prioritize threadId over legacy chatSession)

@@ -139,8 +139,8 @@ export async function signout() {
   const signOutResult = await supabase.auth.signOut();
 
   if (signOutResult.error) {
-    redirect('/?error=' + encodeURIComponent('Logout error'));
+    redirect('/signin?error=' + encodeURIComponent('Logout error'));
   } else {
-    redirect('/');
+    redirect('/signin');
   }
 }

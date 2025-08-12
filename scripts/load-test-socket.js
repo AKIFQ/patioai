@@ -4,6 +4,8 @@ const { io } = require('socket.io-client');
 const CONCURRENT_CONNECTIONS = 10;
 const TEST_DURATION = 5000; // 5 seconds
 
+const SOCKET_URL = process.env.SOCKET_URL || process.env.NEXT_PUBLIC_SOCKET_URL || 'http://127.0.0.1:3000';
+
 console.log(`Starting Socket.IO load test with ${CONCURRENT_CONNECTIONS} concurrent connections...`);
 
 let connectedCount = 0;
@@ -12,7 +14,7 @@ const connections = [];
 
 function createConnection(id) {
   return new Promise((resolve, reject) => {
-    const socket = io('http://localhost:3000', {
+    const socket = io(SOCKET_URL, {
       auth: { token: `load-test-user-${id}` },
       timeout: 5000
     });

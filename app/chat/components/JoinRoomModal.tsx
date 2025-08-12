@@ -48,14 +48,24 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
       }
       
       // Try to extract from end of URL if it ends with the share code
-      const endMatch = trimmedLink.match(/([A-F0-9]{12})$/i);
-      if (endMatch) {
-        return endMatch[1].toUpperCase();
+      const segments = trimmedLink.split('/');
+      const lastSegment = segments[segments.length - 1];
+      if (/^[A-F0-9]{12}$/i.test(lastSegment)) {
+        return lastSegment.toUpperCase();
       }
       
       return null;
-    } catch (error) {
+    } catch {
       return null;
+    }
+  };
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setRoomLink(text);
+    } catch (error) {
+      toast.error('Failed to paste from clipboard');
     }
   };
 
@@ -114,19 +124,9 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
     onClose();
   };
 
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      setRoomLink(text);
-      toast.success('Link pasted!');
-    } catch (error) {
-      toast.error('Failed to paste from clipboard');
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md z-[200]">
         <DialogHeader>
           <DialogTitle>Join Room</DialogTitle>
           <DialogDescription>

@@ -220,10 +220,9 @@ export class SecurityHeaders {
   // Add CORS headers with security considerations
   static addCORSHeaders(response: NextResponse, origin?: string): NextResponse {
     const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
+      process.env.NEXT_PUBLIC_CLIENT_URL,
       process.env.NEXT_PUBLIC_APP_URL
-    ].filter(Boolean);
+    ].filter(Boolean) as string[];
 
     if (origin && allowedOrigins.includes(origin)) {
       response.headers.set('Access-Control-Allow-Origin', origin);

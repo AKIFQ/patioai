@@ -3,6 +3,7 @@ import { AuthenticatedSocket } from '../../types/socket';
 import { createAIResponseHandler, AIResponseHandler } from './aiResponseHandler';
 import { SocketDatabaseService } from '../database/socketQueries';
 import { PerformanceMonitor, measurePerformance } from '../monitoring/performanceMonitor';
+import { SocketMonitor } from '../monitoring/socketMonitor';
 
 export interface SocketHandlers {
   handleConnection: (socket: AuthenticatedSocket) => void;
@@ -20,6 +21,12 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   const handleConnection = (socket: AuthenticatedSocket) => {
     console.log(`Socket connected: ${socket.id} (User: ${socket.userId})`);
     performanceMonitor.updateConnectionMetrics('connect');
+    // Track with SocketMonitor
+    try {
+      SocketMonitor.getInstance().onConnect(socket.userId, socket.id);
+    } catch (e) {
+      console.warn('SocketMonitor onConnect error:', e);
+    }
     
     // Set up event handlers
     handleRoomEvents(socket);
@@ -36,96 +43,67 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   const handleDisconnection = async (socket: AuthenticatedSocket, reason: string) => {
     console.log(`Socket disconnected: ${socket.id} (User: ${socket.userId}) - Reason: ${reason}`);
     performanceMonitor.updateConnectionMetrics('disconnect');
+    // Track with SocketMonitor
+    try {
+      SocketMonitor.getInstance().onDisconnect(socket.userId, socket.id, reason);
+    } catch (e) {
+      console.warn('SocketMonitor onDisconnect error:', e);
+    }
     
     try {
-      // Get all rooms the user was in
-      const userRooms = Array.from(socket.rooms).filter(room => room.startsWith('room:'));
-      
-      // Notify rooms about user disconnection
+      // Snapshot room names without mutating the socket
+      const userRooms = Array.from(socket.rooms || new Set<string>()).filter((room) => room.startsWith('room:'));
+
+      // Notify rooms about user disconnection and stop typing
       for (const roomChannel of userRooms) {
         const shareCode = roomChannel.replace('room:', '');
-        
-        // Notify other participants about disconnection
+
         socket.to(roomChannel).emit('user-disconnected', {
           userId: socket.userId,
           shareCode,
           reason,
           timestamp: new Date().toISOString()
         });
-        
-        console.log(`Notified room ${shareCode} about user ${socket.userId} disconnection`);
-      }
 
-      // Clean up typing indicators
-      for (const roomChannel of userRooms) {
-        const shareCode = roomChannel.replace('room:', '');
-        
-        // Stop any typing indicators for this user
         socket.to(roomChannel).emit('user-typing', {
-          users: [], // Remove this user from typing
+          users: [],
           roomId: shareCode,
           timestamp: new Date().toISOString()
         });
       }
 
-      // Clean up user channel
+      // Leave personal channel if present (do not mutate rooms set)
       const userChannel = `user:${socket.userId}`;
-      if (socket.rooms.has(userChannel)) {
+      if ((socket as any).rooms?.has?.(userChannel)) {
         socket.leave(userChannel);
-        console.log(`User ${socket.userId} left personal channel on disconnect`);
       }
 
-      // Mark disconnection time for safe cleanup
-      (socket as any).disconnectedAt = Date.now();
-
-      // Remove all event listeners to prevent memory leaks
+      // Remove listeners safely
       try {
-        const eventNames = (socket as any).eventNames?.() || [];
-        eventNames.forEach((eventName: string) => {
-          socket.removeAllListeners(eventName);
-        });
-        if (eventNames.length > 0) {
-          console.log(`🧹 Removed ${eventNames.length} event listeners for socket ${socket.id}`);
+        const names = (socket as any).eventNames?.() || [];
+        names.forEach((n: string) => socket.removeAllListeners(n));
+        if (names.length > 0) {
+          console.log(`🧹 Removed ${names.length} event listeners for socket ${socket.id}`);
         }
-        
-        // Clear socket references to prevent memory leaks
-        (socket as any).userId = null;
-        (socket as any).rooms = null;
-        (socket as any).handshake = null;
       } catch (error) {
         console.warn('Error removing event listeners:', error);
       }
 
-      // Clear any existing cleanup timeout
+      // Clear pending cleanup timeout
       if ((socket as any).cleanupTimeout) {
         clearTimeout((socket as any).cleanupTimeout);
         (socket as any).cleanupTimeout = null;
       }
 
-      // Optional: Clean up abandoned sessions after a delay
+      // Optional deferred cleanup
       if (reason === 'transport close' || reason === 'client namespace disconnect') {
         const cleanupTimeout = setTimeout(async () => {
           try {
             await cleanupAbandonedSessions(socket.userId);
-            
-            // Check memory usage and trigger cleanup if needed
-            const memUsage = process.memoryUsage().heapUsed;
-            const memUsageMB = memUsage / 1024 / 1024;
-            
-            if (memUsageMB > 2500) { // > 2.5GB
-              console.warn(`⚠️ High memory usage after disconnect: ${Math.round(memUsageMB)}MB - triggering cleanup`);
-              
-              // Import and trigger memory cleanup
-              const { MemoryManager } = await import('../monitoring/memoryManager');
-              const memoryManager = MemoryManager.getInstance();
-              await memoryManager.forceCleanup();
-            }
           } catch (error) {
             console.error('Error in cleanup timeout:', error);
           }
-        }, 15000); // Reduced to 15 seconds for faster cleanup
-        
-        // Store timeout reference for potential cleanup
+        }, 15000);
         (socket as any).cleanupTimeout = cleanupTimeout;
       }
 
@@ -325,6 +303,26 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       } catch (error) {
         console.error('Error triggering AI response:', error);
         socket.emit('ai-error', { error: 'Failed to generate AI response' });
+      }
+    });
+
+    // NEW: Streaming AI via Socket.IO
+    socket.on('invoke-ai', async (data: {
+      shareCode: string;
+      threadId: string;
+      prompt: string;
+      roomName: string;
+      participants: string[];
+      modelId?: string;
+      chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+    }) => {
+      try {
+        const { shareCode, threadId, prompt, roomName, participants, modelId, chatHistory } = data;
+        // Cast to any to avoid potential type mismatches if typings lag behind implementation
+        (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || []);
+      } catch (error) {
+        console.error('Error invoking AI stream:', error);
+        socket.emit('ai-error', { error: 'Failed to invoke AI stream' });
       }
     });
 

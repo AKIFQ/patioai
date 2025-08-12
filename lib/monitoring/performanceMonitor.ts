@@ -249,6 +249,38 @@ export class PerformanceMonitor {
       console.error(`Operation failed: ${metric.operation} - ${metric.error}`);
     }
   }
+
+  // === Added: Safe cleanup APIs ===
+
+  /**
+   * Aggressively clear recorded performance metrics and shrink arrays
+   */
+  public clearAllMetrics(): void {
+    this.metrics = [];
+  }
+
+  /**
+   * Trim to last N metrics to control memory footprint
+   */
+  public trimMetricsTo(limit: number): number {
+    if (limit <= 0) {
+      const removed = this.metrics.length;
+      this.metrics = [];
+      return removed;
+    }
+    if (this.metrics.length <= limit) return 0;
+    const removed = this.metrics.length - limit;
+    this.metrics = this.metrics.slice(-limit);
+    return removed;
+  }
+
+  /**
+   * Reset internal per-operation maps used by external managers
+   */
+  public resetOperationMaps(): void {
+    // No exposed maps here, but provide a hook for compatibility
+    // Could be expanded if we add maps similar to SocketMonitor
+  }
 }
 
 // Helper function to measure operation performance

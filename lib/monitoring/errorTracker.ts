@@ -270,6 +270,9 @@ export class ErrorTracker {
     if (removedCount > 0) {
       console.log(`🧹 Error Tracker: Cleaned up ${removedCount} old errors, ${this.errors.length} remaining`);
     }
+
+    // Rebuild aggregates after cleanup
+    this.rebuildAggregates();
   }
 
   private checkAlerts(errorEvent: ErrorEvent) {
@@ -314,5 +317,68 @@ export class ErrorTracker {
         resolved: error.resolved
       }))
     };
+  }
+
+  // === Added: Safe cleanup APIs ===
+
+  /**
+   * Trim stored errors to the last N entries to aggressively free memory
+   */
+  public trimErrorsTo(limit: number): number {
+    if (limit <= 0) {
+      const removed = this.errors.length;
+      this.errors = [];
+      this.rebuildAggregates();
+      return removed;
+    }
+    if (this.errors.length <= limit) return 0;
+    const removed = this.errors.length - limit;
+    this.errors = this.errors.slice(-limit);
+    this.rebuildAggregates();
+    return removed;
+  }
+
+  /**
+   * Remove errors older than the specified cutoff time (in ms)
+   */
+  public removeErrorsOlderThan(cutoffMs: number): number {
+    const cutoff = new Date(Date.now() - cutoffMs);
+    const before = this.errors.length;
+    this.errors = this.errors.filter(e => e.timestamp >= cutoff);
+    const removed = before - this.errors.length;
+    if (removed > 0) this.rebuildAggregates();
+    return removed;
+  }
+
+  /**
+   * Clear aggregate maps to reduce memory usage. They will be rebuilt as new errors are tracked.
+   */
+  public clearAggregates(): void {
+    this.metrics.errorsByCategory.clear();
+    this.metrics.errorsByLevel.clear();
+    // Keep counters consistent with current stored errors
+    this.metrics.totalErrors = this.errors.length;
+    this.metrics.lastError = this.errors.length > 0 ? this.errors[this.errors.length - 1].timestamp : undefined;
+  }
+
+  /**
+   * Recompute aggregate maps from the current error list
+   */
+  private rebuildAggregates(): void {
+    this.metrics.errorsByCategory = new Map();
+    this.metrics.errorsByLevel = new Map();
+    this.metrics.totalErrors = this.errors.length;
+    this.metrics.lastError = this.errors.length > 0 ? this.errors[this.errors.length - 1].timestamp : undefined;
+
+    for (const err of this.errors) {
+      this.metrics.errorsByCategory.set(
+        err.category,
+        (this.metrics.errorsByCategory.get(err.category) || 0) + 1
+      );
+      this.metrics.errorsByLevel.set(
+        err.level,
+        (this.metrics.errorsByLevel.get(err.level) || 0) + 1
+      );
+    }
   }
 }

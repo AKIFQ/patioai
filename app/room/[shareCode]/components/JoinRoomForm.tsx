@@ -9,7 +9,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Users, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getOrCreateSessionId, getStoredDisplayName, storeDisplayName } from '@/lib/utils/session';
-import RoomChat from './RoomChat';
 import { useRouter } from 'next/navigation';
 
 interface Room {
@@ -228,16 +227,14 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
     );
   }
 
-  if (hasJoined && roomInfo) {
+  if (isJoining || hasJoined) {
     return (
-      <RoomChat
-        room={roomInfo.room}
-        participant={{
-          displayName: displayName,
-          sessionId: sessionId
-        }}
-        participants={roomInfo.participants}
-      />
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <p className="text-muted-foreground">Joining room...</p>
+        </div>
+      </div>
     );
   }
 

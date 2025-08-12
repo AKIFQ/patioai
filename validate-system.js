@@ -1,5 +1,5 @@
 // Simple system validation script
-const baseUrl = 'http://localhost:3001';
+const baseUrl = process.env.TEST_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3001';
 
 async function validateSystem() {
   console.log('🧪 Running system validation...\n');

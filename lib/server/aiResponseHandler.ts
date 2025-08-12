@@ -1,5 +1,10 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { AuthenticatedSocket } from '../../types/socket';
+import { streamText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { google } from '@ai-sdk/google';
+import { RoomPromptEngine } from '../ai/roomPromptEngine';
 
 interface AIResponseConfig {
   triggerWords: string[];
@@ -18,10 +23,34 @@ const defaultConfig: AIResponseConfig = {
 export class AIResponseHandler {
   private io: SocketIOServer;
   private config: AIResponseConfig;
+  private promptEngine: RoomPromptEngine;
 
   constructor(io: SocketIOServer, config: Partial<AIResponseConfig> = {}) {
     this.io = io;
     this.config = { ...defaultConfig, ...config };
+    this.promptEngine = new RoomPromptEngine();
+  }
+
+  // Centralized model mapping for consistency
+  private getModel(selectedModel: string) {
+    switch (selectedModel) {
+      case 'claude-3.5-sonnet':
+        return anthropic('claude-3-5-sonnet-20241022');
+      case 'gpt-4o':
+        return openai('gpt-4o');
+      case 'gpt-4o-mini':
+        return openai('gpt-4o-mini');
+      case 'gpt-3.5-turbo-1106':
+        return openai('gpt-3.5-turbo');
+      case 'gemini-1.5-pro':
+        return google('gemini-1.5-pro-latest');
+      case 'gemini-2.0-flash':
+      case 'gemini-2.5-pro': // Map the UI model name to the correct API model
+        return google('gemini-2.0-flash-exp');
+      default:
+        console.warn('Unknown model, defaulting to gpt-4o:', selectedModel);
+        return openai('gpt-4o');
+    }
   }
 
   // Check if a message should trigger an AI response
@@ -116,6 +145,99 @@ export class AIResponseHandler {
         roomId: shareCode,
         timestamp: new Date().toISOString()
       });
+    }
+  }
+
+  // Streaming AI over Socket.IO
+  async streamAIResponse(
+    shareCode: string,
+    threadId: string,
+    prompt: string,
+    roomName: string,
+    participants: string[],
+    modelId: string = 'gpt-4o',
+    chatHistory: Array<{role: 'user' | 'assistant', content: string}> = []
+  ): Promise<void> {
+    try {
+      console.log(`🤖 Starting AI stream for room ${shareCode}, model: ${modelId}`);
+      this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now() });
+
+      // Extract current user from prompt (format: "User: message")
+      const promptMatch = prompt.match(/^(.+?):\s*(.+)$/);
+      const currentUser = promptMatch ? promptMatch[1] : 'User';
+      const currentMessage = promptMatch ? promptMatch[2] : prompt;
+
+      // Convert chat history to message format for prompt engine
+      const messages = chatHistory.map(msg => ({
+        id: `msg-${Date.now()}-${Math.random()}`,
+        sender_name: msg.role === 'assistant' ? 'AI Assistant' : currentUser,
+        content: msg.content,
+        is_ai_response: msg.role === 'assistant',
+        created_at: new Date().toISOString(),
+        thread_id: threadId
+      }));
+
+      // Use sophisticated prompt engine for context-aware AI
+      const promptResult = this.promptEngine.generatePrompt(
+        messages,
+        roomName,
+        participants,
+        currentUser,
+        currentMessage
+      );
+
+      console.log(`🧠 AI context: ${chatHistory.length} previous messages + sophisticated analysis`);
+
+      const { textStream } = streamText({
+        model: this.getModel(modelId),
+        system: promptResult.system,
+        messages: promptResult.messages
+      });
+
+      let full = '';
+      for await (const chunk of textStream) {
+        full += chunk;
+        this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', { threadId, chunk, timestamp: Date.now() });
+      }
+
+      this.io.to(`room:${shareCode}`).emit('ai-stream-end', { threadId, text: full, timestamp: Date.now() });
+
+      // NOTE: Don't emit room-message-created here as it causes duplicates
+      // The client handles the final message via ai-stream-end event
+      // The deferred DB save below is just for persistence
+
+      // Defer DB persistence to avoid blocking
+      setTimeout(async () => {
+        try {
+          const { SocketDatabaseService } = await import('../database/socketQueries');
+          
+          // Get the actual room_id from shareCode
+          const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
+          if (!roomValidation.valid || !roomValidation.room) {
+            console.warn(`Failed to get room_id for shareCode ${shareCode}:`, roomValidation.error);
+            return;
+          }
+          
+          const result = await SocketDatabaseService.insertRoomMessage({
+            roomId: roomValidation.room.id, // Use actual room UUID
+            threadId,
+            senderName: 'AI Assistant',
+            content: full,
+            isAiResponse: true
+          });
+          
+          if (!result.success) {
+            console.warn('Background insertRoomMessage failed:', result.error);
+          } else {
+            console.log(`✅ AI message saved to DB: ${result.messageId}`);
+          }
+        } catch (e) {
+          console.warn('Background insertRoomMessage failed:', e);
+        }
+      }, 0);
+    } catch (error) {
+      console.error('❌ Error streaming AI response:', error);
+      this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
     }
   }
 

@@ -13,6 +13,9 @@ interface RoomSocketHookProps {
   onNewMessage: (message: Message) => void;
   onTypingUpdate: (users: string[]) => void;
   onParticipantChange?: (participants: any[]) => void;
+  onStreamStart?: (threadId: string) => void;
+  onStreamChunk?: (threadId: string, chunk: string) => void;
+  onStreamEnd?: (threadId: string, text: string) => void;
 }
 
 export function useRoomSocket({
@@ -21,13 +24,17 @@ export function useRoomSocket({
   chatSessionId,
   onNewMessage,
   onTypingUpdate,
-  onParticipantChange
+  onParticipantChange,
+  onStreamStart,
+  onStreamChunk,
+  onStreamEnd
 }: RoomSocketHookProps) {
   const { socket, isConnected } = useSocket(displayName);
   const [connectionStatus, setConnectionStatus] = useState<string>('DISCONNECTED');
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const roomUuidRef = useRef<string | null>(null);
   const hasMessagesRef = useRef(false);
+  const [isAIStreaming, setIsAIStreaming] = useState(false);
 
   // Handle new room messages from Socket.IO
   const handleNewRoomMessage = useCallback((data: any) => {
@@ -57,11 +64,11 @@ export function useRoomSocket({
 
     // Convert to Message format with reasoning support
     const message: Message & { senderName?: string; reasoning?: string; sources?: any[] } = {
-      id: newMessage.id,
+      id: newMessage.id || `msg-${Date.now()}`,
       role: newMessage.is_ai_response ? 'assistant' : 'user',
       content: newMessage.is_ai_response
         ? newMessage.content
-        : `${newMessage.sender_name}: ${newMessage.content}`,
+        : newMessage.content, // Don't prefix with sender name - use senderName field instead
       createdAt: new Date(newMessage.created_at),
       // Preserve sender information for proper message alignment
       ...(newMessage.sender_name && { senderName: newMessage.sender_name }),
@@ -198,15 +205,33 @@ export function useRoomSocket({
         socket.on('user-left-room', handleParticipantChange);
         socket.on('room-deleted', handleRoomDeleted);
 
+        // Streaming listeners
+        socket.on('ai-stream-start', (payload: { threadId: string; timestamp?: number }) => {
+          const { threadId } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          setIsAIStreaming(true);
+          onStreamStart?.(threadId);
+        });
+        socket.on('ai-stream-chunk', (payload: { threadId: string; chunk: string; timestamp?: number }) => {
+          const { threadId, chunk } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          onStreamChunk?.(threadId, chunk);
+        });
+        socket.on('ai-stream-end', (payload: { threadId: string; text: string; timestamp?: number }) => {
+          const { threadId, text } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          setIsAIStreaming(false);
+          onStreamEnd?.(threadId, text);
+        });
+
         // Connection status updates
         socket.on('room-joined', () => {
           console.log('Successfully joined room via Socket.IO');
           setConnectionStatus('SUBSCRIBED');
         });
 
-        socket.on('room-error', (error) => {
+        socket.on('room-error', (error: any) => {
           console.warn('Room Socket.IO error (non-critical):', error);
-          // Don't set error status for empty errors, just log them
           if (error && Object.keys(error).length > 0) {
             setConnectionStatus('CHANNEL_ERROR');
           }
@@ -225,17 +250,10 @@ export function useRoomSocket({
     return () => {
       mounted = false;
 
-      // Clean up empty thread if no messages were sent
-      if (!hasMessagesRef.current && chatSessionId) {
-        console.log('Cleaning up empty thread on unmount:', chatSessionId);
-        fetch('/api/cleanup/empty-threads', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ threadId: chatSessionId })
-        }).catch(error => {
-          console.warn('Failed to cleanup empty thread:', error);
-        });
-      }
+      // Clean up empty thread if no messages were sent (disable during active sessions to reduce churn)
+      // if (!hasMessagesRef.current && chatSessionId) {
+      //   fetch('/api/cleanup/empty-threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId: chatSessionId }) }).catch(() => {});
+      // }
 
       // Clean up socket listeners
       if (socket) {
@@ -245,27 +263,44 @@ export function useRoomSocket({
         socket.off('user-joined-room', handleParticipantChange);
         socket.off('user-left-room', handleParticipantChange);
         socket.off('room-deleted', handleRoomDeleted);
+        socket.off('ai-stream-start');
+        socket.off('ai-stream-chunk');
+        socket.off('ai-stream-end');
         socket.off('room-joined');
         socket.off('room-error');
 
-        // Leave the room
         if (shareCode) {
           socket.emit('leave-room', shareCode);
         }
       }
 
-      // Clear typing timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
     };
-  }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange]);
+  }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange, onStreamStart, onStreamChunk, onStreamEnd]);
+
+  const invokeAI = useCallback((payload: {
+    shareCode: string;
+    threadId: string;
+    prompt: string;
+    roomName: string;
+    participants: string[];
+    modelId?: string;
+    chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+  }) => {
+    if (socket && isConnected) {
+      socket.emit('invoke-ai', payload);
+    }
+  }, [socket, isConnected]);
 
   return {
     isConnected,
     connectionStatus,
     broadcastTyping,
-    stopTyping
+    stopTyping,
+    invokeAI,
+    isAIStreaming
   };
 }

@@ -378,11 +378,49 @@ const MessageInput = ({
     console.log(`✅ [${submissionId}] PROMPT SUBMIT: Completed`);
   };
 
+  // Focus textarea on mount for mobile to open the keyboard when user taps the input
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const onTouchStart = () => {
+      // Ensure focus on touch to open keyboard
+      el.focus({ preventScroll: true });
+    };
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    return () => el.removeEventListener('touchstart', onTouchStart as any);
+  }, []);
+
+  // Long-press on send button (mobile) to trigger AI quick action (same as Shift+Enter)
+  const sendButtonRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const btn = sendButtonRef.current;
+    if (!btn) return;
+    let timer: any;
+    const handleTouchStart = (e: TouchEvent) => {
+      timer = setTimeout(() => {
+        // Trigger AI prompt action
+        handlePromptSubmit(e as any);
+      }, 500); // 500ms long-press
+    };
+    const clear = () => timer && clearTimeout(timer);
+    btn.addEventListener('touchstart', handleTouchStart, { passive: true });
+    btn.addEventListener('touchend', clear, { passive: true });
+    btn.addEventListener('touchmove', clear, { passive: true });
+    btn.addEventListener('touchcancel', clear, { passive: true });
+    return () => {
+      btn.removeEventListener('touchstart', handleTouchStart as any);
+      btn.removeEventListener('touchend', clear as any);
+      btn.removeEventListener('touchmove', clear as any);
+      btn.removeEventListener('touchcancel', clear as any);
+    };
+  }, [handlePromptSubmit]);
+
   return (
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative w-full mb-1 backdrop-blur-sm rounded-2xl overflow-hidden border-1 shadow-sm flex flex-col transition-all duration-200 shadow-md dark:shadow-lg focus-within:shadow-lg dark:focus-within:shadow-xl hover:border-gray-300 dark:hover:border-gray-700 focus-within:border-gray-300 dark:focus-within:border-gray-700 cursor-text"
+        className="relative w-full mb-1 rounded-2xl overflow-hidden border-1 shadow-sm flex flex-col transition-all duration-200 shadow-md dark:shadow-lg focus-within:shadow-lg dark:focus-within:shadow-xl hover:border-gray-300 dark:hover:border-gray-700 focus-within:border-gray-300 dark:focus-within:border-gray-700 cursor-text bg-background/95 backdrop-blur-sm"
       >
         <input
           type="file"
@@ -393,6 +431,7 @@ const MessageInput = ({
         />
 
         <Textarea
+          ref={textareaRef}
           value={input}
           onChange={handleInputChangeWithTyping}
           onKeyDown={handleKeyDown}
@@ -518,12 +557,13 @@ const MessageInput = ({
               </div>
             ) : (
               <Button
+                ref={sendButtonRef}
                 type="submit"
                 size="icon"
                 variant="ghost"
                 disabled={!input.trim() && attachedFiles.length === 0}
                 className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-primary/30 rounded-lg cursor-pointer flex-shrink-0"
-                title="Send message only (Enter)"
+                title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
               >
                 <Send className="text-primary w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </Button>

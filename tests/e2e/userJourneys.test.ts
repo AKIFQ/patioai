@@ -12,7 +12,7 @@ interface TestResult {
 
 export class E2ETestSuite {
   private results: TestResult[] = [];
-  private baseUrl = process.env.TEST_BASE_URL || 'http://localhost:3001';
+  private baseUrl = process.env.TEST_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3001';
 
   async runAllTests(): Promise<{ passed: number; failed: number; results: TestResult[] }> {
     console.log('🧪 Starting comprehensive end-to-end test suite...');

@@ -11,7 +11,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { ModeToggle } from '@/components/ui/toggleButton';
-import SignOut from '@/app/components/ui/Navbar/SignOut';
+import SignOut from '@/components/layout/SignOut';
+import { SmartAvatar } from '@/components/ui/Avatar';
 
 interface SidebarFooterProps {
   userInfo: {
@@ -22,7 +23,7 @@ interface SidebarFooterProps {
 }
 
 export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
-  if (!userInfo.email) {
+  if (!userInfo) {
     return null; // Don't show footer if user is not signed in
   }
 
@@ -34,11 +35,11 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
             variant="ghost"
             className="w-full justify-start gap-3 h-12 px-3"
           >
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
-              {userInfo.full_name?.charAt(0)?.toUpperCase() || 
-               userInfo.email?.charAt(0)?.toUpperCase() || 
-               'U'}
-            </div>
+            <SmartAvatar 
+              user={userInfo} 
+              size={32}
+              style="thumbs"
+            />
             <div className="flex flex-col items-start flex-1 min-w-0">
               <span className="text-sm font-medium truncate w-full">
                 {userInfo.full_name || 'User'}
@@ -58,11 +59,11 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
         >
           <div className="px-2 py-1.5">
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                {userInfo.full_name?.charAt(0)?.toUpperCase() || 
-                 userInfo.email?.charAt(0)?.toUpperCase() || 
-                 'U'}
-              </div>
+              <SmartAvatar 
+                user={userInfo} 
+                size={32}
+                style="thumbs"
+              />
               <div className="flex flex-col flex-1 min-w-0">
                 <span className="text-sm font-medium truncate">
                   {userInfo.full_name || 'User'}

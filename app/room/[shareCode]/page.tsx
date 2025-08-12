@@ -2,6 +2,7 @@ import JoinRoomForm from './components/JoinRoomForm';
 import { getUserInfo } from '@/lib/server/supabase';
 import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import ExpiredRoomHandler from '@/app/chat/room/[shareCode]/components/ExpiredRoomHandler';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,15 +30,15 @@ async function getRoomInfo(shareCode: string) {
   const now = new Date();
   const expiresAt = new Date(room.expires_at);
   if (now > expiresAt) {
-    return null;
+    return { ...room, expired: true };
   }
 
-  return room;
+  return { ...room, expired: false };
 }
 
 async function autoJoinAuthenticatedUser(shareCode: string, userId: string, displayName: string) {
   const room = await getRoomInfo(shareCode);
-  if (!room) return false;
+  if (!room || room.expired) return false;
 
   // Generate a session ID for the authenticated user
   const sessionId = `auth_${userId}`;
@@ -90,6 +91,26 @@ export default async function RoomPage(props: RoomPageProps) {
 
   // Check if user is authenticated
   const userInfo = await getUserInfo();
+
+  // Check room status first
+  const roomInfo = await getRoomInfo(shareCode);
+  
+  if (!roomInfo) {
+    // Room not found
+    redirect('/chat');
+  }
+
+  if (roomInfo.expired) {
+    // Room is expired, show modal
+    const isCreator = userInfo && roomInfo.created_by === userInfo.id;
+    return (
+      <ExpiredRoomHandler 
+        shareCode={shareCode}
+        roomName={roomInfo.name || 'Unknown Room'}
+        isCreator={isCreator || false}
+      />
+    );
+  }
 
   if (userInfo) {
     // User is authenticated, try to auto-join them

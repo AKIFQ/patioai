@@ -193,3 +193,38 @@ body:has([data-chat-page]) footer {
 [data-chat-page] .sidebar-container {
   height: 100vh !important;
 }
+
+/* Hide scrollbar utility - maintains scrolling functionality */
+.scrollbar-hide {
+  /* For Webkit browsers (Chrome, Safari, Edge) */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer and Edge */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Webkit browsers */
+}
+
+/* Smooth 60fps sidebar animations */
+.sidebar-slide {
+  transform: translate3d(0, 0, 0); /* Force hardware acceleration */
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Optimize transitions for 60fps */
+.sidebar-transition {
+  transition-property: transform, opacity;
+  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94); /* easeOutQuad for smooth feel */
+  will-change: transform, opacity;
+}
+
+/* Ensure smooth mobile sidebar animations */
+@media (max-width: 768px) {
+  .mobile-sidebar {
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+}

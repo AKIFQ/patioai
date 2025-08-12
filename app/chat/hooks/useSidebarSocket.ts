@@ -59,8 +59,19 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
 
             console.log(`New thread "${newMessage.content?.substring(0, 30)}..." created in room ${roomData.name}`);
 
-            // Force refresh the page data to show the new thread in sidebar
-            router.refresh();
+            // Only refresh the sidebar data, not the entire page
+            // This prevents all users from having their sidebar updated when someone else creates a thread
+            try {
+              await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+              console.log('Triggered SWR mutate for chatPreviews (room thread)');
+            } catch (error) {
+              console.warn('Could not mutate SWR cache for room thread:', error);
+            }
+
+            // Dispatch custom event to trigger room chat data refresh
+            window.dispatchEvent(new CustomEvent('roomThreadCreated', { 
+              detail: threadData 
+            }));
 
             // Call custom handler if provided
             if (onThreadCreated) {
@@ -72,7 +83,7 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
         console.error('Error handling new room thread:', error);
       }
     }
-  }, [onThreadCreated, router]);
+  }, [onThreadCreated]);
 
   const handleNewChatMessage = useCallback(async (data: any) => {
     console.log('RAW CHAT MESSAGE PAYLOAD:', data);
@@ -159,46 +170,47 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
     socket.on('chat-message-created', handleNewChatMessage);
     socket.on('sidebar-refresh-requested', handleSidebarRefreshRequested);
 
-    // Join rooms for room-specific updates
-    if (userRooms && userRooms.length > 0) {
-      userRooms.forEach(room => {
-        socket.emit('join-room', room.shareCode);
-      });
+    // REMOVED: Auto-joining all user rooms to prevent churn
+    // Individual rooms will be joined only when actively viewing them via useRoomSocket
+    // if (userRooms && userRooms.length > 0) {
+    //   userRooms.forEach(room => {
+    //     socket.emit('join-room', room.shareCode);
+    //   });
+    // }
 
-      // Pre-populate seen threads with existing threads to avoid false positives
-      const populateSeenThreads = async () => {
-        try {
-          if (supabase) {
-            const { data: rooms } = await supabase
-              .from('rooms')
-              .select('id')
-              .in('share_code', userRooms.map(r => r.shareCode));
+    // Pre-populate seen threads with existing threads to avoid false positives
+    const populateSeenThreads = async () => {
+      try {
+        if (supabase && userRooms && userRooms.length > 0) {
+          const { data: rooms } = await supabase
+            .from('rooms')
+            .select('id')
+            .in('share_code', userRooms.map(r => r.shareCode));
 
-            if (rooms && rooms.length > 0) {
-              const roomIds = rooms.map(r => r.id);
-              const { data: existingMessages } = await supabase
-                .from('room_messages')
-                .select('thread_id')
-                .in('room_id', roomIds)
-                .not('thread_id', 'is', null);
+          if (rooms && rooms.length > 0) {
+            const roomIds = rooms.map(r => r.id);
+            const { data: existingMessages } = await supabase
+              .from('room_messages')
+              .select('thread_id')
+              .in('room_id', roomIds)
+              .not('thread_id', 'is', null);
 
-              if (existingMessages) {
-                existingMessages.forEach(msg => {
-                  if (msg.thread_id) {
-                    seenThreadsRef.current.add(msg.thread_id);
-                  }
-                });
-                console.log(`Pre-populated ${seenThreadsRef.current.size} existing threads`);
-              }
+            if (existingMessages) {
+              existingMessages.forEach(msg => {
+                if (msg.thread_id) {
+                  seenThreadsRef.current.add(msg.thread_id);
+                }
+              });
+              console.log(`Pre-populated ${seenThreadsRef.current.size} existing threads`);
             }
           }
-        } catch (error) {
-          console.error('Error pre-populating seen threads:', error);
         }
-      };
+      } catch (error) {
+        console.error('Error pre-populating seen threads:', error);
+      }
+    };
 
-      populateSeenThreads();
-    }
+    populateSeenThreads();
 
     return () => {
       console.log('Cleaning up sidebar socket listeners');

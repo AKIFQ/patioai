@@ -127,13 +127,23 @@ interface CombinedDrawerProps {
 }
 
 // Function to fetch rooms
-const fetchRooms = async (): Promise<RoomPreview[]> => {
+const fetchRooms = async () => {
   const response = await fetch('/api/rooms');
   if (!response.ok) {
     throw new Error('Failed to fetch rooms');
   }
   const data = await response.json();
   return data.rooms || [];
+};
+
+// Function to fetch room chat data
+const fetchRoomChats = async () => {
+  const response = await fetch('/api/rooms?includeChats=true');
+  if (!response.ok) {
+    throw new Error('Failed to fetch room chats');
+  }
+  const data = await response.json();
+  return data.roomChatsData || [];
 };
 
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
@@ -172,6 +182,17 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     userInfo.email ? fetchRooms : () => Promise.resolve([]), // Conditional function instead of conditional key
     {
       fallbackData: rooms,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false
+    }
+  );
+
+  // Add SWR for room chat data with real-time updates
+  const { data: currentRoomChatsData, mutate: mutateRoomChats } = useSWR(
+    'roomChats',
+    userInfo.email ? fetchRoomChats : () => Promise.resolve([]),
+    {
+      fallbackData: roomChatsData,
       revalidateOnFocus: false,
       revalidateOnReconnect: false
     }
@@ -226,6 +247,26 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     mutateRooms();
   }, [mutateRooms]);
 
+  const handleThreadCreated = useCallback(() => {
+    // Refresh room chat data when a new thread is created
+    mutateRoomChats();
+  }, [mutateRoomChats]);
+
+  // Listen for room thread creation events from sidebar socket
+  React.useEffect(() => {
+    const handleRoomThreadCreated = () => {
+      console.log('Received room thread created event, refreshing room chat data');
+      mutateRoomChats();
+    };
+
+    // Listen for custom event from sidebar socket
+    window.addEventListener('roomThreadCreated', handleRoomThreadCreated);
+
+    return () => {
+      window.removeEventListener('roomThreadCreated', handleRoomThreadCreated);
+    };
+  }, [mutateRoomChats]);
+
   const toggleSidebar = () => {
     const newState = !sidebarOpen;
     setSidebarOpen(newState);
@@ -250,7 +291,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       const threadLatestTimes = new Map();
 
       // Group room messages by thread_id and find the first user message for each thread
-      (roomChatsData || []).forEach((msg: any) => {
+      (currentRoomChatsData || []).forEach((msg: any) => {
         if (msg.thread_id && !msg.is_ai_response) {
           if (!threadFirstMessages.has(msg.thread_id)) {
             threadFirstMessages.set(msg.thread_id, msg);
@@ -311,7 +352,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
       if (currentRoom) {
         // Group room messages by thread_id for the current room
-        (roomChatsData || []).forEach((msg: any) => {
+        (currentRoomChatsData || []).forEach((msg: any) => {
           if (msg.room_id === currentRoom.id && msg.thread_id && !msg.is_ai_response) {
             if (!threadFirstMessages.has(msg.thread_id)) {
               threadFirstMessages.set(msg.thread_id, msg);
@@ -358,23 +399,30 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
       return roomThreads;
     }
-  }, [currentRoomShareCode, roomChatsData, currentRooms]);
+  }, [currentRoomShareCode, currentRoomChatsData, currentRooms]);
 
   // On mobile, reuse the SAME sidebar as an overlay, controlled by the shared context
   // We render the sidebar only when open to avoid layout shift
   const mobileOverlay = isMobile ? (
     <div
-      className={`${isMobileSidebarOpen ? 'fixed' : 'hidden'} inset-0 z-[100] md:hidden`}
+      className={`fixed inset-0 z-[100] md:hidden transition-opacity duration-300 ease-out ${
+        isMobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
       aria-hidden={!isMobileSidebarOpen}
     >
-      <div className="absolute inset-0 bg-black/40" onClick={closeMobileSidebar} />
+      <div 
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ease-out ${
+          isMobileSidebarOpen ? 'opacity-100' : 'opacity-0'
+        }`} 
+        onClick={closeMobileSidebar} 
+      />
     </div>
   ) : null;
 
   // Minimized sidebar - Only show on desktop when collapsed
   if (!sidebarOpen && !isMobile) {
     return (
-      <div className="h-full border-r border-border w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2 hidden md:flex">
+      <div className="h-full border-r border-border w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2 hidden md:flex transform transition-all duration-300 ease-out">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -382,7 +430,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={toggleSidebar}
-                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
+                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-all duration-200 ease-out hover:scale-105 active:scale-95"
                 aria-label="Open sidebar"
               >
                 <Menu size={16} />
@@ -458,19 +506,15 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   return (
     <>
       {mobileOverlay}
-      <CreateRoomModal
-        isOpen={isCreateGroupModalOpen}
-        onClose={() => setIsCreateGroupModalOpen(false)}
-        onRoomCreated={handleRoomCreated}
-      />
-
-      <JoinRoomModal
-        isOpen={isJoinRoomModalOpen}
-        onClose={() => setIsJoinRoomModalOpen(false)}
-      />
       <Sidebar
         collapsible="none"
-        className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${isMobile ? (isMobileSidebarOpen ? 'fixed left-0 top-0 bottom-0 w-[280px] z-[101]' : 'hidden') : ''}`}
+        className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${
+          isMobile 
+            ? `fixed left-0 top-0 bottom-0 w-[280px] z-[101] mobile-sidebar sidebar-slide sidebar-transition transition-transform duration-300 ease-out ${
+                isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              }` 
+            : 'sidebar-slide'
+        }`}
       >
         <SidebarHeader className="px-3 sm:px-4 lg:px-5 py-3 sm:py-4 border-b border-border gap-0">
           {/* PatioAI Logo - Larger with more spacing */}
@@ -489,7 +533,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               variant="ghost"
               size="sm"
               onClick={toggleSidebar}
-              className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/70 transition-colors"
+              className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/70 transition-all duration-200 ease-out hover:scale-105 active:scale-95"
               aria-label="Close sidebar"
             >
               <PanelLeftIcon size={14} />
@@ -509,14 +553,16 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           </Button>
 
           {/* ROOMS Header - Compact */}
-          <div className="flex items-center justify-between mb-1 ml-1 sm:ml-2">
-            <h2 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Rooms</h2>
+          <div className="mb-1 border-b border-border/50 pb-2 ml-1 sm:ml-2">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rooms</h2>
           </div>
 
           {/* Room Action Buttons - Compact */}
           <div className="flex gap-1 sm:gap-2 ml-1 sm:ml-2">
             <Button
-              onClick={() => setIsCreateGroupModalOpen(true)}
+              onClick={() => {
+                setIsCreateGroupModalOpen(true);
+              }}
               className="flex-1 h-7 text-xs font-medium"
               size="sm"
               variant="ghost"
@@ -525,7 +571,9 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               New
             </Button>
             <Button
-              onClick={() => setIsJoinRoomModalOpen(true)}
+              onClick={() => {
+                setIsJoinRoomModalOpen(true);
+              }}
               className="flex-1 h-7 text-xs font-medium"
               size="sm"
               variant="outline"
@@ -537,7 +585,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         </SidebarHeader>
 
         {/* Rooms List - Clean scrollable section */}
-        <div className="flex-1 overflow-y-auto border-b border-border">
+        <div className="border-b border-border">
           <div className="px-3 sm:px-4 py-2">
             {!userInfo.email ? (
               <div className="text-center py-4 sm:py-6 space-y-2 sm:space-y-3">
@@ -557,66 +605,151 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 <p className="text-xs text-muted-foreground/60 mt-1">Create your first room above</p>
               </div>
             ) : (
-              <div className="space-y-1">
-                {currentRooms.map((room) => (
-                  <Link
-                    key={room.id}
-                    href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
-                    onClick={handleRoomSelect}
-                    className={`block w-full text-left p-2 sm:p-3 rounded-lg transition-colors ${currentRoomShareCode === room.shareCode
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-muted/60'
-                      }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="font-medium text-sm truncate">{room.name}</span>
-                      {room.isCreator && (
-                        <Crown className="h-3 w-3 text-amber-500 ml-auto" />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground/70">
-                      <span>{room.participantCount} online</span>
-                      <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
-                        {room.tier}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+              <div className="max-h-32 overflow-y-auto">
+                <div className="space-y-1">
+                  {currentRooms.map((room: any) => {
+                    const isExpired = new Date() > new Date(room.expiresAt);
+                    const isExpiringSoon = !isExpired && (new Date(room.expiresAt).getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+                    
+                    return (
+                      <Link
+                        key={room.id}
+                        href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
+                        onClick={(e) => {
+                          if (isExpired) {
+                            e.preventDefault();
+                            return;
+                          }
+                          handleRoomSelect();
+                        }}
+                        className={`block w-full text-left p-2 sm:p-3 rounded-lg transition-colors ${
+                          isExpired 
+                            ? 'opacity-50 pointer-events-none' 
+                            : currentRoomShareCode === room.shareCode
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/60'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`w-2 h-2 rounded-full ${
+                            isExpired 
+                              ? 'bg-destructive' 
+                              : isExpiringSoon 
+                              ? 'bg-amber-500 animate-pulse' 
+                              : 'bg-emerald-500 animate-pulse'
+                          }`} />
+                          <span className={`font-medium text-sm truncate ${isExpired ? 'line-through text-muted-foreground' : ''}`}>
+                            {room.name}
+                          </span>
+                          <div className="flex items-center gap-1 ml-auto">
+                            {room.isCreator && (
+                              <Crown className="h-3 w-3 text-amber-500" />
+                            )}
+                            {isExpired && (
+                              <span className="px-1.5 py-0.5 bg-destructive/20 text-destructive rounded text-xs font-medium">
+                                Expired
+                              </span>
+                            )}
+                            {isExpiringSoon && (
+                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-600 rounded text-xs font-medium">
+                                Soon
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                          <span>{room.participantCount} online</span>
+                          <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
+                            {room.tier}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Chat History - Clean bottom section */}
-        <div className="h-[40%] flex flex-col">
-          <div className="px-3 sm:px-4 py-1.5 border-b border-border bg-muted/20">
-            <h3 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide ml-1 sm:ml-2">
-              {currentRoomShareCode ? 'Room Threads' : 'Recent Chats'}
-            </h3>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {currentRoomShareCode ? (
-              <div className="px-3 sm:px-4 py-2">
-                {processedThreads.length === 0 ? (
-                  <div className="text-center py-4 sm:py-6">
-                    <p className="text-sm text-muted-foreground/80">No chat threads yet</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Start a new conversation!</p>
+        {/* Room Threads Section - Scrollable threads for the active room */}
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-2">
+          {/* Switch between Room Threads and Personal Chat History */}
+          {currentRoomShareCode ? (
+            <div>
+              <div className="mb-1 border-b border-border/50 pb-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Room Threads
+                </h4>
+              </div>
+              {processedThreads.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground/80">No chat threads yet</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Start a new conversation!</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {processedThreads.map((thread: any) => (
+                    <Link
+                      key={thread.id}
+                      href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                      onClick={handleChatSelect}
+                      className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
+                    >
+                      <div className="text-xs text-muted-foreground/70 mb-1">
+                        {new Date(thread.created_at).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric'
+                        })} {thread.roomName && `• ${thread.roomName}`}
+                      </div>
+                      <div className="text-sm text-foreground font-medium truncate">
+                        {thread.firstMessage}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              {/* Personal Chats Header */}
+              <div className="mb-1 border-b border-border/50 pb-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Personal Chat
+                </h4>
+              </div>
+              
+              {/* Personal Chats */}
+              <ChatHistorySection
+                initialChatPreviews={initialChatPreviews}
+                categorizedChats={categorizedChats}
+                currentChatId={currentChatId}
+                searchParams={searchParams}
+                onChatSelect={handleChatSelect}
+                mutateChatPreviews={async () => { return; }}
+              />
+
+              {/* Room Threads */}
+              {processedThreads.length > 0 && (
+                <>
+                  <div className="mt-6 mb-3 border-b border-border/50 pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Room Threads
+                    </h4>
                   </div>
-                ) : (
                   <div className="space-y-1">
                     {processedThreads.map((thread: any) => (
                       <Link
                         key={thread.id}
-                        href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                        href={`/chat/room/${thread.roomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
                         onClick={handleChatSelect}
-                        className="block p-2 sm:p-2.5 rounded-lg hover:bg-muted/60 transition-colors"
+                        className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                       >
                         <div className="text-xs text-muted-foreground/70 mb-1">
                           {new Date(thread.created_at).toLocaleDateString([], {
                             month: 'short',
                             day: 'numeric'
-                          })} {thread.roomName && `• ${thread.roomName}`}
+                          })} • {thread.roomName}
                         </div>
                         <div className="text-sm text-foreground font-medium truncate">
                           {thread.firstMessage}
@@ -624,58 +757,36 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                       </Link>
                     ))}
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="px-3 sm:px-4 py-2">
-                {/* Personal Chats */}
-                <ChatHistorySection
-                  initialChatPreviews={initialChatPreviews}
-                  categorizedChats={categorizedChats}
-                  currentChatId={currentChatId}
-                  searchParams={searchParams}
-                  onChatSelect={handleChatSelect}
-                  mutateChatPreviews={mutateChatPreviews}
-                />
-
-                {/* Room Threads */}
-                {processedThreads.length > 0 && (
-                  <>
-                    <div className="mt-4 mb-1 ml-1 sm:ml-2">
-                      <h4 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">
-                        Room Threads
-                      </h4>
-                    </div>
-                    <div className="space-y-1">
-                      {processedThreads.map((thread: any) => (
-                        <Link
-                          key={thread.id}
-                          href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
-                          onClick={handleChatSelect}
-                          className="block p-2 sm:p-2.5 rounded-lg hover:bg-muted/60 transition-colors"
-                        >
-                          <div className="text-xs text-muted-foreground/70 mb-1">
-                            {thread.roomName} • {new Date(thread.created_at).toLocaleDateString([], {
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </div>
-                          <div className="text-sm text-foreground font-medium truncate">
-                            {thread.firstMessage}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Settings Footer - Like ChatGPT */}
         <ChatSidebarFooter userInfo={userInfo} />
       </Sidebar>
+
+      {/* Modals outside sidebar so they stay visible when sidebar closes */}
+      <CreateRoomModal
+        isOpen={isCreateGroupModalOpen}
+        onClose={() => {
+          setIsCreateGroupModalOpen(false);
+          if (isMobile) {
+            closeMobileSidebar();
+          }
+        }}
+        onRoomCreated={handleRoomCreated}
+      />
+
+      <JoinRoomModal
+        isOpen={isJoinRoomModalOpen}
+        onClose={() => {
+          setIsJoinRoomModalOpen(false);
+          if (isMobile) {
+            closeMobileSidebar();
+          }
+        }}
+      />
     </>
   );
 };
@@ -918,7 +1029,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
               </div>
 
               {/* Rooms List */}
-              <div className="px-4 py-2">
+              <div className="px-4 py-2 border-b border-border">
                 {!userInfo.email ? (
                   <div className="text-center py-4 space-y-2">
                     <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
@@ -932,41 +1043,79 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                     <p className="text-xs text-muted-foreground/60 mt-1">Create your first room above</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {rooms.map((room) => (
-                      <Link
-                        key={room.id}
-                        href={`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
-                        onClick={handleRoomSelect}
-                        className={`block w-full text-left p-2 rounded-lg transition-colors ${currentRoomShareCode === room.shareCode
-                          ? 'bg-primary/10 text-primary'
-                          : 'hover:bg-muted/60'
-                          }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="font-medium text-sm truncate">{room.name}</span>
-                          {room.isCreator && (
-                            <Crown className="h-3 w-3 text-amber-500 ml-auto" />
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground/70">
-                          <span>{room.participantCount} online</span>
-                          <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
-                            {room.tier}
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
+                  <div className="max-h-32 overflow-y-auto">
+                    <div className="space-y-1">
+                      {rooms.map((room) => {
+                      const isExpired = new Date() > new Date(room.expiresAt);
+                      const isExpiringSoon = !isExpired && (new Date(room.expiresAt).getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+                      
+                      return (
+                        <Link
+                          key={room.id}
+                          href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
+                          onClick={(e) => {
+                            if (isExpired) {
+                              e.preventDefault();
+                              return;
+                            }
+                            handleRoomSelect();
+                          }}
+                          className={`block w-full text-left p-2 rounded-lg transition-colors ${
+                            isExpired 
+                              ? 'opacity-50 pointer-events-none' 
+                              : currentRoomShareCode === room.shareCode
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-muted/60'
+                            }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className={`w-2 h-2 rounded-full ${
+                              isExpired 
+                                ? 'bg-destructive' 
+                                : isExpiringSoon 
+                                ? 'bg-amber-500 animate-pulse' 
+                                : 'bg-emerald-500 animate-pulse'
+                            }`} />
+                            <span className={`font-medium text-sm truncate ${isExpired ? 'line-through text-muted-foreground' : ''}`}>
+                              {room.name}
+                            </span>
+                            <div className="flex items-center gap-1 ml-auto">
+                              {room.isCreator && (
+                                <Crown className="h-3 w-3 text-amber-500" />
+                              )}
+                              {isExpired && (
+                                <span className="px-1 py-0.5 bg-destructive/20 text-destructive rounded text-xs font-medium">
+                                  Expired
+                                </span>
+                              )}
+                              {isExpiringSoon && (
+                                <span className="px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-xs font-medium">
+                                  Soon
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                            <span>{room.participantCount} online</span>
+                            <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
+                              {room.tier}
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Chat History */}
               <div className="px-4 py-2 border-t">
-                <h3 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide mb-2">
-                  {currentRoomShareCode ? 'Room Threads' : 'Recent Chats'}
-                </h3>
+                <div className="mb-1 border-b border-border/50 pb-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {currentRoomShareCode ? 'Room Threads' : 'Personal Chat'}
+                  </h3>
+                </div>
                 
                 {currentRoomShareCode ? (
                   <div>
@@ -1007,7 +1156,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                       currentChatId={currentChatId}
                       searchParams={searchParams}
                       onChatSelect={handleChatSelect}
-                      mutateChatPreviews={() => {}}
+                      mutateChatPreviews={async () => {}}
                     />
 
                     {/* Room Threads */}

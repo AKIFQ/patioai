@@ -9,7 +9,7 @@
 
 const http = require('http');
 
-const API_BASE = process.env.API_BASE || 'http://localhost:3000';
+const API_BASE = process.env.API_BASE || process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000';
 
 async function makeRequest(path, method = 'GET', body = null) {
     return new Promise((resolve, reject) => {

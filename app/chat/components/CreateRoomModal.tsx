@@ -51,7 +51,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: roomName.trim() }),
+        body: JSON.stringify({ name: roomName }),
       });
 
       if (!response.ok) {
@@ -61,7 +61,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
 
       const data = await response.json();
       setCreatedRoom(data);
-      toast.success('Room created successfully!');
+      
     } catch (error) {
       console.error('Error creating room:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create room');
@@ -107,7 +107,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md z-[200]">
         {!createdRoom ? (
           <>
             <DialogHeader>
@@ -165,7 +165,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                 <span className="sm:hidden">Share this link to invite others.</span>
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               <div className="bg-muted/30 p-4 rounded-lg space-y-3 border border-border/40">
                 <div>
@@ -189,16 +189,16 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                   </div>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Shareable Link</Label>
                 <div className="flex gap-2">
-                  <Input
-                    value={createdRoom.shareableLink}
-                    readOnly
+                  <Input 
+                    value={createdRoom.shareableLink} 
+                    readOnly 
                     className="font-mono text-sm h-9"
                   />
-                  <Button
+                  <Button 
                     variant="ghost"
                     size="sm"
                     onClick={handleCopyLink}
