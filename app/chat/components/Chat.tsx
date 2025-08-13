@@ -320,7 +320,12 @@ const ChatComponent: React.FC<ChatProps> = ({
           const res = await fetch(`/api/rooms/${roomContext.shareCode}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: message, displayName: roomContext.displayName, threadId: roomContext.chatSessionId, triggerAI })
+            body: JSON.stringify({
+              messages: [{ role: 'user', content: message }],
+              displayName: roomContext.displayName,
+              threadId: roomContext.chatSessionId,
+              triggerAI
+            })
           });
           if (!res.ok) throw new Error('Failed to persist room message');
 
