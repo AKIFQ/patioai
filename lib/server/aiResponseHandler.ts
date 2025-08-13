@@ -160,7 +160,9 @@ export class AIResponseHandler {
       // Extract current user from prompt (format: "User: message")
       const promptMatch = prompt.match(/^(.+?):\s*(.+)$/);
       const currentUser = promptMatch ? promptMatch[1] : 'User';
-      const currentMessage = promptMatch ? promptMatch[2] : prompt;
+      let currentMessage = promptMatch ? promptMatch[2] : prompt;
+      const forceReasoning = currentMessage.startsWith('[reasoning:on]');
+      if (forceReasoning) currentMessage = currentMessage.replace('[reasoning:on]', '').trimStart();
 
       // Convert chat history to message format for prompt engine
       const messages = chatHistory.map(msg => ({
@@ -196,8 +198,11 @@ export class AIResponseHandler {
         .map(m => (typeof m.content === 'string' ? m.content : ''))
         .join(' ');
       const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
-      const messageContext = this.modelRouter.analyzeMessageContext(analysisText, chatHistory.length);
-      const routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId);
+      const messageContext = this.modelRouter.analyzeMessageContext(currentMessage, chatHistory.length);
+      let routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId);
+      if (forceReasoning && (!modelId || modelId === 'auto' || modelId === 'gpt-4o')) {
+        routedModelId = 'deepseek/deepseek-r1:free';
+      }
       
       console.log(`🎯 Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity)`);
 

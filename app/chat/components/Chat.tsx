@@ -138,6 +138,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [reasoningEnabled, setReasoningEnabled] = useState(false);
 
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
@@ -298,165 +299,78 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput
-  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true) => {
-    // Prevent duplicate submissions
-    if (isSubmitting) {
-      console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
-      return;
-    }
+  const handleSubmit = useCallback(
+    async (message: string, attachments?: File[], triggerAI: boolean = true, options?: { reasoning?: boolean }) => {
+      // Prevent duplicate submissions
+      if (isSubmitting) {
+        console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
+        return;
+      }
 
-    setIsSubmitting(true);
-    console.log(`🚀 CHAT: Handling submission: "${message.substring(0, 50)}"`);
+      setIsSubmitting(true);
+      console.log(`🚀 CHAT: Handling submission: "${message.substring(0, 50)}"`);
 
-    try {
-      if (roomContext) {
-        if (triggerAI) {
-          // For room chats with AI response: Direct API call with loading state
-          console.log('🏠 Room chat: Persisting user message, streaming via Socket.IO');
+      try {
+        if (roomContext) {
+          // Room chat flow (Socket.IO)
+          if (process.env.NODE_ENV === 'development') console.log('🏠 Room chat: Persisting user message, streaming via Socket.IO');
           setIsRoomLoading(true);
 
-          const response = await fetch(apiEndpoint, {
+          // Persist user message via HTTP so everyone sees it
+          const res = await fetch(`/api/rooms/${roomContext.shareCode}/chat`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messages: [
-                ...realtimeMessages,
-                {
-                  role: 'user',
-                  content: message,
-                  id: crypto.randomUUID(),
-                  createdAt: new Date()
-                }
-              ],
-              displayName: roomContext.displayName,
-              option: optimisticOption,
-              threadId: roomContext.chatSessionId,
-              triggerAI: false
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: message, displayName: roomContext.displayName, threadId: roomContext.chatSessionId, triggerAI })
           });
+          if (!res.ok) throw new Error('Failed to persist room message');
 
-          if (!response.ok) {
-            throw new Error(`API call failed: ${response.status}`);
-          }
-          // Then invoke streaming via socket
-          if (invokeAI && isConnected) {
-            // Prepare chat history for context (last 10 messages)
-            const chatHistory = realtimeMessages
-              .slice(-10) // Last 10 messages for context
-              .map(msg => ({
-                role: msg.role,
-                content: msg.senderName && msg.role === 'user' 
-                  ? `${msg.senderName}: ${msg.content}` 
-                  : msg.content
-              }));
-
-            invokeAI({
+          // Trigger AI stream via socket (only if requested)
+          if (triggerAI) {
+            const payload = {
               shareCode: roomContext.shareCode,
-              threadId: roomContext.chatSessionId!,
+              threadId: roomContext.chatSessionId as string,
               prompt: `${roomContext.displayName}: ${message}`,
               roomName: roomContext.roomName,
-              participants: roomContext.participants.map(p => p.displayName),
-              modelId: optimisticOption,
-              chatHistory
-            });
-          }
-          console.log('✅ Room chat: User message persisted, AI stream invoked');
-        } else {
-          // For room chats without AI response: Use same endpoint but with triggerAI: false
-          console.log('📤 Room chat: Sending user message only (no AI)');
-
-          const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messages: [
-                ...realtimeMessages,
-                {
-                  role: 'user',
-                  content: message,
-                  id: crypto.randomUUID(),
-                  createdAt: new Date()
-                }
-              ],
-              displayName: roomContext.displayName,
-              option: optimisticOption,
-              threadId: roomContext.chatSessionId,
-              triggerAI: false
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error(`API call failed: ${response.status}`);
+              participants: roomContext.participants?.map(p => p.displayName) || [],
+              // If reasoning toggle is enabled, force DeepSeek R1 free; else use user's selection/auto
+              modelId: (options?.reasoning || reasoningEnabled)
+                ? 'deepseek/deepseek-r1:free'
+                : (optimisticOption === 'auto' ? undefined : optimisticOption),
+              chatHistory: realtimeMessages
+                .filter(m => m.role === 'user' || m.role === 'assistant')
+                .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+            };
+            invokeAI?.(payload as any);
           }
 
-          console.log('✅ Room chat: User message sent (no AI)');
+          setIsRoomLoading(false);
+          return;
         }
 
-        // Clear the input field immediately for better UX
-        handleInputChange({ target: { value: '' } } as any);
-        // Real-time will handle showing the messages
+        // Personal chat flow (HTTP SSE)
+        if (process.env.NODE_ENV === 'development') console.log('💬 Personal chat: streaming via /api/chat');
 
-      } else {
-        // For individual chats: Update URL immediately to prevent re-renders
-        if (window.location.pathname === '/chat' && stableChatId) {
-          const newUrl = `/chat/${stableChatId}${window.location.search}`;
-          window.history.replaceState({}, '', newUrl);
-          console.log(`🔄 Pre-emptively updated URL to: ${newUrl}`);
-        }
-
-        if (triggerAI) {
-          // For individual chats with AI response: Use optimistic updates
-          if (attachments && attachments.length > 0) {
-            // Handle attachments
-            const fileList = new DataTransfer();
-            attachments.forEach(file => fileList.items.add(file));
-
-            await append({
-              role: 'user',
-              content: message,
-              experimental_attachments: Array.from(fileList.files as any) as any
-            });
-          } else {
-            await append({
-              role: 'user',
-              content: message
-            });
-          }
-        } else {
-          // For individual chats without AI response: Just add user message
-          const userMessage: Message = {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: message,
-            createdAt: new Date(),
-            ...(attachments && attachments.length > 0 && {
-              experimental_attachments: attachments as any
-            })
-          } as any;
-
-          setMessages(prevMessages => [...prevMessages, userMessage]);
-          console.log('📤 Added user message without AI response');
-        }
+        const controller = new AbortController();
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            messages,
+            chatId,
+            option: optimisticOption,
+            webSearch: webSearchEnabled,
+            reasoning: options?.reasoning ?? reasoningEnabled,
+            selectedBlobs: []
+          }),
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error('Failed to stream chat');
+      } catch (e) {
+        console.error(e);
       }
-    } catch (error) {
-      console.error('❌ CHAT: Error in handleSubmit:', error);
-      if (roomContext) {
-        toast.error('Failed to send message. Please try again.');
-      }
-    } finally {
-      if (roomContext) {
-        setIsRoomLoading(false);
-      }
-      // Reset submission flag after a delay to prevent rapid-fire submissions
-      setTimeout(() => {
-        setIsSubmitting(false);
-      }, 1000);
-    }
-  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting, setMessages, stableChatId]);
+    },
+    [roomContext, optimisticOption, messages, chatId, webSearchEnabled, reasoningEnabled, invokeAI, realtimeMessages]
+  );
 
   const { mutate } = useSWRConfig();
 
@@ -1085,6 +999,7 @@ const ChatComponent: React.FC<ChatProps> = ({
           setInput={(value: string) => handleInputChange({ target: { value } } as any)}
           webSearchEnabled={webSearchEnabled}
           setWebSearchEnabled={setWebSearchEnabled}
+          onReasoningToggle={(enabled: boolean) => setReasoningEnabled(enabled)}
           userTier={(userData as any)?.subscription_tier || 'free'}
           onUpgrade={() => {
             // Placeholder: surface your checkout/upgrade flow here

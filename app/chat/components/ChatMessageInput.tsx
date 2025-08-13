@@ -134,7 +134,8 @@ const MessageInput = ({
   webSearchEnabled,
   setWebSearchEnabled,
   userTier = 'free',
-  onUpgrade
+  onUpgrade,
+  onReasoningToggle
 }: {
   chatId: string;
   currentChatId: string;
@@ -142,7 +143,7 @@ const MessageInput = ({
   handleOptionChange: (value: string) => void;
   roomContext?: RoomContext;
   onTyping?: (isTyping: boolean) => void;
-  onSubmit: (message: string, attachments?: File[], triggerAI?: boolean) => void;
+  onSubmit: (message: string, attachments?: File[], triggerAI?: boolean, options?: { reasoning?: boolean }) => void;
   isLoading: boolean;
   input: string;
   setInput: (value: string) => void;
@@ -150,11 +151,13 @@ const MessageInput = ({
   setWebSearchEnabled: (value: boolean) => void;
   userTier?: 'free' | 'basic' | 'premium';
   onUpgrade?: () => void;
+  onReasoningToggle?: (enabled: boolean) => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [reasoningEnabled, setReasoningEnabled] = useState<boolean>(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const onTypingRef = useRef(onTyping);
 
@@ -349,7 +352,8 @@ const MessageInput = ({
     const submissionId = Math.random().toString(36).substring(7);
     console.log(`⚡ [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
     
-    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true);
+    // For room chats, we will use reasoningEnabled downstream to pick DeepSeek; for personal chat, the API also reads the flag
+    (onSubmit as any)(input, attachedFiles.length > 0 ? attachedFiles : undefined, true, { reasoning: reasoningEnabled });
     
     // Clear form
     setInput('');
@@ -464,6 +468,28 @@ const MessageInput = ({
                     <span
                       className={`inline-block h-3 w-3 rounded-full bg-background shadow transition-transform ${
                         webSearchEnabled ? 'translate-x-3' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setReasoningEnabled(!reasoningEnabled);
+                  }}
+                  className="text-xs flex items-center justify-between"
+                >
+                  <span>Reasoning (DeepSeek)</span>
+                  <span
+                    className={`ml-2 inline-flex h-4 w-7 items-center rounded-full border transition-colors ${
+                      reasoningEnabled
+                        ? 'bg-amber-500/70 border-amber-400/60'
+                        : 'bg-muted/40 border-border/40'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3 w-3 rounded-full bg-background shadow transition-transform ${
+                        reasoningEnabled ? 'translate-x-3' : 'translate-x-0.5'
                       }`}
                     />
                   </span>

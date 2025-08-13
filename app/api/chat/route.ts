@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
   const signal = body.signal;
   const selectedFiles: string[] = body.selectedBlobs ?? [];
   const webSearch: boolean = !!body.webSearch;
+  const reasoning: boolean = !!body.reasoning;
 
   if (!chatSessionId) {
     return new NextResponse('Chat session ID is empty.', {
@@ -145,7 +146,7 @@ export async function POST(req: NextRequest) {
   
   // Route model and get provider options
   const context = modelRouter.analyzeMessageContext(lastMessageContent, messages.length);
-  const routedModel = modelRouter.routeModel(
+  let routedModel = modelRouter.routeModel(
     { tier: userSubscription.tier }, 
     context, 
     selectedModel,
@@ -156,6 +157,10 @@ export async function POST(req: NextRequest) {
       hardLimit: userSubscription.hardLimit
     }
   );
+  // If free/auto and user toggled Reasoning, force DeepSeek R1 free
+  if (userSubscription.tier === 'free' && (selectedModel === 'auto' || !selectedModel) && reasoning) {
+    routedModel = 'deepseek/deepseek-r1:free';
+  }
   const providerOptions = openRouterService.getProviderOptions(routedModel);
 
   // Dev visibility: log the final model selection
@@ -164,7 +169,8 @@ export async function POST(req: NextRequest) {
   }
 
   const result = streamText({
-    model: getModel(selectedModel, userSubscription.tier, lastMessageContent),
+    // Use the routed/forced model id
+    model: openRouterService.getModel(routedModel),
     system: getSystemPrompt(selectedFiles),
     messages: convertToCoreMessages(messages),
     abortSignal: signal,
