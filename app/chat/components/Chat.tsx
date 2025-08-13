@@ -340,7 +340,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                 .filter(m => m.role === 'user' || m.role === 'assistant')
                 .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
             };
-            invokeAI?.(payload as any);
+            invokeAIRef.current?.(payload as any);
           }
 
           setIsRoomLoading(false);
@@ -369,7 +369,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         console.error(e);
       }
     },
-    [roomContext, optimisticOption, messages, chatId, webSearchEnabled, reasoningEnabled, invokeAI, realtimeMessages]
+    [roomContext, optimisticOption, messages, chatId, webSearchEnabled, reasoningEnabled, realtimeMessages]
   );
 
   const { mutate } = useSWRConfig();
@@ -570,6 +570,12 @@ const ChatComponent: React.FC<ChatProps> = ({
     invokeAI,
     isAIStreaming = false
   } = (realtimeHook as any) || {};
+
+  // Avoid temporal-dead-zone issues by referencing invokeAI via a ref
+  const invokeAIRef = useRef<any>(null);
+  useEffect(() => {
+    invokeAIRef.current = invokeAI;
+  }, [invokeAI]);
 
   // Listen for dev-only modelUsed announcements via socket
   useEffect(() => {
