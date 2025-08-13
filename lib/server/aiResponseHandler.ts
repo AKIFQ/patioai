@@ -154,8 +154,7 @@ export class AIResponseHandler {
     chatHistory: Array<{role: 'user' | 'assistant', content: string}> = []
   ): Promise<void> {
     try {
-      console.log(`🤖 Starting AI stream for room ${shareCode}, model: ${modelId}`);
-      this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
+      console.log(`🤖 Starting AI stream for room ${shareCode}, requested model: ${modelId}`);
 
       // Extract current user from prompt (format: "User: message")
       const promptMatch = prompt.match(/^(.+?):\s*(.+)$/);
@@ -199,12 +198,19 @@ export class AIResponseHandler {
         .join(' ');
       const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       const messageContext = this.modelRouter.analyzeMessageContext(currentMessage, chatHistory.length);
-      let routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId);
-      if (forceReasoning && (!modelId || modelId === 'auto' || modelId === 'gpt-4o')) {
-        routedModelId = 'deepseek/deepseek-r1:free';
+      let routedModelId: string;
+      // Honor explicit model selection (e.g., DeepSeek toggle) even for free tier
+      if (modelId && modelId !== 'auto') {
+        routedModelId = modelId;
+      } else {
+        routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, 'auto');
       }
+      if (forceReasoning) routedModelId = 'deepseek/deepseek-r1:free';
       
       console.log(`🎯 Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity)`);
+
+      // Now that we know the resolved model, emit stream-start with both requested and used
+      this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), requestedModel: modelId, modelUsed: routedModelId });
 
       // Get provider options for reasoning models
       const providerOptions = openRouterService.getProviderOptions(routedModelId);
