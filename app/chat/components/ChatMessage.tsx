@@ -120,16 +120,15 @@ const ChatMessage = memo(({
 
             {/* Streaming Reasoning UI - Show for AI messages when reasoning is available OR streaming */}
             {!isUserMessage && message.role === 'assistant' && (
-              streamingReasoning || 
-              message.reasoning || 
-              (isRoomChat && (isReasoningStreaming || isReasoningComplete)) ||
-              (!isRoomChat && isStreaming)
+              // show only if we have reasoning content or we are actively streaming reasoning
+              (streamingReasoning?.length || message.reasoning?.length) ||
+              (isRoomChat && isReasoningStreaming)
             ) && (
               <StreamingReasoningUI
                 messageId={message.id}
                 reasoningText={streamingReasoning || message.reasoning || ''}
-                isStreaming={isRoomChat ? isReasoningStreaming : (isStreaming && !!streamingReasoning)}
-                isComplete={isRoomChat ? isReasoningComplete : (isReasoningComplete || (!isStreaming && !!message.reasoning))}
+                isStreaming={isRoomChat ? isReasoningStreaming : (!!streamingReasoning && isStreaming)}
+                isComplete={isRoomChat ? isReasoningComplete : (!!message.reasoning && !isStreaming)}
                 onMinimize={() => {
                   // Handle reasoning minimization if needed
                 }}

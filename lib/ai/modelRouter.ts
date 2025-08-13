@@ -113,8 +113,9 @@ export class ModelRouter {
     const hasCode = /```|function|class|import|const|let|var|def |class |import |from |<\/|<\w+/.test(content);
     const isQuestion = content.includes('?') || /^(how|what|why|when|where|can you|could you)/i.test(content);
     
-    // Detect academic/research content
-    const isAcademic = /research|study|analysis|theory|academic|paper|journal|thesis|hypothesis/.test(lowerContent);
+    // Detect academic/research content (expanded to include math/logic)
+    const isMath = /(math|mathematics|algebra|geometry|calculus|probability|statistics|statistical|theorem|lemma|proof|derive|equation|pythagoras|bayes|bayes'|bayesian)/.test(lowerContent) || /[=<>±∞∑∫√^]/.test(content);
+    const isAcademic = /research|study|analysis|theory|academic|paper|journal|thesis|hypothesis/.test(lowerContent) || isMath;
     
     // Detect shopping/commercial content
     const isShopping = /buy|purchase|price|cost|shop|product|review|compare|recommend|best|cheap|expensive/.test(lowerContent);
@@ -122,7 +123,7 @@ export class ModelRouter {
     let complexity: MessageContext['complexity'] = 'simple';
     
     // Determine complexity
-    if (content.length > 500 || hasCode || isAcademic) {
+    if (content.length > 300 || hasCode || isAcademic) {
       complexity = 'complex';
     } else if (content.length > 100 || isQuestion || isShopping) {
       complexity = 'medium';

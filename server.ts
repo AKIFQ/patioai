@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
@@ -9,6 +10,12 @@ import { AuthenticatedSocket } from './types/socket';
 import { MemoryManager } from './lib/monitoring/memoryManager';
 import { AlertSystem } from './lib/monitoring/alertSystem';
 
+// Print masked key so we can confirm availability at process start
+try {
+  const k = process.env.OPENROUTER_API_KEY || '';
+  const masked = k ? `${k.slice(0, 6)}…${k.slice(-4)}` : 'MISSING';
+  console.log(`🔐 OPENROUTER_API_KEY (server.ts): ${masked}`);
+} catch {}
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';

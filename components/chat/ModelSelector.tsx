@@ -10,16 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Crown, Zap, Brain, Code, ShoppingCart } from 'lucide-react';
+import { Brain, Code, ShoppingCart, Zap } from 'lucide-react';
 
 interface ModelSelectorProps {
   selectedModel: string;
@@ -77,50 +68,33 @@ export function ModelSelector({
     );
   };
 
-  // For free users, only show "Auto" option
+  // For free users, only show a compact "Auto" control (no upgrade CTA here)
   if (userTier === 'free') {
     return (
       <div className="flex items-center gap-2">
         <Select value="auto" onValueChange={() => {}}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="h-8 px-2 text-xs rounded-md border border-border/40 bg-background/60 hover:bg-background/80 w-28">
             <SelectValue>
-              <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4" />
-                Auto (Smart Routing)
-                <Badge className="bg-green-100 text-green-800 ml-2">Free</Badge>
+              <div className="flex items-center gap-1.5">
+                <Brain className="w-3.5 h-3.5" />
+                <span className="text-xs">Auto</span>
               </div>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="w-40">
             <SelectItem value="auto">
               <div className="flex items-center gap-2">
                 <Brain className="w-4 h-4" />
-                <div>
-                  <div className="font-medium">Auto (Smart Routing)</div>
-                  <div className="text-xs text-muted-foreground">
-                    Automatically selects the best free model for your query
-                  </div>
-                </div>
-                <Badge className="bg-green-100 text-green-800">Free</Badge>
+                <span className="text-sm">Auto</span>
               </div>
             </SelectItem>
           </SelectContent>
         </Select>
-        
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={onUpgradeClick}
-          className="flex items-center gap-1"
-        >
-          <Crown className="w-4 h-4" />
-          Upgrade for More Models
-        </Button>
       </div>
     );
   }
 
-  // For paid users, show model selection
+  // For paid users, show model selection (unchanged)
   const currentModelKey = Object.keys(availableModels).find(
     key => availableModels[key].id === selectedModel
   ) || Object.keys(availableModels)[0];
@@ -178,7 +152,7 @@ export function ModelSelector({
                         Requires Premium
                       </div>
                     </div>
-                    <Crown className="w-4 h-4 text-yellow-500" />
+                    {/* Crown icon removed from premium models as per new UX */}
                   </div>
                 </SelectItem>
               ))}
@@ -187,45 +161,7 @@ export function ModelSelector({
         </SelectContent>
       </Select>
 
-      {/* Upgrade Dialog */}
-      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Crown className="w-5 h-5 text-yellow-500" />
-              Upgrade Required
-            </DialogTitle>
-            <DialogDescription>
-              This model requires a higher subscription tier to access advanced features and premium models.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="p-4 bg-muted rounded-lg">
-              <h4 className="font-medium mb-2">What you'll get:</h4>
-              <ul className="text-sm space-y-1">
-                <li>• Access to flagship models (GPT-4o, Claude Sonnet)</li>
-                <li>• Advanced reasoning capabilities</li>
-                <li>• Higher monthly limits</li>
-                <li>• Priority support</li>
-              </ul>
-            </div>
-            
-            <div className="flex gap-2">
-              <Button onClick={onUpgradeClick} className="flex-1">
-                <Crown className="w-4 h-4 mr-2" />
-                Upgrade Now
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setShowUpgradeDialog(false)}
-              >
-                Maybe Later
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Upgrade dialog removed from input area per new UX */}
     </>
   );
 }

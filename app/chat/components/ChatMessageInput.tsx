@@ -165,18 +165,11 @@ const MessageInput = ({
 
   // Create a safe typing handler using ref
   const safeOnTyping = useCallback((isTyping: boolean) => {
-    console.log('🔧 safeOnTyping called:', isTyping);
     try {
-      const currentOnTyping = onTypingRef.current;
-      console.log('🔧 currentOnTyping exists:', !!currentOnTyping);
-      if (currentOnTyping && typeof currentOnTyping === 'function') {
-        console.log('🔧 Calling onTyping function');
-        currentOnTyping(isTyping);
-      } else {
-        console.log('🔧 No onTyping function available');
-      }
+      const fn = onTypingRef.current;
+      if (typeof fn === 'function') fn(isTyping);
     } catch (error) {
-      console.warn('❌ Error calling onTyping:', error);
+      if (process.env.NODE_ENV !== 'production') console.warn('Error calling onTyping:', error);
     }
   }, []); // No dependencies needed since we use ref
 
@@ -190,11 +183,9 @@ const MessageInput = ({
   }, []);
 
   // Removed unused chatSessionIdForRoom calculation
-
+  
   // Only log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`📝 MESSAGE INPUT: Component initialized as controlled component`);
-  }
+  // (Removed noisy init log)
   
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -222,8 +213,6 @@ const MessageInput = ({
   const handleTyping = useCallback(() => {
     if (!roomContext) return;
 
-    console.log('🎯 handleTyping called for room:', roomContext.shareCode);
-    
     // Start typing
     safeOnTyping(true);
 
@@ -234,7 +223,6 @@ const MessageInput = ({
 
     // Stop typing after 1 second of inactivity
     typingTimeoutRef.current = setTimeout(() => {
-      console.log('⏰ Typing timeout - stopping typing');
       safeOnTyping(false);
     }, 1000);
   }, [roomContext, safeOnTyping]);
@@ -266,12 +254,9 @@ const MessageInput = ({
     
     // Handle typing indicators for room chats
     if (roomContext) {
-      console.log('📝 Input changed, value length:', e.target.value.length);
       if (e.target.value.length > 0) {
-        console.log('📝 Starting typing indicator');
         handleTyping();
       } else {
-        console.log('📝 Stopping typing indicator (empty input)');
         safeOnTyping(false);
       }
     }

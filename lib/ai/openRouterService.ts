@@ -34,13 +34,25 @@ export class OpenRouterService {
   getProviderOptions(modelId: string): any {
     const modelInfo = getModelInfo(modelId);
     
+    // Base: enable unified reasoning when model supports it (OpenRouter normalizes this)
+    const baseReasoning = modelInfo?.reasoning
+      ? {
+          openai: {
+            // OpenRouter normalizes this to the top-level `reasoning` param
+            reasoning: { enabled: true, effort: 'high' as const }
+          }
+        }
+      : {};
+    
     if (!modelInfo?.reasoning) {
-      return {};
+      // For non-reasoning models, return any provider-specific overrides only
+      // (none by default)
     }
 
     // Configure reasoning for different providers
     if (modelId.includes('claude')) {
       return {
+        ...baseReasoning,
         anthropic: {
           thinking: { type: 'enabled', budgetTokens: 12000 }
         }
@@ -49,6 +61,7 @@ export class OpenRouterService {
 
     if (modelId.includes('gemini')) {
       return {
+        ...baseReasoning,
         google: {
           thinkingConfig: {
             thinkingBudget: 4096,
@@ -60,14 +73,22 @@ export class OpenRouterService {
 
     if (modelId.includes('o1') || modelId.includes('o3')) {
       return {
+        ...baseReasoning,
         openai: {
-          reasoningEffort: 'high'
+          reasoning: { enabled: true, effort: 'high' }
         }
       };
     }
 
-    // DeepSeek and other reasoning models
-    return {};
+    // DeepSeek and other reasoning models use the unified OpenRouter `reasoning` param
+    if (modelId.includes('deepseek')) {
+      return {
+        ...baseReasoning
+      };
+    }
+
+    // Default
+    return baseReasoning;
   }
 
   /**

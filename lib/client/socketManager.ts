@@ -65,6 +65,9 @@ class SocketManager {
       socket.on('connect', () => {
         clearTimeout(timeoutId);
         console.log('Socket.IO connected:', socket.id);
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          (window as any).__patio_socket = socket;
+        }
         resolve(socket);
       });
 

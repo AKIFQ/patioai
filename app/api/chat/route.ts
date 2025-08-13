@@ -158,6 +158,11 @@ export async function POST(req: NextRequest) {
   );
   const providerOptions = openRouterService.getProviderOptions(routedModel);
 
+  // Dev visibility: log the final model selection
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🧭 Using OpenRouter model: ${routedModel} (selected=${selectedModel}, tier=${userSubscription.tier})`);
+  }
+
   const result = streamText({
     model: getModel(selectedModel, userSubscription.tier, lastMessageContent),
     system: getSystemPrompt(selectedFiles),
@@ -215,7 +220,7 @@ export async function POST(req: NextRequest) {
         );
         
         // Update user usage
-        await userTierService.updateUsage(userId, totalTokens, estimatedCost);
+        await userTierService.updateUsage(userId, totalTokens, estimatedCost, routedModel, 'chat');
         
         console.log(`💰 Usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost`);
       }
@@ -249,9 +254,11 @@ export async function POST(req: NextRequest) {
 
   result.consumeStream(); // We consume the stream if the server is discnnected from the client to ensure the onFinish callback is called
 
-  return result.toDataStreamResponse({
+  const response = result.toDataStreamResponse({
     sendReasoning: true, // Enable reasoning streaming for Gemini models
     sendSources: true,
     getErrorMessage: errorHandler
   });
+  try { response.headers.set('x-model-used', routedModel); } catch {}
+  return response;
 }

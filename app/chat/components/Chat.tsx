@@ -498,7 +498,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, []); // Empty dependency array - stable function
 
   const handleTypingUpdate = useCallback((users: string[]) => {
-    console.log('👥 Typing users updated in Chat:', users);
+    if (process.env.NODE_ENV === 'development') console.debug('👥 Typing users:', users);
     setTypingUsers(users);
   }, []);
 
@@ -589,7 +589,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
     
-    console.log('🧠 Reasoning chunk received:', { threadId, reasoning: reasoning.substring(0, 100), currentId });
+    if (process.env.NODE_ENV === 'development') console.debug('🧠 Reasoning chunk received:', { threadId, preview: reasoning.substring(0, 60) });
     setRoomReasoningState(prev => ({
       ...prev,
       reasoning
@@ -611,7 +611,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const handleContentStart = useCallback((threadId: string) => {
     if (!roomContext || threadId !== roomContext.chatSessionId) return;
     
-    console.log('📝 Content started for room chat:', threadId);
+    if (process.env.NODE_ENV === 'development') console.debug('📝 Content started for room chat:', threadId);
     // Reasoning UI should auto-minimize when content starts
   }, [roomContext]);
 
@@ -657,12 +657,36 @@ const ChatComponent: React.FC<ChatProps> = ({
     isAIStreaming = false
   } = (realtimeHook as any) || {};
 
+  // Listen for dev-only modelUsed announcements via socket
+  useEffect(() => {
+    const w = (window as any);
+    const socket = (w && w.__patio_socket) || null;
+    if (!socket) return;
+    const onStart = (payload: any) => {
+      if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-start', payload);
+    };
+    const onContentStart = (payload: any) => {
+      if (process.env.NODE_ENV === 'development') console.info('🔎 model used:', payload?.modelUsed);
+    };
+    const onEnd = (payload: any) => {
+      if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
+    };
+    socket.on?.('ai-stream-start', onStart);
+    socket.on?.('ai-content-start', onContentStart);
+    socket.on?.('ai-stream-end', onEnd);
+    return () => {
+      socket.off?.('ai-stream-start', onStart);
+      socket.off?.('ai-content-start', onContentStart);
+      socket.off?.('ai-stream-end', onEnd);
+    };
+  }, []);
+
   // Initialize realtime messages with current chat messages
   useEffect(() => {
     if (roomContext) {
       if (currentChat && currentChat.length > 0) {
         // Initialize with current chat messages
-        console.log('Initializing realtime messages with currentChat:', currentChat.length);
+        if (process.env.NODE_ENV === 'development') console.debug('Init realtime messages:', currentChat.length);
         setRealtimeMessages(currentChat);
       } else {
         // Start with empty array for fresh sessions
@@ -677,7 +701,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (roomContext) {
       // For room chats, ignore useChat messages completely
       // Only use real-time messages to ensure consistency across all users
-      console.log('🏠 Room chat: Using only real-time messages, ignoring useChat optimistic updates');
+      if (process.env.NODE_ENV === 'development') console.debug('🏠 Room chat using only realtime messages');
 
       // Don't merge - real-time messages are the single source of truth
       // This ensures User A and User B see exactly the same messages
@@ -688,7 +712,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   useEffect(() => {
     // Clear messages when switching to a different chat (only for regular chats)
     if (!roomContext && currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
-      console.log(`🧹 CHAT: Clearing messages due to chat ID change: ${currentChatId} -> ${chatId}`);
+      if (process.env.NODE_ENV === 'development') console.debug('🧹 Clear messages on chat change');
       setMessages([]);
     }
   }, [chatId, currentChatId, roomContext, setMessages]);
@@ -696,7 +720,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Force clear messages when component mounts with a new chat ID
   useEffect(() => {
     if (!roomContext && !currentChat) {
-      console.log(`🆕 CHAT: New chat detected, ensuring clean state for ${chatId}`);
+      if (process.env.NODE_ENV === 'development') console.debug('�� New chat detected, clear state');
       setMessages([]);
     }
   }, [chatId, roomContext, currentChat, setMessages]);

@@ -155,7 +155,7 @@ export class AIResponseHandler {
   ): Promise<void> {
     try {
       console.log(`🤖 Starting AI stream for room ${shareCode}, model: ${modelId}`);
-      this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now() });
+      this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
 
       // Extract current user from prompt (format: "User: message")
       const promptMatch = prompt.match(/^(.+?):\s*(.+)$/);
@@ -189,7 +189,14 @@ export class AIResponseHandler {
       console.log(`🧠 AI context: ${chatHistory.length} previous messages + sophisticated analysis`);
 
       // Route model based on user tier and context
-      const messageContext = this.modelRouter.analyzeMessageContext(currentMessage, chatHistory.length);
+      // Build richer analysis text from the latest few messages so short follow-ups like
+      // "any other way to prove it?" consider prior mathematical context
+      const recentHistoryText = chatHistory
+        .slice(-4)
+        .map(m => (typeof m.content === 'string' ? m.content : ''))
+        .join(' ');
+      const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
+      const messageContext = this.modelRouter.analyzeMessageContext(analysisText, chatHistory.length);
       const routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId);
       
       console.log(`🎯 Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity)`);
@@ -207,22 +214,81 @@ export class AIResponseHandler {
       let fullText = '';
       let fullReasoning = '';
       let hasReasoningStarted = false;
+      let usageTotals: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
+      let inThinkBlock = false;
+      const startMarkers = ['<think>', '<thinking>', '<reasoning>', '<thought>', '<chain_of_thought>'];
+      const endMarkers = ['</think>', '</thinking>', '</reasoning>', '</thought>', '</chain_of_thought>'];
 
-      console.log(`🧠 Starting AI stream for model: ${modelId}`);
+      if (process.env.NODE_ENV === 'development') console.log(`🧠 Starting AI stream for model: ${routedModelId}`);
+
+      // Let clients know which model is actually used
+      this.io.to(`room:${shareCode}`).emit('ai-content-start', { threadId, timestamp: Date.now(), modelUsed: routedModelId });
 
       // Use AI SDK's proper streaming interface
       for await (const delta of result.fullStream) {
-        console.log(`🔍 Delta type received: ${delta.type}`, JSON.stringify(delta, null, 2));
+        // Suppress verbose delta logs in production
+        // if (process.env.NODE_ENV === 'development') console.debug('delta:', delta.type);
         
         if (delta.type === 'text-delta') {
           const chunk = delta.textDelta;
           fullText += chunk;
-          
+
+          // Extract reasoning if model places thoughts inside tags within normal text stream
+          try {
+            let reasoningAppend = '';
+            let working = chunk;
+
+            // Detect start markers only if not already inside a think block
+            if (!inThinkBlock) {
+              for (const m of startMarkers) {
+                const idx = working.indexOf(m);
+                if (idx !== -1) {
+                  inThinkBlock = true;
+                  reasoningAppend = working.slice(idx + m.length);
+                  break;
+                }
+              }
+            } else {
+              reasoningAppend = working;
+            }
+
+            // If inside a think block, check for any end marker and trim
+            if (inThinkBlock && reasoningAppend) {
+              for (const m of endMarkers) {
+                const endIdx = reasoningAppend.indexOf(m);
+                if (endIdx !== -1) {
+                  reasoningAppend = reasoningAppend.slice(0, endIdx);
+                  inThinkBlock = false;
+                  break;
+                }
+              }
+            }
+
+            if (reasoningAppend && reasoningAppend.trim().length > 0) {
+              fullReasoning += reasoningAppend;
+              if (!hasReasoningStarted) {
+                hasReasoningStarted = true;
+                this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
+                  threadId, 
+                  timestamp: Date.now(),
+                  modelUsed: routedModelId
+                });
+              }
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
+                threadId, 
+                reasoning: fullReasoning, 
+                timestamp: Date.now(),
+                modelUsed: routedModelId
+              });
+            }
+          } catch {}
+
           // Stream main content
           this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', { 
             threadId, 
             chunk, 
-            timestamp: Date.now() 
+            timestamp: Date.now(),
+            modelUsed: routedModelId
           });
         } 
         else if (delta.type === 'reasoning') {
@@ -244,7 +310,8 @@ export class AIResponseHandler {
               hasReasoningStarted = true;
               this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
                 threadId, 
-                timestamp: Date.now() 
+                timestamp: Date.now(),
+                modelUsed: routedModelId
               });
             }
 
@@ -252,15 +319,57 @@ export class AIResponseHandler {
             this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
               threadId, 
               reasoning: fullReasoning, 
-              timestamp: Date.now() 
+              timestamp: Date.now(),
+              modelUsed: routedModelId
             });
           }
         }
+        else if (delta.type === 'step-finish' || delta.type === 'finish') {
+          const anyDelta = delta as any;
+          const u = anyDelta.usage || anyDelta.response?.usage;
+          if (u) {
+            usageTotals = {
+              promptTokens: u.promptTokens ?? usageTotals.promptTokens,
+              completionTokens: u.completionTokens ?? usageTotals.completionTokens,
+              totalTokens: (u.promptTokens ?? 0) + (u.completionTokens ?? 0)
+            };
+          }
 
+          // Some providers (or routes) include reasoning only at the end
+          let finalReasoning: string | undefined;
+          const r =
+            anyDelta.reasoning ??
+            anyDelta.reasoningText ??
+            anyDelta.response?.reasoning ??
+            anyDelta.response?.message?.reasoning ??
+            undefined;
+          if (Array.isArray(r)) {
+            finalReasoning = r.map((p: any) => (typeof p === 'string' ? p : p?.text || '')).join('');
+          } else if (typeof r === 'string') {
+            finalReasoning = r;
+          }
+          if (finalReasoning && finalReasoning.trim().length > 0) {
+            fullReasoning = finalReasoning;
+            if (!hasReasoningStarted) {
+              hasReasoningStarted = true;
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
+                threadId, 
+                timestamp: Date.now(),
+                modelUsed: routedModelId
+              });
+            }
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
+              threadId, 
+              reasoning: fullReasoning, 
+              timestamp: Date.now(),
+              modelUsed: routedModelId
+            });
+          }
+        }
+        
         // Handle other delta types that might contain reasoning/thought content
         else {
-          // Log all delta types to understand what we're receiving
-          console.log(`🔍 Delta type: ${delta.type}`, JSON.stringify(delta, null, 2));
+          // Quiet by default
           
           // Check if this delta contains thought-like content (flexible detection)
           const deltaAny = delta as any;
@@ -277,7 +386,7 @@ export class AIResponseHandler {
             '';
             
           if (thoughtContent) {
-            console.log(`💭 Found thought content in ${delta.type}:`, thoughtContent);
+            if (process.env.NODE_ENV === 'development') console.debug(`💭 thought from ${delta.type}`);
             
             // For delta types, append; for complete types, replace
             if (delta.type.includes('delta') || delta.type.includes('chunk')) {
@@ -289,19 +398,20 @@ export class AIResponseHandler {
             // Start reasoning if not already started
             if (!hasReasoningStarted) {
               hasReasoningStarted = true;
-              console.log(`🧠 Thoughts started for ${modelId} (${delta.type})`);
+              if (process.env.NODE_ENV === 'development') console.debug(`🧠 thoughts started for ${routedModelId} (${delta.type})`);
               this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
                 threadId, 
-                timestamp: Date.now() 
+                timestamp: Date.now(),
+                modelUsed: routedModelId
               });
             }
             
             // Stream thought content
-            console.log(`💭 Sending thought from ${delta.type}:`, fullReasoning);
             this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
               threadId, 
               reasoning: fullReasoning, 
-              timestamp: Date.now() 
+              timestamp: Date.now(),
+              modelUsed: routedModelId
             });
           }
         }
@@ -312,21 +422,25 @@ export class AIResponseHandler {
         this.io.to(`room:${shareCode}`).emit('ai-reasoning-end', { 
           threadId, 
           reasoning: fullReasoning, 
-          timestamp: Date.now() 
+          timestamp: Date.now(),
+          modelUsed: routedModelId
         });
       }
 
       // Signal that main content is starting
       this.io.to(`room:${shareCode}`).emit('ai-content-start', { 
         threadId, 
-        timestamp: Date.now() 
+        timestamp: Date.now(),
+        modelUsed: routedModelId
       });
 
       this.io.to(`room:${shareCode}`).emit('ai-stream-end', { 
         threadId, 
         text: fullText, 
         reasoning: fullReasoning || undefined,
-        timestamp: Date.now() 
+        timestamp: Date.now(),
+        modelUsed: routedModelId,
+        usage: usageTotals
       });
 
       // NOTE: Don't emit room-message-created here as it causes duplicates
