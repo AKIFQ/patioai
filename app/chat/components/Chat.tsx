@@ -94,7 +94,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [optimisticOption, setOptimisticOption] = useOptimistic<string, string>(
-    initialSelectedOption,
+    (userData?.subscription_tier === 'free' ? 'auto' : initialSelectedOption),
     (_, newValue) => newValue
   );
 
@@ -1061,6 +1061,11 @@ const ChatComponent: React.FC<ChatProps> = ({
           setInput={(value: string) => handleInputChange({ target: { value } } as any)}
           webSearchEnabled={webSearchEnabled}
           setWebSearchEnabled={setWebSearchEnabled}
+          userTier={(userData as any)?.subscription_tier || 'free'}
+          onUpgrade={() => {
+            // Placeholder: surface your checkout/upgrade flow here
+            console.log('Upgrade clicked');
+          }}
         />
       </div>
 

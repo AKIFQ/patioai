@@ -1,13 +1,10 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { AuthenticatedSocket } from '../../types/socket';
 import { streamText } from 'ai';
-import { openai } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { google } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
 import { RoomPromptEngine } from '../ai/roomPromptEngine';
 import { ContextManager } from '../ai/contextManager';
 import { ModelRouter } from '../ai/modelRouter';
+import { openRouterService } from '../ai/openRouterService';
 
 interface AIResponseConfig {
   triggerWords: string[];
@@ -29,7 +26,6 @@ export class AIResponseHandler {
   private promptEngine: RoomPromptEngine;
   private contextManager: ContextManager;
   private modelRouter: ModelRouter;
-  private openrouter: ReturnType<typeof createOpenAI>;
 
   constructor(io: SocketIOServer, config: Partial<AIResponseConfig> = {}) {
     this.io = io;
@@ -37,66 +33,19 @@ export class AIResponseHandler {
     this.promptEngine = new RoomPromptEngine();
     this.contextManager = new ContextManager();
     this.modelRouter = new ModelRouter();
-    
-    // Initialize OpenRouter for cost-effective models
-    this.openrouter = createOpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
-    });
   }
 
-  // Centralized model mapping for consistency
-  private getModel(selectedModel: string) {
-    switch (selectedModel) {
-      // Existing premium models
-      case 'claude-3.7-sonnet':
-        return anthropic('claude-4-sonnet-20250514');
-      case 'claude-3.5-sonnet':
-        return anthropic('claude-3-5-sonnet-20241022');
-      case 'gpt-4.1':
-        return openai('gpt-4.1-2025-04-14');
-      case 'gpt-4.1-mini':
-        return openai('gpt-4.1-mini');
-      case 'o3':
-        return openai('o3-2025-04-16');
-      case 'gpt-4o':
-        return openai('gpt-4o');
-      case 'gpt-4o-mini':
-        return openai('gpt-4o-mini');
-      case 'gpt-3.5-turbo-1106':
-        return openai('gpt-3.5-turbo');
-      case 'gemini-2.5-pro':
-        return google('gemini-2.5-pro');
-      case 'gemini-2.5-flash':
-        return google('gemini-2.5-flash');
-      case 'gemini-1.5-pro':
-        return google('gemini-1.5-pro-latest');
-      case 'gemini-2.0-flash':
-        return google('gemini-2.0-flash-exp');
-      
-      // Cost-effective models via OpenRouter
-      case 'deepseek-v3':
-        return this.openrouter('deepseek/deepseek-v3');
-      case 'qwen-2.5-72b':
-        return this.openrouter('qwen/qwen-2.5-72b-instruct');
-      case 'auto':
-        return this.getAutoModel(); // Smart routing for free users
-      
-      default:
-        console.warn('Unknown model, defaulting to deepseek-v3:', selectedModel);
-        return this.openrouter('deepseek/deepseek-v3');
+  // Get model through OpenRouter service
+  private getModel(modelId: string, messageContent?: string) {
+    // Handle auto routing for free users
+    if (modelId === 'auto') {
+      const context = this.modelRouter.analyzeMessageContext(messageContent || '', 1);
+      const routedModel = this.modelRouter.routeModel({ tier: 'free' }, context, 'auto');
+      return openRouterService.getModel(routedModel);
     }
-  }
 
-  // Smart model selection for "auto" mode
-  private getAutoModel(messageContent?: string) {
-    if (messageContent) {
-      const context = this.modelRouter.analyzeMessageContext(messageContent, 1);
-      const optimalModel = this.modelRouter.routeModel({ tier: 'free' }, context);
-      return this.getModel(optimalModel);
-    }
-    // Default to DeepSeek V3 (best price/performance)
-    return this.openrouter('deepseek/deepseek-v3');
+    // All models go through OpenRouter
+    return openRouterService.getModel(modelId);
   }
 
   // Check if a message should trigger an AI response
@@ -239,31 +188,17 @@ export class AIResponseHandler {
 
       console.log(`🧠 AI context: ${chatHistory.length} previous messages + sophisticated analysis`);
 
-      // Configure provider options for reasoning
-      const providerOptions: any = {};
-      if (modelId === 'claude-3.7-sonnet' || modelId === 'claude-3.5-sonnet') {
-        providerOptions.anthropic = {
-          thinking: { type: 'enabled', budgetTokens: 12000 }
-        };
-      }
-      if (modelId === 'gemini-2.5-pro' || modelId === 'gemini-2.5-flash' || modelId === 'gemini-2.0-flash' || modelId === 'gemini-1.5-pro') {
-        providerOptions.google = {
-          thinkingConfig: {
-            // Enable internal thinking for better reasoning
-            thinkingBudget: 4096,
-            // Enable user-facing thoughts (reasoning shown to user)
-            includeThoughts: true
-          }
-        };
-      }
-      if (modelId === 'o3') {
-        providerOptions.openai = {
-          reasoningEffort: 'high'
-        };
-      }
+      // Route model based on user tier and context
+      const messageContext = this.modelRouter.analyzeMessageContext(currentMessage, chatHistory.length);
+      const routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId);
+      
+      console.log(`🎯 Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity)`);
+
+      // Get provider options for reasoning models
+      const providerOptions = openRouterService.getProviderOptions(routedModelId);
 
       const result = streamText({
-        model: this.getModel(modelId),
+        model: this.getModel(routedModelId, currentMessage),
         system: promptResult.system,
         messages: promptResult.messages,
         providerOptions

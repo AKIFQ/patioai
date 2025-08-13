@@ -14,6 +14,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { ModelSelector } from '@/components/chat/ModelSelector';
+import { Crown } from 'lucide-react';
 // Removed model type Select as every chat is standard by default
 
 // Icons from Lucide React
@@ -130,7 +132,9 @@ const MessageInput = ({
   input,
   setInput,
   webSearchEnabled,
-  setWebSearchEnabled
+  setWebSearchEnabled,
+  userTier = 'free',
+  onUpgrade
 }: {
   chatId: string;
   currentChatId: string;
@@ -144,6 +148,8 @@ const MessageInput = ({
   setInput: (value: string) => void;
   webSearchEnabled: boolean;
   setWebSearchEnabled: (value: boolean) => void;
+  userTier?: 'free' | 'basic' | 'premium';
+  onUpgrade?: () => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
@@ -480,45 +486,13 @@ const MessageInput = ({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="flex-1 max-w-[140px] sm:max-w-[180px] min-w-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full h-7 sm:h-8 justify-between text-xs min-w-0 border border-border/40 bg-background/60 hover:bg-background/80"
-                    aria-label="Select model"
-                  >
-                    <span className="truncate">{selectedOption}</span>
-                    <ChevronDown className="h-3 w-3 ml-2 flex-shrink-0 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 border border-border/40 bg-background/90 backdrop-blur-md">
-                  {[
-                    { value: 'gpt-4.1', label: 'GPT-4.1' },
-                    { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-                    { value: 'o3', label: 'OpenAI O3' },
-                    {
-                      value: 'claude-3.7-sonnet',
-                      label: 'Claude 3.7 Sonnet'
-                    },
-                    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-                    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
-                  ].map((option) => (
-                    <DropdownMenuItem
-                      key={option.value}
-                      onClick={() => handleOptionChange(option.value)}
-                      className={`text-xs ${
-                        selectedOption === option.value
-                          ? 'bg-primary/20 dark:bg-primary/30 text-primary dark:text-primary-foreground'
-                          : ''
-                      }`}
-                    >
-                      {option.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div className="flex-1 min-w-0">
+              <ModelSelector
+                selectedModel={selectedOption}
+                userTier={userTier}
+                onModelChange={(modelId) => handleOptionChange(modelId)}
+                onUpgradeClick={onUpgrade}
+              />
             </div>
 
             {selectedBlobs.length > 0 && (

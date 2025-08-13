@@ -3,18 +3,13 @@ import type { Message, Attachment } from 'ai';
 import { streamText, convertToCoreMessages } from 'ai';
 import { saveChatToSupbabase } from './SaveToDb';
 import { Ratelimit } from '@upstash/ratelimit';
-import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
-import { openai } from '@ai-sdk/openai';
-import type { AnthropicProviderOptions } from '@ai-sdk/anthropic';
-import { anthropic } from '@ai-sdk/anthropic';
 import { redis } from '@/lib/server/server';
 import { getSession } from '@/lib/server/supabase';
 import { searchUserDocument } from './tools/documentChat';
 import { websiteSearchTool } from './tools/WebsiteSearchTool';
-import { google } from '@ai-sdk/google';
-import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
-import type { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
-import { createOpenAI } from '@ai-sdk/openai';
+import { openRouterService } from '@/lib/ai/openRouterService';
+import { ModelRouter } from '@/lib/ai/modelRouter';
+import { userTierService } from '@/lib/ai/userTierService';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,36 +57,18 @@ function errorHandler(error: unknown) {
   return JSON.stringify(error);
 }
 
-// Initialize OpenRouter for cost-effective models
-const openrouter = createOpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+const modelRouter = new ModelRouter();
 
-const getModel = (selectedModel: string) => {
-  switch (selectedModel) {
-    case 'claude-3.7-sonnet':
-      return anthropic('claude-4-sonnet-20250514');
-    case 'gpt-4.1':
-      return openai('gpt-4.1-2025-04-14');
-    case 'gpt-4.1-mini':
-      return openai('gpt-4.1-mini');
-    case 'o3':
-      return openai('o3-2025-04-16');
-    case 'gemini-2.5-pro':
-      return google('gemini-2.5-pro');
-    case 'gemini-2.5-flash':
-      return google('gemini-2.5-flash');
-    case 'deepseek-v3':
-      return openrouter('deepseek/deepseek-v3');
-    case 'qwen-2.5-72b':
-      return openrouter('qwen/qwen-2.5-72b-instruct');
-    case 'auto':
-      return openrouter('deepseek/deepseek-v3'); // Default for auto mode
-    default:
-      console.error('Invalid model selected:', selectedModel);
-      return openrouter('deepseek/deepseek-v3'); // Default to cost-effective model
-  }
+const getModel = (selectedModel: string, userTier: string = 'free', messageContent?: string) => {
+  // Analyze message context for smart routing
+  const context = modelRouter.analyzeMessageContext(messageContent || '', 1);
+  
+  // Route model based on user tier and context
+  const routedModel = modelRouter.routeModel({ tier: userTier as any }, context, selectedModel);
+  
+  console.log(`🎯 Chat model routing: ${selectedModel} → ${routedModel} (tier: ${userTier})`);
+  
+  return openRouterService.getModel(routedModel);
 };
 
 export async function POST(req: NextRequest) {
@@ -149,37 +126,40 @@ export async function POST(req: NextRequest) {
     fileAttachments = lastMessage.experimental_attachments;
   }
 
-  const selectedModel = body.option ?? 'gpt-3.5-turbo-1106';
+  const selectedModel = body.option ?? 'auto';
   const userId = session.id;
-
-  const providerOptions: LanguageModelV1ProviderMetadata = {};
-  if (selectedModel === 'claude-3.7-sonnet') {
-    providerOptions.anthropic = {
-      thinking: { type: 'enabled', budgetTokens: 12000 }
-    } satisfies AnthropicProviderOptions;
+  
+  // Get user tier and check if request is allowed
+  const userSubscription = await userTierService.getUserTier(userId);
+  const canMakeRequest = await userTierService.canMakeRequest(userId);
+  
+  if (!canMakeRequest.allowed) {
+    return new NextResponse(canMakeRequest.reason, {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-
-  if (
-    selectedModel === 'gemini-2.5-pro' ||
-    selectedModel === 'gemini-2.5-flash'
-  ) {
-    providerOptions.google = {
-      thinkingConfig: {
-        thinkingBudget: 2048,
-        includeThoughts: true
-      }
-    } satisfies GoogleGenerativeAIProviderOptions;
-  }
-
-  // Only add OpenAI options if o3 model is selected
-  if (selectedModel === 'o3') {
-    providerOptions.openai = {
-      reasoningEffort: 'high'
-    } satisfies OpenAIResponsesProviderOptions;
-  }
+  
+  // Get last message content for context analysis
+  const lastMessageContent = typeof lastMessage.content === 'string' ? lastMessage.content : '';
+  
+  // Route model and get provider options
+  const context = modelRouter.analyzeMessageContext(lastMessageContent, messages.length);
+  const routedModel = modelRouter.routeModel(
+    { tier: userSubscription.tier }, 
+    context, 
+    selectedModel,
+    {
+      monthlySpend: userSubscription.costSpent,
+      requestCount: userSubscription.monthlyUsage,
+      warningThreshold: userSubscription.warningThreshold,
+      hardLimit: userSubscription.hardLimit
+    }
+  );
+  const providerOptions = openRouterService.getProviderOptions(routedModel);
 
   const result = streamText({
-    model: getModel(selectedModel),
+    model: getModel(selectedModel, userSubscription.tier, lastMessageContent),
     system: getSystemPrompt(selectedFiles),
     messages: convertToCoreMessages(messages),
     abortSignal: signal,
@@ -205,13 +185,15 @@ export async function POST(req: NextRequest) {
       functionId: 'api_chat',
       metadata: {
         userId: session.id,
-        chatId: chatSessionId
+        chatId: chatSessionId,
+        modelUsed: routedModel,
+        userTier: userSubscription.tier
       },
       recordInputs: true,
       recordOutputs: true
     },
     onFinish: async (event) => {
-      const { text, reasoning, steps, sources } = event;
+      const { text, reasoning, steps, sources, usage } = event;
       const lastMessage = messages[messages.length - 1];
       const lastMessageContent =
         typeof lastMessage.content === 'string' ? lastMessage.content : '';
@@ -222,6 +204,21 @@ export async function POST(req: NextRequest) {
         (foundReasoningStep?.reasoning
           ? foundReasoningStep.reasoning
           : undefined);
+
+      // Track usage and cost
+      if (usage) {
+        const totalTokens = (usage.promptTokens || 0) + (usage.completionTokens || 0);
+        const estimatedCost = openRouterService.estimateCost(
+          routedModel, 
+          usage.promptTokens || 0, 
+          usage.completionTokens || 0
+        );
+        
+        // Update user usage
+        await userTierService.updateUsage(userId, totalTokens, estimatedCost);
+        
+        console.log(`💰 Usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost`);
+      }
 
       await saveChatToSupbabase(
         chatSessionId,
