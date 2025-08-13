@@ -23,7 +23,7 @@ Whether you're brainstorming ideas, analyzing documents, researching topics, or 
 - **OpenAI** (GPT-4, GPT-3.5, o1)
 - **Anthropic** (Claude 3.5 Sonnet, Claude 3 Haiku)
 - **Google AI** (Gemini Pro, Gemini Flash)
-- **Perplexity** for real-time web search
+- (Perplexity disabled) Previously used for real-time web search
 
 ### Group AI Collaboration
 - **Instant Room Creation** - Generate shareable room codes in seconds

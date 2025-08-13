@@ -89,7 +89,7 @@ const ChatMessage = memo(({
   const reasoningParts: any[] = [];
 
   return (
-    <li key={message.id} className="mb-1.5 last:mb-0 group" data-message-id={message.id} style={{ listStyle: 'none', paddingLeft: 0, marginLeft: 0 }}>
+    <li key={message.id} className="mb-2.5 last:mb-1 group" data-message-id={message.id} style={{ listStyle: 'none', paddingLeft: 0, marginLeft: 0 }}>
       <div className={`flex gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'} items-end`} role={message.role}>
         {/* Avatar - only show on left side for non-current-user messages */}
         {!isUserMessage && (
@@ -114,7 +114,7 @@ const ChatMessage = memo(({
         )}
 
         {/* Message Content with Copy Button */}
-        <div className={`flex items-start gap-1 max-w-[85%] sm:max-w-[75%] ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex items-start gap-1 ${isUserMessage ? 'max-w-[85%] sm:max-w-[75%]' : 'max-w-[92%] sm:max-w-[82%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 

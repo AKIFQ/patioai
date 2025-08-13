@@ -19,7 +19,7 @@
 - **Vector Search**: pgvector for semantic document search
 
 ### AI Integration
-- **AI Providers**: OpenAI, Anthropic, Google AI, Perplexity
+- **AI Providers**: OpenAI, Anthropic, Google AI (Perplexity disabled)
 - **Document Processing**: LlamaIndex for PDF parsing and chunking
 - **Vector Embeddings**: OpenAI embeddings for document search
 - **Web Search**: Tavily API for real-time web information
@@ -622,7 +622,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Google AI
 GOOGLE_GENERATIVE_AI_API_KEY=...
 
-# Perplexity
+# Perplexity (disabled)
 PERPLEXITY_API_KEY=pplx-...
 ```
 

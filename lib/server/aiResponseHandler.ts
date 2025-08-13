@@ -4,7 +4,10 @@ import { streamText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 import { RoomPromptEngine } from '../ai/roomPromptEngine';
+import { ContextManager } from '../ai/contextManager';
+import { ModelRouter } from '../ai/modelRouter';
 
 interface AIResponseConfig {
   triggerWords: string[];
@@ -24,16 +27,28 @@ export class AIResponseHandler {
   private io: SocketIOServer;
   private config: AIResponseConfig;
   private promptEngine: RoomPromptEngine;
+  private contextManager: ContextManager;
+  private modelRouter: ModelRouter;
+  private openrouter: ReturnType<typeof createOpenAI>;
 
   constructor(io: SocketIOServer, config: Partial<AIResponseConfig> = {}) {
     this.io = io;
     this.config = { ...defaultConfig, ...config };
     this.promptEngine = new RoomPromptEngine();
+    this.contextManager = new ContextManager();
+    this.modelRouter = new ModelRouter();
+    
+    // Initialize OpenRouter for cost-effective models
+    this.openrouter = createOpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY,
+    });
   }
 
   // Centralized model mapping for consistency
   private getModel(selectedModel: string) {
     switch (selectedModel) {
+      // Existing premium models
       case 'claude-3.7-sonnet':
         return anthropic('claude-4-sonnet-20250514');
       case 'claude-3.5-sonnet':
@@ -58,10 +73,30 @@ export class AIResponseHandler {
         return google('gemini-1.5-pro-latest');
       case 'gemini-2.0-flash':
         return google('gemini-2.0-flash-exp');
+      
+      // Cost-effective models via OpenRouter
+      case 'deepseek-v3':
+        return this.openrouter('deepseek/deepseek-v3');
+      case 'qwen-2.5-72b':
+        return this.openrouter('qwen/qwen-2.5-72b-instruct');
+      case 'auto':
+        return this.getAutoModel(); // Smart routing for free users
+      
       default:
-        console.warn('Unknown model, defaulting to gpt-4o:', selectedModel);
-        return openai('gpt-4o');
+        console.warn('Unknown model, defaulting to deepseek-v3:', selectedModel);
+        return this.openrouter('deepseek/deepseek-v3');
     }
+  }
+
+  // Smart model selection for "auto" mode
+  private getAutoModel(messageContent?: string) {
+    if (messageContent) {
+      const context = this.modelRouter.analyzeMessageContext(messageContent, 1);
+      const optimalModel = this.modelRouter.routeModel({ tier: 'free' }, context);
+      return this.getModel(optimalModel);
+    }
+    // Default to DeepSeek V3 (best price/performance)
+    return this.openrouter('deepseek/deepseek-v3');
   }
 
   // Check if a message should trigger an AI response
@@ -188,13 +223,18 @@ export class AIResponseHandler {
         thread_id: threadId
       }));
 
-      // Use sophisticated prompt engine for context-aware AI
+      // Compress context to reduce token usage
+      const compressedContext = this.contextManager.compressContext(messages);
+      console.log(`🗜️ Context compressed: ${messages.length} messages → ${compressedContext.totalTokens} tokens`);
+
+      // Use sophisticated prompt engine for context-aware AI with compressed context
       const promptResult = this.promptEngine.generatePrompt(
-        messages,
+        compressedContext.recentMessages,
         roomName,
         participants,
         currentUser,
-        currentMessage
+        currentMessage,
+        compressedContext.summarizedHistory
       );
 
       console.log(`🧠 AI context: ${chatHistory.length} previous messages + sophisticated analysis`);

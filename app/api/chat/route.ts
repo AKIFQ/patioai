@@ -14,6 +14,7 @@ import { websiteSearchTool } from './tools/WebsiteSearchTool';
 import { google } from '@ai-sdk/google';
 import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import type { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
+import { createOpenAI } from '@ai-sdk/openai';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,12 @@ function errorHandler(error: unknown) {
   return JSON.stringify(error);
 }
 
+// Initialize OpenRouter for cost-effective models
+const openrouter = createOpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
 const getModel = (selectedModel: string) => {
   switch (selectedModel) {
     case 'claude-3.7-sonnet':
@@ -75,9 +82,15 @@ const getModel = (selectedModel: string) => {
       return google('gemini-2.5-pro');
     case 'gemini-2.5-flash':
       return google('gemini-2.5-flash');
+    case 'deepseek-v3':
+      return openrouter('deepseek/deepseek-v3');
+    case 'qwen-2.5-72b':
+      return openrouter('qwen/qwen-2.5-72b-instruct');
+    case 'auto':
+      return openrouter('deepseek/deepseek-v3'); // Default for auto mode
     default:
       console.error('Invalid model selected:', selectedModel);
-      return openai('gpt-4.1-2025-04-14');
+      return openrouter('deepseek/deepseek-v3'); // Default to cost-effective model
   }
 };
 
@@ -117,6 +130,7 @@ export async function POST(req: NextRequest) {
   const chatSessionId = body.chatId;
   const signal = body.signal;
   const selectedFiles: string[] = body.selectedBlobs ?? [];
+  const webSearch: boolean = !!body.webSearch;
 
   if (!chatSessionId) {
     return new NextResponse('Chat session ID is empty.', {
@@ -171,16 +185,20 @@ export async function POST(req: NextRequest) {
     abortSignal: signal,
     providerOptions,
     tools: {
-      searchUserDocument: searchUserDocument({
-        userId,
-        selectedBlobs: selectedFiles
-      }),
-      websiteSearchTool: websiteSearchTool
+      ...(selectedFiles.length > 0
+        ? {
+            searchUserDocument: searchUserDocument({
+              userId,
+              selectedBlobs: selectedFiles
+            })
+          }
+        : {}),
+      ...(webSearch ? { websiteSearchTool: websiteSearchTool } : {})
     },
-    experimental_activeTools:
-      selectedFiles.length > 0
-        ? ['searchUserDocument', 'websiteSearchTool']
-        : ['websiteSearchTool'],
+    experimental_activeTools: [
+      ...(selectedFiles.length > 0 ? ['searchUserDocument'] as const : []),
+      ...(webSearch ? (['websiteSearchTool'] as const) : [])
+    ],
     maxSteps: 3,
     experimental_telemetry: {
       isEnabled: true,

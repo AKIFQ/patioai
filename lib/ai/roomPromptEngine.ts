@@ -49,7 +49,8 @@ export class RoomPromptEngine {
     roomName: string,
     participants: string[],
     currentUser: string,
-    currentMessage: string
+    currentMessage: string,
+    historySummary?: string
   ): { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
     
     // Analyze conversation context
@@ -59,7 +60,7 @@ export class RoomPromptEngine {
     this.buildUserProfiles(messages);
     
     // Generate sophisticated system prompt
-    const system = this.buildSystemPrompt(conversationContext, currentUser, currentMessage);
+    const system = this.buildSystemPrompt(conversationContext, currentUser, currentMessage, historySummary);
     
     // Format messages with rich context
     const formattedMessages = this.formatMessagesWithContext(messages, conversationContext);
@@ -73,7 +74,7 @@ export class RoomPromptEngine {
     return { system, messages: formattedMessages };
   }
 
-  private buildSystemPrompt(context: ConversationContext, currentUser: string, currentMessage: string): string {
+  private buildSystemPrompt(context: ConversationContext, currentUser: string, currentMessage: string, historySummary?: string): string {
     const userProfile = this.userProfiles.get(currentUser);
     const groupDynamicsInsight = this.analyzeGroupDynamics(context);
     const conversationFlowInsight = this.analyzeConversationFlow(context);
@@ -132,7 +133,7 @@ You are an emotionally intelligent AI assistant who:
 **When to be Supportive**: Users expressing frustration, uncertainty, or asking for help
 **When to be Analytical**: Technical discussions, problem-solving, or decision-making scenarios
 
-## CURRENT CONVERSATION ANALYSIS
+${historySummary ? `## CONVERSATION HISTORY SUMMARY\n\n${historySummary}\n\n` : ''}## CURRENT CONVERSATION ANALYSIS
 
 **What's Happening**: ${this.analyzeCurrentMoment(context, currentUser, currentMessage)}
 

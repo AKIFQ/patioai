@@ -141,7 +141,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
             const { data: messages } = await supabase
               .from('room_messages')
               .select('id')
-              .eq('room_chat_session_id', session.id)
+              .eq('thread_id', session.id)
               .limit(1);
 
             if (!messages || messages.length === 0) {
@@ -280,31 +280,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   };
 
   const handleChatEvents = (socket: AuthenticatedSocket) => {
-    // Handle AI response triggers
-    socket.on('trigger-ai-response', async (data: { 
-      shareCode: string; 
-      threadId: string; 
-      message: string; 
-      senderName: string;
-      roomName: string;
-      participants: string[];
-    }) => {
-      try {
-        const { shareCode, threadId, message, senderName, roomName, participants } = data;
-        
-        await aiHandler.handleAIResponse(
-          shareCode,
-          threadId,
-          message,
-          senderName,
-          roomName,
-          participants
-        );
-      } catch (error) {
-        console.error('Error triggering AI response:', error);
-        socket.emit('ai-error', { error: 'Failed to generate AI response' });
-      }
-    });
+    // Removed legacy non-streaming AI path (trigger-ai-response). Streaming is handled via invoke-ai.
 
     // NEW: Streaming AI via Socket.IO
     socket.on('invoke-ai', async (data: {

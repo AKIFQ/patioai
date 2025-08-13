@@ -1,3 +1,8 @@
+// PERPLEXITY ROUTE DISABLED
+// The Perplexity endpoint has been commented out to remove usage across the app.
+// Keeping the file for reference; re-enable by restoring the exports below.
+
+/*
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import type { Message } from 'ai';
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
   const ratelimit = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(30, '24h') // 30 msg per 24 hours
+    limiter: Ratelimit.slidingWindow(30, '24h')
   });
 
   const { success, limit, reset, remaining } = await ratelimit.limit(
@@ -58,8 +63,8 @@ export async function POST(req: NextRequest) {
       }
     });
   }
-  const systemPromptTemplate = `
-    - You are a helpful assistant that always provides clear and accurate answers! For helpful information use Markdown. Use remark-math formatting for Math Equations`;
+
+  const systemPromptTemplate = `- You are a helpful assistant...`;
 
   try {
     const result = streamText({
@@ -78,9 +83,7 @@ export async function POST(req: NextRequest) {
         recordOutputs: true
       },
       onFinish: async (event) => {
-        // Access the experimental provider metadata
         const sources = event.sources;
-        console.log('Sources:', sources);
         await saveChatToSupbabase(
           chatSessionId,
           session.id,
@@ -91,13 +94,13 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // Return the streaming response
-    return result.toDataStreamResponse({ 
-      sendReasoning: true, // Enable reasoning streaming
-      sendSources: true 
+    return result.toDataStreamResponse({
+      sendReasoning: true,
+      sendSources: true
     });
   } catch (error) {
     console.error('Error processing Perplexity response:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
+*/

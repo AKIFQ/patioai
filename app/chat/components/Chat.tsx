@@ -137,6 +137,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Message deduplication and loading state for room chats
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
@@ -183,15 +184,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (roomContext) {
       return `/api/rooms/${roomContext.shareCode}/chat`;
     }
-
-    switch (optimisticModelType) {
-      case 'perplex':
-        return '/api/perplexity';
-      case 'website':
-        return '/api/websitechat';
-      default:
-        return '/api/chat';
-    }
+    return '/api/chat';
   };
 
   const apiEndpoint = getApiEndpoint();
@@ -236,7 +229,8 @@ const ChatComponent: React.FC<ChatProps> = ({
       dummy: true
     } : {
       chatId: chatId,
-      option: optimisticOption
+      option: optimisticOption,
+      webSearch: webSearchEnabled
     },
 
     onFinish: async () => {
@@ -1039,7 +1033,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             <VirtualizedMessageList
               messages={roomContext ? realtimeMessages : messages}
               height={0} // Will be calculated by the flexible container using CSS
-              itemHeight={80}
+              itemHeight={88}
               currentUserDisplayName={roomContext?.displayName}
               showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
               isRoomChat={!!roomContext}
@@ -1050,249 +1044,6 @@ const ChatComponent: React.FC<ChatProps> = ({
             />
           </div>
         )}
-
-        {/* Keep the original rendering as fallback - remove this section later */}
-        {false && (
-          <div className="w-full h-full min-w-0">
-            <ul className="w-full px-1 sm:px-2 md:px-4 lg:px-6 py-2 sm:py-4 min-w-0">
-              {(roomContext ? realtimeMessages : messages).map((message, index) => {
-
-
-                const isUserMessage = message.role === 'user';
-                const copyToClipboard = (str: string) => {
-                  window.navigator.clipboard.writeText(str);
-                };
-                const handleCopy = (content: string) => {
-                  copyToClipboard(content);
-                  setIsCopied(true);
-                  setTimeout(() => setIsCopied(false), 1000);
-                };
-
-                // First filter the tool invocation parts to check if we need the accordion
-                const toolInvocationParts = !isUserMessage
-                  ? message.parts?.filter(
-                    (part) => part.type === 'tool-invocation'
-                  ) || []
-                  : [];
-
-                const hasToolInvocations = toolInvocationParts.length > 0;
-
-                // Group parts by type for ordered rendering
-                const textParts =
-                  message.parts?.filter((part) => part.type === 'text') || [];
-                const reasoningParts =
-                  message.parts?.filter((part) => part.type === 'reasoning') || [];
-                const sourceParts =
-                  message.parts?.filter((part) => part.type === 'source') || [];
-
-                return (
-                  <li key={message.id} className="my-1.5 mx-2">
-                    <Card
-                      className={`relative gap-2 py-2 ${isUserMessage
-                        ? 'bg-primary/5 dark:bg-primary/10 border-primary/20'
-                        : 'bg-card dark:bg-card/90 border-border/50'
-                        }`}
-                    >
-                      <CardHeader className="pb-2 px-4">
-                        <div className="flex items-center gap-3">
-                          {isUserMessage ? (
-                            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                              <User className="h-4 w-4 text-primary-foreground" />
-                            </div>
-                          ) : (
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                              <Image
-                                src="/icons/icon-512x512.png"
-                                alt="AI Assistant"
-                                width={20}
-                                height={20}
-                                className="rounded-full"
-                              />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-sm">
-                              {isUserMessage ? 'You' : 'AI Assistant'}
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                              {message.createdAt
-                                ? new Date(message.createdAt).toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    hour12: false
-                                  }
-                                )
-                                : new Date().toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: false
-                                })}
-                            </p>
-                          </div>
-                          {!isUserMessage && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleCopy(message.content)}
-                            >
-                              {isCopied ? (
-                                <CheckCircle
-                                  size={14}
-                                  className="text-green-600 dark:text-green-400"
-                                />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="py-0 px-4">
-                        {/* Render text parts first (main message content) */}
-                        {textParts.length > 0 ? (
-                          textParts.map((part, partIndex) => (
-                            <MemoizedMarkdown
-                              key={`text-${partIndex}`}
-                              content={part.text}
-                              id={`${isUserMessage ? 'user' : 'assistant'}-text-${message.id
-                                }-${partIndex}`}
-                            />
-                          ))
-                        ) : (
-                          // Fallback for messages that don't have parts (like room messages)
-                          message.content && (
-                            <MemoizedMarkdown
-                              content={message.content}
-                              id={`${isUserMessage ? 'user' : 'assistant'}-content-${message.id}`}
-                            />
-                          )
-                        )}
-
-                        {/* Then render reasoning parts (only for assistant messages) */}
-                        {!isUserMessage &&
-                          reasoningParts.map((part, partIndex) => (
-                            <div key={`reasoning-${partIndex}`} className="mt-4">
-                              <ReasoningContent
-                                details={part.details}
-                                messageId={message.id}
-                              />
-                            </div>
-                          ))}
-
-                        {/* Then render source parts (only for assistant messages) */}
-                        {!isUserMessage && sourceParts.length > 0 && (
-                          <div className="mt-2">
-                            <SourceView
-                              sources={sourceParts.map((part) => part.source)}
-                            />
-                          </div>
-                        )}
-
-                        {/* Display attached files in user messages */}
-                        {isUserMessage &&
-                          message.experimental_attachments &&
-                          message.experimental_attachments.length > 0 && (
-                            <div className="mt-4 pt-4 border-t">
-                              <h4 className="text-sm font-medium mb-2">
-                                Attached Files:
-                              </h4>
-                              <div className="space-y-2">
-                                {message.experimental_attachments.map(
-                                  (attachment, idx) => (
-                                    <div
-                                      key={`attachment-${idx}`}
-                                      className="flex items-center gap-2 p-2 bg-background rounded border"
-                                    >
-                                      <FileIcon className="h-4 w-4 text-blue-500" />
-                                      <Link
-                                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex-1"
-                                        href={`?file=${attachment.name}`}
-                                      >
-                                        {attachment.name}
-                                      </Link>
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                        {/* Render all tool invocations in a single accordion */}
-                        {hasToolInvocations && (
-                          <div className="mt-6">
-                            <Accordion
-                              type="single"
-                              defaultValue="tool-invocation"
-                              collapsible
-                              className="w-full border rounded-lg"
-                            >
-                              <AccordionItem
-                                value="tool-invocation"
-                                className="border-0"
-                              >
-                                <AccordionTrigger className="px-4 py-3 font-medium hover:no-underline">
-                                  <div className="flex items-center gap-2">
-                                    <Image
-                                      src="/icons/icon-512x512.png"
-                                      alt="AI Assistant"
-                                      width={16}
-                                      height={16}
-                                      className="rounded-full"
-                                    />
-                                    <span>AI Tools Used</span>
-                                  </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 pb-4">
-                                  <div className="space-y-4">
-                                    {toolInvocationParts.map((part) => {
-                                      const toolName = part.toolInvocation.toolName;
-                                      const toolId = part.toolInvocation.toolCallId;
-                                      switch (toolName) {
-                                        case 'searchUserDocument':
-                                          return (
-                                            <DocumentSearchTool
-                                              key={toolId}
-                                              toolInvocation={part.toolInvocation}
-                                            />
-                                          );
-                                        case 'websiteSearchTool':
-                                          return (
-                                            <WebsiteSearchTool
-                                              key={toolId}
-                                              toolInvocation={part.toolInvocation}
-                                            />
-                                          );
-                                        default:
-                                          return null;
-                                      }
-                                    })}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            </Accordion>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </li>
-                );
-
-
-
-
-              })}
-              <ChatScrollAnchor trackVisibility status={status} />
-            </ul>
-
-
-
-
-          </div>
-        )}
       </div>
 
       <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4 bg-transparent">
@@ -1300,9 +1051,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         <MessageInput
           chatId={chatId}
           currentChatId={currentChatId}
-          modelType={optimisticModelType}
           selectedOption={optimisticOption}
-          handleModelTypeChange={handleModelTypeChange}
           handleOptionChange={handleOptionChange}
           roomContext={roomContext}
           onTyping={roomContext && typeof broadcastTyping === 'function' ? broadcastTyping : undefined}
@@ -1310,6 +1059,8 @@ const ChatComponent: React.FC<ChatProps> = ({
           isLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
           input={input}
           setInput={(value: string) => handleInputChange({ target: { value } } as any)}
+          webSearchEnabled={webSearchEnabled}
+          setWebSearchEnabled={setWebSearchEnabled}
         />
       </div>
 
