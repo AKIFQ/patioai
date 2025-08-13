@@ -19,7 +19,7 @@
 - **Vector Search**: pgvector for semantic document search
 
 ### AI Integration
-- **AI Providers**: OpenAI, Anthropic, Google AI (Perplexity disabled)
+- **AI Access**: OpenRouter (routes to OpenAI, Anthropic, DeepSeek, Google)
 - **Document Processing**: LlamaIndex for PDF parsing and chunking
 - **Vector Embeddings**: OpenAI embeddings for document search
 - **Web Search**: Tavily API for real-time web information
@@ -37,7 +37,7 @@
 - Node.js 18+ 
 - npm or yarn
 - Supabase project
-- At least one AI provider API key
+- OpenRouter API key
 
 ### 1. Clone and Install
 
@@ -49,12 +49,7 @@ npm install
 
 ### 2. Environment Configuration
 
-Copy the environment template:
-```bash
-cp env.example .env.local
-```
-
-Configure your `.env.local`:
+Create your `.env` in the project root (the custom Node server reads `.env`):
 
 ```env
 # Core application URLs (for deployment, change these)
@@ -68,11 +63,11 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-# AI Provider Keys (Choose one or more)
-OPENAI_API_KEY=your_openai_api_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
-GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_api_key
-PERPLEXITY_API_KEY=your_perplexity_api_key
+# OpenRouter (single key for all models)
+OPENROUTER_API_KEY=your_openrouter_api_key
+APP_URL=http://127.0.0.1:3000
+NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
+NEXT_PUBLIC_SOCKET_URL=http://127.0.0.1:3000
 
 # OAuth Configuration (Optional)
 GOOGLE_CLIENT_ID=your_google_client_id
@@ -504,7 +499,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.room_participants;
 npm run dev
 ```
 
-Visit the app at `NEXT_PUBLIC_APP_URL` (default `http://127.0.0.1:3000`).
+Visit the app at `NEXT_PUBLIC_APP_URL` (default `http://127.0.0.1:3000`). Ensure `.env` contains `OPENROUTER_API_KEY`.
 
 ## 🏗️ Architecture Overview
 
@@ -554,6 +549,8 @@ NEXT_PUBLIC_SOCKET_URL=https://your-domain.com
 NEXT_PUBLIC_API_URL=https://your-domain.com/api
 
 # Keep all other variables the same
+OPENROUTER_API_KEY=sk-or-...
+APP_URL=https://your-domain.com
 ```
 
 ### Custom Server Deployment
@@ -608,22 +605,15 @@ SOCKET_RECONNECTION_ATTEMPTS=5         # Auto-reconnection attempts
 SOCKET_RECONNECTION_DELAY=1000         # Reconnection delay
 ```
 
-### AI Provider Configuration
+### AI Configuration (OpenRouter)
 
-Each AI provider can be configured independently:
+Use a single key and router-controlled selection; reasoning is enabled automatically for models that support it.
 
 ```env
-# OpenAI
-OPENAI_API_KEY=sk-...
-
-# Anthropic  
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Google AI
-GOOGLE_GENERATIVE_AI_API_KEY=...
-
-# Perplexity (disabled)
-PERPLEXITY_API_KEY=pplx-...
+OPENROUTER_API_KEY=sk-or-...
+APP_URL=https://your-domain.com
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+NEXT_PUBLIC_SOCKET_URL=https://your-domain.com
 ```
 
 ### Rate Limiting
@@ -774,44 +764,4 @@ For enterprise scale, implement Socket.IO with Redis clustering.
 
 To add custom AI providers:
 
-1. Create provider in `lib/ai/providers/`
-2. Update provider selection logic
-3. Add environment variables
-4. Test integration
-
-### Document Processing Customization
-
-Customize document processing:
-
-1. Modify chunking strategy in `lib/documents/`
-2. Adjust embedding model
-3. Update vector search parameters
-4. Configure similarity thresholds
-
-## 🤝 Contributing
-
-### Development Workflow
-
-1. **Fork** the repository
-2. **Create** a feature branch
-3. **Make** your changes
-4. **Test** thoroughly
-5. **Submit** a pull request
-
-### Code Standards
-
-- **TypeScript**: Full type safety
-- **ESLint**: Code quality enforcement
-- **Prettier**: Code formatting
-- **Testing**: Comprehensive test coverage
-
-### Pull Request Guidelines
-
-- Clear description of changes
-- Tests for new features
-- Documentation updates
-- Performance considerations
-
----
-
-**Need help?** Check the [main README](./README.md) for user documentation or open an issue for technical support. 
+1. Create provider in `

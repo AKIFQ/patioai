@@ -12,18 +12,17 @@
 
 PatioAI is a modern AI chat platform that brings artificial intelligence to your conversations in two powerful ways:
 
-1. **Personal AI Assistant** - Have private conversations with multiple AI providers, upload documents for intelligent analysis, and maintain organized chat history
+1. **Personal AI Assistant** - Have private conversations with models via OpenRouter, upload documents for intelligent analysis, and maintain organized chat history
 2. **Group AI Collaboration** - Create shared AI chat rooms where teams can collaborate with AI together in real-time
 
 Whether you're brainstorming ideas, analyzing documents, researching topics, or working with a team, PatioAI makes AI accessible and collaborative.
 
 ## Key Features
 
-### Multiple AI Providers
-- **OpenAI** (GPT-4, GPT-3.5, o1)
-- **Anthropic** (Claude 3.5 Sonnet, Claude 3 Haiku)
-- **Google AI** (Gemini Pro, Gemini Flash)
-- (Perplexity disabled) Previously used for real-time web search
+### Unified model access via OpenRouter
+- **OpenRouter-based access** to OpenAI, Anthropic, DeepSeek, Google and more
+- **Smart router** automatically selects efficient models by query type and user tier
+- (Perplexity integration removed)
 
 ### Group AI Collaboration
 - **Instant Room Creation** - Generate shareable room codes in seconds
@@ -42,8 +41,8 @@ Whether you're brainstorming ideas, analyzing documents, researching topics, or 
 - **Organized Chat History** - Automatic categorization by time (today, yesterday, last week)
 - **Real-time Streaming** - See AI responses as they're generated
 - **Typing Indicators** - Know when AI or other users are responding
-- **Web Search Integration** - AI can search the web for current information
-- **Reasoning Display** - See how AI thinks through complex problems
+- **Web Search Integration** - Toggle web search; works with all models via OpenRouter
+- **Reasoning Display** - See how AI thinks through complex problems (when models return reasoning tokens)
 
 ## How to Use PatioAI
 
@@ -53,7 +52,7 @@ Whether you're brainstorming ideas, analyzing documents, researching topics, or 
 2. **Start Chatting** - Choose your preferred AI model and begin conversations
 3. **Upload Documents** - Drag and drop PDFs to chat with your documents
 4. **Organize & Search** - Find past conversations easily with smart categorization
-5. **Switch Models** - Try different AI providers for different use cases
+5. **Switch Models** - Use Auto (free) or tier-appropriate models; router optimizes selection
 
 ### Group AI Collaboration
 
@@ -151,3 +150,12 @@ This project is proprietary software owned by Akif Azher Qureshi. While it build
 **Important**: This software is not open source. Unauthorized copying, modification, or distribution is strictly prohibited. See the [LICENSE.md](LICENSE.md) file for complete terms and restrictions.
 
 For licensing inquiries, please contact Akif Azher Qureshi.
+
+## Developer Setup (OpenRouter shift)
+
+PatioAI now uses OpenRouter exclusively for model access. Direct provider SDKs were removed. A model router selects models based on user tier and prompt context, and reasoning tokens are enabled for models that support them.
+
+- Model routing: `lib/ai/modelRouter.ts`
+- OpenRouter client and provider options: `lib/ai/openRouterService.ts`
+- Reasoning streaming (rooms): `lib/server/aiResponseHandler.ts`
+- Main chat API (personal): `app/api/chat/route.ts`
