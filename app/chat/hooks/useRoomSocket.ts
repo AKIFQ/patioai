@@ -68,13 +68,19 @@ export function useRoomSocket({
       return;
     }
 
+    // Must have a stable id from DB; otherwise ignore to avoid duplicates
+    if (!newMessage.id) {
+      if (process.env.NODE_ENV === 'development') console.debug('SKIPPING: Message without stable id');
+      return;
+    }
+
     // Track that this thread has messages
     hasMessagesRef.current = true;
     if (process.env.NODE_ENV === 'development') console.debug('PROCESSING SOCKET MSG from:', newMessage.sender_name, 'for user:', displayName);
 
     // Convert to Message format with reasoning support
     const message: Message & { senderName?: string; reasoning?: string; sources?: any[] } = {
-      id: newMessage.id || `msg-${Date.now()}`,
+      id: newMessage.id,
       role: newMessage.is_ai_response ? 'assistant' : 'user',
       content: newMessage.is_ai_response
         ? newMessage.content
@@ -126,6 +132,11 @@ export function useRoomSocket({
 
     if (!socket || !isConnected || !displayName || !roomUuidRef.current) {
       if (process.env.NODE_ENV === 'development') console.debug('No socket connection or missing data, skipping broadcast');
+      return;
+    }
+
+    // Do not broadcast when tab is hidden
+    if (typeof document !== 'undefined' && document.hidden) {
       return;
     }
 
@@ -190,6 +201,27 @@ export function useRoomSocket({
     let mounted = true;
     hasMessagesRef.current = false;
 
+    // Re-join the room after reconnects
+    const handleConnect = () => {
+      socket.emit('join-room', shareCode);
+    };
+    socket.on('connect', handleConnect);
+    socket.on('reconnect', handleConnect as any);
+
+    // Pause typing timers when tab hidden
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+        isTypingActiveRef.current = false;
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
+
     const initializeRoomSocket = async () => {
       try {
         // Get the room UUID from share code
@@ -221,7 +253,7 @@ export function useRoomSocket({
         socket.on('room-deleted', handleRoomDeleted);
 
         // Streaming listeners
-        socket.on('ai-stream-start', (payload: { threadId: string; timestamp?: number; modelId?: string }) => {
+        socket.on('ai-stream-start', (payload: { threadId: string; timestamp?: number; requestedModel?: string; modelUsed?: string }) => {
           const { threadId } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(true);
@@ -315,15 +347,17 @@ export function useRoomSocket({
         socket.off('ai-stream-end');
         socket.off('room-joined');
         socket.off('room-error');
-
-        if (shareCode) {
-          socket.emit('leave-room', shareCode);
-        }
+        socket.off('connect', handleConnect);
+        socket.off('reconnect', handleConnect as any);
       }
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
+      }
+
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
       }
     };
   }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange, onStreamStart, onStreamChunk, onStreamEnd]);

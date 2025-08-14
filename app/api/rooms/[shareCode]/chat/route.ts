@@ -83,58 +83,7 @@ async function saveRoomMessage(
       created_at: new Date().toISOString()
     });
 
-    // Trigger AI response for user messages
-    if (!isAiResponse && isFirstMessage) {
-      try {
-        const io = getSocketIOInstance();
-        if (io) {
-          // Get room info and participants for AI context
-          const { data: roomData } = await supabase
-            .from('rooms')
-            .select('name')
-            .eq('id', roomId)
-            .single();
-
-          const { data: participants } = await supabase
-            .from('room_participants')
-            .select('display_name')
-            .eq('room_id', roomId);
-
-          // Get recent messages for context (last 10 messages)
-          const { data: recentMessages } = await supabase
-            .from('room_messages')
-            .select('*')
-            .eq('room_id', roomId)
-            .eq('thread_id', threadId)
-            .order('created_at', { ascending: true })
-            .limit(10);
-
-          // Format messages for AI context
-          const chatHistory = (recentMessages || [])
-            .filter(msg => msg.id !== result.messageId) // Exclude the message we just saved
-            .map(msg => ({
-              role: msg.is_ai_response ? 'assistant' as const : 'user' as const,
-              content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`
-            }));
-
-          const participantNames = participants?.map(p => p.display_name) || [];
-
-          console.log(`🧠 Passing ${chatHistory.length} messages as context to AI`);
-
-          // Emit AI trigger event via streaming path
-          io.to(`room:${shareCode}`).emit('invoke-ai', {
-            shareCode,
-            threadId,
-            prompt: `${senderName}: ${content}`,
-            roomName: roomData?.name || 'Room',
-            participants: participantNames,
-            chatHistory
-          });
-        }
-      } catch (aiError) {
-        console.warn('Failed to trigger AI response:', aiError);
-      }
-    }
+    // Note: Do not auto-invoke AI here; client triggers streaming after persistence to avoid duplicates
 
     // Mark if this is the first message for potential sidebar updates
     if (isFirstMessage && !isAiResponse) {

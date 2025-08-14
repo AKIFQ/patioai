@@ -423,7 +423,11 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Streaming UI glue: add a temporary assistant message and append chunks
   const handleStreamStart = useCallback((threadId: string) => {
-    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    if (!roomContext) return;
+    // Accept first stream for this session even if threadId differs, when no temp assistant exists yet
+    if (roomContext.chatSessionId && threadId !== roomContext.chatSessionId && streamingAssistantIdRef.current) {
+      return;
+    }
     const tempId = `ai-temp-${Date.now()}`;
     streamingAssistantIdRef.current = tempId;
     setStreamingAssistantId(tempId);
