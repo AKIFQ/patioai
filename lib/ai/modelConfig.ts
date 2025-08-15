@@ -23,111 +23,159 @@ export const MODEL_TIERS: Record<string, ModelTier> = {
   free: {
     id: 'free',
     name: 'Free',
-    description: 'Smart auto-routing to best free models',
+    description: 'Free tier with generous limits using Gemini 2.0 Flash and DeepSeek R1',
     models: {
-      'auto': {
+      auto: {
         id: 'auto',
         name: 'Auto (Smart Routing)',
+        provider: 'openrouter',
+        costTier: 'ultra-low',
+        inputCost: 0,
+        outputCost: 0,
+        reasoning: false
+      },
+      'gemini-flash': {
+        id: 'google/gemini-2.0-flash-001',
+        name: 'Gemini 2.0 Flash',
+        provider: 'openrouter',
+        costTier: 'ultra-low',
+        inputCost: 0.075, // $0.075 per 1M input tokens
+        outputCost: 0.30, // $0.30 per 1M output tokens
+        reasoning: false,
+        specialization: 'Fast general-purpose chat, 229 tokens/sec'
+      },
+      'deepseek-r1': {
+        id: 'deepseek/deepseek-r1:free',
+        name: 'DeepSeek R1 (Free)',
         provider: 'openrouter',
         costTier: 'free',
         inputCost: 0,
         outputCost: 0,
-        reasoning: false
+        reasoning: true,
+        specialization: 'Complex reasoning through reasoning button'
       }
     },
-    monthlyLimit: 50,
+    monthlyLimit: 2000,
     costPerUser: '$0',
     userChoice: false
   },
-  
+
   basic: {
     id: 'basic',
-    name: 'Pro Basic',
-    description: 'Choose from fast, efficient models',
+    name: 'Basic',
+    description: 'Same models as Free but higher limits and features',
     models: {
-      'openai-fast': {
-        id: 'openai/gpt-4o-mini',
-        name: 'OpenAI Fast',
-        provider: 'openrouter',
-        costTier: 'low',
-        inputCost: 0.0001,
-        outputCost: 0.0004,
-        reasoning: false,
-        specialization: 'General purpose, fast responses'
-      },
-      'claude-speed': {
-        id: 'anthropic/claude-3-haiku',
-        name: 'Claude Speed',
-        provider: 'openrouter',
-        costTier: 'low',
-        inputCost: 0.00025,
-        outputCost: 0.00125,
-        reasoning: false,
-        specialization: 'Safe, fast, reliable'
-      },
-      'deepseek-reasoning': {
-        id: 'deepseek/deepseek-r1',
-        name: 'DeepSeek Reasoning',
+      auto: {
+        id: 'auto',
+        name: 'Auto (Smart Routing)',
         provider: 'openrouter',
         costTier: 'ultra-low',
-        inputCost: 0.00055,
-        outputCost: 0.00219,
+        inputCost: 0,
+        outputCost: 0,
+        reasoning: false
+      },
+      'gemini-flash': {
+        id: 'google/gemini-2.0-flash-001',
+        name: 'Gemini 2.0 Flash',
+        provider: 'openrouter',
+        costTier: 'ultra-low',
+        inputCost: 0.075, // $0.075 per 1M input tokens
+        outputCost: 0.30, // $0.30 per 1M output tokens
+        reasoning: false,
+        specialization: 'Fast general-purpose chat, 229 tokens/sec'
+      },
+      'deepseek-r1': {
+        id: 'deepseek/deepseek-r1:free',
+        name: 'DeepSeek R1 (Free)',
+        provider: 'openrouter',
+        costTier: 'free',
+        inputCost: 0,
+        outputCost: 0,
         reasoning: true,
-        specialization: 'Best value reasoning'
+        specialization: 'Complex reasoning through reasoning button'
       }
     },
-    monthlyLimit: 200,
-    costPerUser: '$20',
+    monthlyLimit: 8000,
+    costPerUser: '$10',
     userChoice: true
   },
-  
+
   premium: {
     id: 'premium',
-    name: 'Pro Premium',
-    description: 'Access to flagship models',
+    name: 'Premium',
+    description: 'Top-tier models and enterprise features',
     models: {
-      'openai-flagship': {
-        id: 'openai/gpt-4o',
-        name: 'OpenAI Flagship',
+      auto: {
+        id: 'auto',
+        name: 'Auto (Smart Routing)',
         provider: 'openrouter',
-        costTier: 'high',
-        inputCost: 0.0025,
-        outputCost: 0.01,
-        reasoning: false,
-        specialization: 'Most capable general model'
+        costTier: 'medium',
+        inputCost: 0,
+        outputCost: 0,
+        reasoning: false
       },
-      'openai-reasoning': {
-        id: 'openai/o1-mini',
-        name: 'OpenAI Reasoning',
+      'gemini-flash': {
+        id: 'google/gemini-2.0-flash-001',
+        name: 'Gemini 2.0 Flash',
         provider: 'openrouter',
-        costTier: 'high',
-        inputCost: 0.003,
-        outputCost: 0.012,
-        reasoning: true,
-        specialization: 'Advanced reasoning'
+        costTier: 'ultra-low',
+        inputCost: 0.075, // $0.075 per 1M input tokens
+        outputCost: 0.30, // $0.30 per 1M output tokens
+        reasoning: false,
+        specialization: 'Fast general-purpose chat, 229 tokens/sec'
+      },
+      'gpt-4o-mini': {
+        id: 'openai/gpt-4o-mini',
+        name: 'GPT-4o Mini',
+        provider: 'openrouter',
+        costTier: 'low',
+        inputCost: 0.15, // $0.15 per 1M input tokens
+        outputCost: 0.60, // $0.60 per 1M output tokens
+        reasoning: false,
+        specialization: 'Balanced performance and cost'
       },
       'claude-sonnet': {
         id: 'anthropic/claude-3.5-sonnet',
-        name: 'Claude Sonnet',
+        name: 'Claude 3.5 Sonnet',
         provider: 'openrouter',
         costTier: 'high',
-        inputCost: 0.003,
-        outputCost: 0.015,
+        inputCost: 3.0, // $3.00 per 1M input tokens
+        outputCost: 15.0, // $15.00 per 1M output tokens
         reasoning: false,
-        specialization: 'Creative and analytical'
+        specialization: 'Advanced reasoning and analysis'
       },
-      'deepseek-reasoning': {
-        id: 'deepseek/deepseek-r1',
-        name: 'DeepSeek Reasoning',
+      'gpt-4o': {
+        id: 'openai/gpt-4o',
+        name: 'GPT-4o',
         provider: 'openrouter',
-        costTier: 'ultra-low',
-        inputCost: 0.00055,
-        outputCost: 0.00219,
+        costTier: 'high',
+        inputCost: 2.5, // $2.50 per 1M input tokens
+        outputCost: 10.0, // $10.00 per 1M output tokens
+        reasoning: false,
+        specialization: 'Multimodal capabilities'
+      },
+      'o1-preview': {
+        id: 'openai/o1-preview',
+        name: 'O1-Preview',
+        provider: 'openrouter',
+        costTier: 'premium',
+        inputCost: 15.0, // $15.00 per 1M input tokens
+        outputCost: 60.0, // $60.00 per 1M output tokens
         reasoning: true,
-        specialization: 'Best value reasoning'
+        specialization: 'Advanced reasoning and problem-solving'
+      },
+      'deepseek-r1': {
+        id: 'deepseek/deepseek-r1:free',
+        name: 'DeepSeek R1 (Free)',
+        provider: 'openrouter',
+        costTier: 'free',
+        inputCost: 0,
+        outputCost: 0,
+        reasoning: true,
+        specialization: 'Complex reasoning through reasoning button'
       }
     },
-    monthlyLimit: 500,
+    monthlyLimit: 20000,
     costPerUser: '$50',
     userChoice: true
   }
@@ -135,10 +183,11 @@ export const MODEL_TIERS: Record<string, ModelTier> = {
 
 // Free tier model routing logic
 export const FREE_MODEL_ROUTING = {
-  general: 'qwen/qwen-2.5-72b-instruct:free',      // Shopping, web, general chat
-  academic: 'deepseek/deepseek-r1:free',           // Research, complex reasoning  
-  coding: 'qwen/qwen-2.5-coder-32b-instruct:free', // Code generation, debugging
-  fallback: 'meta-llama/llama-3.1-8b-instruct:free' // High volume fallback
+  general: 'google/gemini-2.0-flash-001',
+  academic: 'google/gemini-2.0-flash-001',
+  coding: 'google/gemini-2.0-flash-001',
+  reasoning: 'deepseek/deepseek-r1:free',
+  fallback: 'google/gemini-2.0-flash-001'
 };
 
 export function getModelsByTier(userTier: string): Record<string, ModelInfo> {

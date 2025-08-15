@@ -186,7 +186,7 @@ const VirtualizedMessageList = memo(({
     return (
       <div 
         ref={containerRef}
-        className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 flex flex-col overflow-hidden"
+        className="flex-1 w-full min-w-0 px-4 sm:px-8 md:px-16 lg:px-24 xl:px-32 2xl:px-48 flex flex-col overflow-hidden"
         data-chat-container
       >
         <div 
@@ -239,7 +239,7 @@ const VirtualizedMessageList = memo(({
   return (
     <div 
       ref={containerRef}
-      className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 flex flex-col overflow-hidden relative" 
+      className="flex-1 w-full min-w-0 px-4 sm:px-8 md:px-16 lg:px-24 xl:px-32 2xl:px-48 flex flex-col overflow-hidden relative" 
       data-chat-container
     >
       <List

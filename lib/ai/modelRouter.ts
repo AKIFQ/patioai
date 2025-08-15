@@ -26,9 +26,27 @@ export class ModelRouter {
   /**
    * Route to the best model based on user tier and message context
    */
-  routeModel(userTier: UserTier, context: MessageContext, selectedModel?: string, costControl?: CostControl): string {
-    // Handle auto mode for free users
-    if (selectedModel === 'auto' || userTier.tier === 'free') {
+  routeModel(userTier: UserTier, context: MessageContext, selectedModel?: string, costControl?: CostControl, reasoningMode?: boolean): string {
+    // PROMINENT Debug logging
+    console.log(`🚨 MODEL ROUTER CALLED:`, {
+      tier: userTier.tier,
+      selectedModel,
+      reasoningMode,
+      complexity: context.complexity
+    });
+    
+    // Reasoning mode routing across tiers
+    if (reasoningMode === true) {
+      if (userTier.tier === 'premium') {
+        return 'openai/o1-preview';
+      }
+      // Free/Basic explicit reasoning goes to DeepSeek R1
+      return 'deepseek/deepseek-r1';
+    }
+
+    // Handle auto mode for free users (only if not in reasoning mode)
+    if ((selectedModel === 'auto' || userTier.tier === 'free') && !reasoningMode) {
+      console.log(`🔄 Regular free routing (no reasoning)`);
       return this.getOptimalFreeModel(context);
     }
 
@@ -47,24 +65,16 @@ export class ModelRouter {
 
   /**
    * Smart model selection for free users (auto mode)
+   * Note: Reasoning models are now opt-in only, not auto-routed
    */
   private getOptimalFreeModel(context: MessageContext): string {
-    // Academic research, complex reasoning
-    if (context.isAcademic || (context.complexity === 'complex' && !context.hasCode)) {
-      return FREE_MODEL_ROUTING.academic;
-    }
-
     // Code generation, debugging
     if (context.hasCode) {
       return FREE_MODEL_ROUTING.coding;
     }
 
-    // Shopping, web searches, general chat
-    if (context.isShopping || context.complexity === 'simple') {
-      return FREE_MODEL_ROUTING.general;
-    }
-
-    // Default for medium complexity
+    // All other cases use general model (no auto-reasoning)
+    // Academic, shopping, web searches, general chat
     return FREE_MODEL_ROUTING.general;
   }
 
@@ -96,7 +106,7 @@ export class ModelRouter {
   private getTierDefault(tier: string): string {
     switch (tier) {
       case 'basic':
-        return 'openai/gpt-4o-mini';
+        return 'google/gemini-2.0-flash';
       case 'premium':
         return 'openai/gpt-4o';
       default:

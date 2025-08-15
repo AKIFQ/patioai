@@ -83,8 +83,20 @@ const ChatMessage = memo(({
     return message.content;
   }, [message.content, message.senderName, isRoomChat, message.role]);
 
+  // Prefer primary content; if assistant text is empty, fall back to reasoning/streamingReasoning
+  const primaryText = React.useMemo(() => {
+    const base = (cleanContent || '').trim();
+    if (base.length > 0) return base;
+    if (!isUserMessage && (streamingReasoning || message.reasoning)) {
+      return (streamingReasoning || message.reasoning || '').trim();
+    }
+    return '';
+  }, [cleanContent, isUserMessage, streamingReasoning, message.reasoning]);
+
   // Separate text and reasoning parts for better rendering
-  const textParts = cleanContent ? [{ type: 'text' as const, text: cleanContent }] : [];
+  const textParts = primaryText
+    ? [{ type: 'text' as const, text: primaryText }]
+    : (!isUserMessage ? [{ type: 'text' as const, text: '🤔 AI is thinking…' }] : []);
   // Note: reasoning parts removed for now due to type issues
   const reasoningParts: any[] = [];
 
@@ -114,7 +126,7 @@ const ChatMessage = memo(({
         )}
 
         {/* Message Content with Copy Button */}
-        <div className={`flex items-start gap-1 ${isUserMessage ? 'max-w-[85%] sm:max-w-[75%]' : 'max-w-[92%] sm:max-w-[82%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex items-start gap-1 ${isUserMessage ? 'max-w-[90%] sm:max-w-[85%] md:max-w-[80%]' : 'max-w-[95%] sm:max-w-[90%] md:max-w-[85%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 

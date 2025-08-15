@@ -133,6 +133,8 @@ const MessageInput = ({
   setInput,
   webSearchEnabled,
   setWebSearchEnabled,
+  reasoningMode = false,
+  setReasoningMode,
   userTier = 'free',
   onUpgrade
 }: {
@@ -142,12 +144,14 @@ const MessageInput = ({
   handleOptionChange: (value: string) => void;
   roomContext?: RoomContext;
   onTyping?: (isTyping: boolean) => void;
-  onSubmit: (message: string, attachments?: File[], triggerAI?: boolean) => void;
+  onSubmit: (message: string, attachments?: File[], triggerAI?: boolean, reasoningMode?: boolean) => void;
   isLoading: boolean;
   input: string;
   setInput: (value: string) => void;
   webSearchEnabled: boolean;
   setWebSearchEnabled: (value: boolean) => void;
+  reasoningMode?: boolean;
+  setReasoningMode?: (value: boolean) => void;
   userTier?: 'free' | 'basic' | 'premium';
   onUpgrade?: () => void;
 }) => {
@@ -315,7 +319,7 @@ const MessageInput = ({
     const submissionId = Math.random().toString(36).substring(7);
     console.log(`📤 [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
     
-    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false);
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false, reasoningMode);
     
     // Clear form
     setInput('');
@@ -349,7 +353,7 @@ const MessageInput = ({
     const submissionId = Math.random().toString(36).substring(7);
     console.log(`⚡ [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
     
-    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true);
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true, reasoningMode);
     
     // Clear form
     setInput('');
@@ -468,6 +472,53 @@ const MessageInput = ({
                     />
                   </span>
                 </DropdownMenuItem>
+                {/* Reasoning toggle - only for free users */}
+                {userTier === 'free' && setReasoningMode && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (!reasoningMode) {
+                        // Show warning when enabling reasoning mode
+                        const confirmed = window.confirm(
+                          'Reasoning mode uses DeepSeek R1 with 512 token reasoning limit (~$0.0005 per message). Continue?'
+                        );
+                        if (confirmed) {
+                          setReasoningMode(true);
+                          // Show success toast
+                          if (typeof window !== 'undefined' && (window as any).toast) {
+                            (window as any).toast.success('Reasoning mode enabled - using DeepSeek R1');
+                          }
+                        }
+                      } else {
+                        setReasoningMode(false);
+                      }
+                    }}
+                    className="text-xs flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <div className="h-3.5 w-3.5 mr-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 flex items-center justify-center">
+                        <div className="h-2 w-2 rounded-full bg-white" />
+                      </div>
+                      <span>Reasoning mode</span>
+                      {reasoningMode && (
+                        <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">($)</span>
+                      )}
+                    </div>
+                    <span
+                      className={`ml-2 inline-flex h-4 w-7 items-center rounded-full border transition-colors ${
+                        reasoningMode
+                          ? 'bg-amber-500/70 border-amber-400/60'
+                          : 'bg-muted/40 border-border/40'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3 w-3 rounded-full bg-background shadow transition-transform ${
+                          reasoningMode ? 'translate-x-3' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </span>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
 

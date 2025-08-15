@@ -4,7 +4,7 @@
 BEGIN;
 
 -- Enable realtime replication for chat_messages table (skip if already exists)
-DO $
+DO $$
 BEGIN
     BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
@@ -12,10 +12,10 @@ BEGIN
         -- Table already in publication, skip
         NULL;
     END;
-END $;
+END $$;
 
 -- Enable realtime replication for chat_sessions table (skip if already exists)
-DO $
+DO $$
 BEGIN
     BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE chat_sessions;
@@ -23,7 +23,7 @@ BEGIN
         -- Table already in publication, skip
         NULL;
     END;
-END $;
+END $$;
 
 -- Create indexes to optimize realtime queries for chat messages
 CREATE INDEX IF NOT EXISTS idx_chat_messages_realtime 

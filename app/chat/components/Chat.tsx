@@ -97,6 +97,9 @@ const ChatComponent: React.FC<ChatProps> = ({
     (userData?.subscription_tier === 'free' ? 'auto' : initialSelectedOption),
     (_, newValue) => newValue
   );
+  
+  // Reasoning mode state (only for free users)
+  const [reasoningMode, setReasoningMode] = useState(false);
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -222,7 +225,8 @@ const ChatComponent: React.FC<ChatProps> = ({
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
     id: stableChatId,
     api: apiEndpoint, // Use real endpoint for both room and individual chats
-    experimental_throttle: 50,
+    // Remove client-side throttle to avoid hidden rate limiting
+    experimental_throttle: undefined as any,
     initialMessages: roomContext ? [] : (currentChat || []), // Empty for room chats
     body: roomContext ? {
       // Dummy body for room chats (won't be used)
@@ -230,7 +234,8 @@ const ChatComponent: React.FC<ChatProps> = ({
     } : {
       chatId: chatId,
       option: optimisticOption,
-      webSearch: webSearchEnabled
+      webSearch: webSearchEnabled,
+      reasoningMode: reasoningMode
     },
 
     onFinish: async () => {
@@ -298,7 +303,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput
-  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true) => {
+  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true, reasoningModeEnabled: boolean = false) => {
     // Prevent duplicate submissions
     if (isSubmitting) {
       console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
@@ -352,6 +357,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                   : msg.content
               }));
 
+            console.log(`🔍 Chat invokeAI called with reasoningMode:`, reasoningModeEnabled);
             invokeAI({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
@@ -359,7 +365,8 @@ const ChatComponent: React.FC<ChatProps> = ({
               roomName: roomContext.roomName,
               participants: roomContext.participants.map(p => p.displayName),
               modelId: optimisticOption,
-              chatHistory
+              chatHistory,
+              reasoningMode: reasoningModeEnabled
             });
           }
           console.log('✅ Room chat: User message persisted, AI stream invoked');
@@ -1085,6 +1092,8 @@ const ChatComponent: React.FC<ChatProps> = ({
           setInput={(value: string) => handleInputChange({ target: { value } } as any)}
           webSearchEnabled={webSearchEnabled}
           setWebSearchEnabled={setWebSearchEnabled}
+          reasoningMode={reasoningMode}
+          setReasoningMode={setReasoningMode}
           userTier={(userData as any)?.subscription_tier || 'free'}
           onUpgrade={() => {
             // Placeholder: surface your checkout/upgrade flow here

@@ -29,20 +29,22 @@ export class UserTierService {
 
       const tier = (tierRow?.tier as any) || 'free';
 
-      // 2) Read current limits and spend using SQL function
-      const { data: limits, error: limitsError } = await supabase
-        .rpc('check_user_limits', { user_id_param: userId });
+      // 2) Read usage summary from counters (fallback to 0 if missing)
+      const monthStart = new Date();
+      monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+      const { data: counters } = await supabase
+        .from('user_usage_counters')
+        .select('count')
+        .eq('user_id', userId)
+        .eq('resource', 'ai_requests')
+        .eq('period', 'month')
+        .eq('period_start', monthStart.toISOString())
+        .maybeSingle();
 
-      if (limitsError) {
-        console.warn('check_user_limits error:', limitsError);
-      }
-
-      const usage = Array.isArray(limits) && limits.length > 0 ? limits[0] : null;
-
-      const monthlyUsage = usage?.usage_count ?? 0;
-      const monthlyLimit = usage?.usage_limit ?? (tier === 'free' ? 50 : tier === 'basic' ? 200 : 500);
-      const costSpent = Number(usage?.cost_spent ?? 0);
-      const costLimit = Number(usage?.cost_limit ?? (tier === 'basic' ? 15 : tier === 'premium' ? 40 : 0));
+      const monthlyUsage = counters?.count ?? 0;
+      const monthlyLimit = tier === 'free' ? 400 : tier === 'basic' ? 1500 : 4000;
+      const costSpent = 0;
+      const costLimit = tier === 'basic' ? 15 : tier === 'premium' ? 40 : 0;
 
       return {
         tier: tier as any,
@@ -71,13 +73,23 @@ export class UserTierService {
    */
   async updateUsage(userId: string, tokensUsed: number, cost: number, modelUsed: string, requestType: string = 'chat'): Promise<void> {
     try {
-      await supabase.rpc('increment_usage', {
-        p_user_id: userId,
-        p_tokens: Math.max(0, Math.floor(tokensUsed || 0)),
-        p_cost: Number(cost || 0),
-        p_model: modelUsed,
-        p_type: requestType
+      const tokens = Math.max(0, Math.floor(tokensUsed || 0));
+      const costNumber = Number(cost || 0);
+
+      // Append usage log
+      await supabase.from('user_usage_logs').insert({
+        user_id: userId as any,
+        model_used: modelUsed,
+        tokens_used: tokens,
+        cost: costNumber,
+        request_type: requestType
       });
+
+      // Update monthly aggregates on users table
+      await supabase.from('users').update({
+        monthly_usage: (undefined as any), // left undefined to avoid overwriting with null
+        monthly_cost: (undefined as any)
+      }).eq('id', userId);
     } catch (error) {
       console.error('Error updating usage via increment_usage:', error);
     }
@@ -86,20 +98,9 @@ export class UserTierService {
   /**
    * Check if user can make request using helper function
    */
-  async canMakeRequest(userId: string): Promise<{ allowed: boolean; reason?: string }> {
-    try {
-      const { data, error } = await supabase.rpc('check_user_limits', { user_id_param: userId });
-      if (error) {
-        console.warn('check_user_limits error:', error);
-        return { allowed: true }; // be permissive on error
-      }
-      const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      if (!row) return { allowed: true };
-      return { allowed: !!row.can_make_request, reason: row.reason ?? undefined };
-    } catch (e) {
-      console.warn('canMakeRequest fallback:', e);
-      return { allowed: true };
-    }
+  async canMakeRequest(_userId: string): Promise<{ allowed: boolean; reason?: string }> {
+    // Legacy API no longer used for gating; limits enforced via TierRateLimiter
+    return { allowed: true };
   }
 
   /**

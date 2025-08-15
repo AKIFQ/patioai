@@ -221,8 +221,8 @@ export function useRoomSocket({
         socket.on('room-deleted', handleRoomDeleted);
 
         // Streaming listeners
-        socket.on('ai-stream-start', (payload: { threadId: string; timestamp?: number; modelId?: string }) => {
-          const { threadId } = payload;
+        socket.on('ai-stream-start', (payload: { threadId?: string; timestamp?: number; modelId?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(true);
           if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-start', payload);
@@ -230,37 +230,41 @@ export function useRoomSocket({
         });
         
         // Reasoning events
-        socket.on('ai-reasoning-start', (payload: { threadId: string; timestamp?: number; modelUsed?: string }) => {
-          const { threadId } = payload;
+        socket.on('ai-reasoning-start', (payload: { threadId?: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           if (process.env.NODE_ENV === 'development') console.info('🔎 reasoning-start model:', payload?.modelUsed);
           onReasoningStart?.(threadId);
         });
-        socket.on('ai-reasoning-chunk', (payload: { threadId: string; reasoning: string; timestamp?: number; modelUsed?: string }) => {
-          const { threadId, reasoning } = payload;
+        socket.on('ai-reasoning-chunk', (payload: { threadId?: string; reasoning: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { reasoning } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           onReasoningChunk?.(threadId, reasoning);
         });
-        socket.on('ai-reasoning-end', (payload: { threadId: string; reasoning: string; timestamp?: number; modelUsed?: string }) => {
-          const { threadId, reasoning } = payload;
+        socket.on('ai-reasoning-end', (payload: { threadId?: string; reasoning: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { reasoning } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           onReasoningEnd?.(threadId, reasoning);
         });
         
         // Content events
-        socket.on('ai-content-start', (payload: { threadId: string; timestamp?: number; modelUsed?: string }) => {
-          const { threadId } = payload;
+        socket.on('ai-content-start', (payload: { threadId?: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           if (process.env.NODE_ENV === 'development') console.info('🔎 model used:', payload?.modelUsed);
           onContentStart?.(threadId);
         });
-        socket.on('ai-stream-chunk', (payload: { threadId: string; chunk: string; timestamp?: number; modelUsed?: string }) => {
-          const { threadId, chunk } = payload;
+        socket.on('ai-stream-chunk', (payload: { threadId?: string; chunk: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { chunk } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           onStreamChunk?.(threadId, chunk);
         });
-        socket.on('ai-stream-end', (payload: { threadId: string; text: string; reasoning?: string; timestamp?: number; modelUsed?: string; usage?: any }) => {
-          const { threadId, text, reasoning } = payload;
+        socket.on('ai-stream-end', (payload: { threadId?: string; text: string; reasoning?: string; timestamp?: number; modelUsed?: string; usage?: any }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { text, reasoning } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(false);
           if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
@@ -336,6 +340,7 @@ export function useRoomSocket({
     participants: string[];
     modelId?: string;
     chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+    reasoningMode?: boolean;
   }) => {
     if (socket && isConnected) {
       socket.emit('invoke-ai', payload);

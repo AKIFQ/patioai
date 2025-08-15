@@ -1,29 +1,12 @@
--- Enable realtime for room chat functionality
--- This migration sets up realtime subscriptions and helper functions
+-- Deprecated: Supabase Realtime not used (Socket.IO only). Keep helper functions and indexes.
 
 BEGIN;
 
 -- Enable realtime replication for room_messages table (skip if already exists)
-DO $$
-BEGIN
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE room_messages;
-    EXCEPTION WHEN duplicate_object THEN
-        -- Table already in publication, skip
-        NULL;
-    END;
-END $$;
+-- No-op: do not add room_messages to supabase_realtime
 
 -- Enable realtime replication for room_participants table (skip if already exists)
-DO $$
-BEGIN
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE room_participants;
-    EXCEPTION WHEN duplicate_object THEN
-        -- Table already in publication, skip
-        NULL;
-    END;
-END $$;
+-- No-op: do not add room_participants to supabase_realtime
 
 -- Create indexes to optimize realtime queries
 CREATE INDEX IF NOT EXISTS idx_room_messages_realtime 

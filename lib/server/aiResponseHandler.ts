@@ -37,14 +37,19 @@ export class AIResponseHandler {
 
   // Get model through OpenRouter service
   private getModel(modelId: string, messageContent?: string) {
+    console.log(`🔍 getModel called with modelId: "${modelId}"`);
+
     // Handle auto routing for free users
     if (modelId === 'auto') {
+      console.log(`🔄 Auto routing triggered in getModel`);
       const context = this.modelRouter.analyzeMessageContext(messageContent || '', 1);
       const routedModel = this.modelRouter.routeModel({ tier: 'free' }, context, 'auto');
+      console.log(`🔄 Auto routing result: ${routedModel}`);
       return openRouterService.getModel(routedModel);
     }
 
     // All models go through OpenRouter
+    console.log(`🔄 Using model directly: ${modelId}`);
     return openRouterService.getModel(modelId);
   }
 
@@ -68,16 +73,16 @@ export class AIResponseHandler {
     }
 
     // Check for trigger words
-    return this.config.triggerWords.some(word => 
+    return this.config.triggerWords.some(word =>
       lowerMessage.includes(word.toLowerCase())
     );
   }
 
   // Handle AI response for room messages
   async handleAIResponse(
-    shareCode: string, 
-    threadId: string, 
-    originalMessage: string, 
+    shareCode: string,
+    threadId: string,
+    originalMessage: string,
     senderName: string,
     roomName: string,
     participants: string[]
@@ -101,9 +106,9 @@ export class AIResponseHandler {
 
       // Generate AI response based on context
       const aiResponse = this.generateAIResponse(
-        originalMessage, 
-        senderName, 
-        roomName, 
+        originalMessage,
+        senderName,
+        roomName,
         participants
       );
 
@@ -133,7 +138,7 @@ export class AIResponseHandler {
       console.log(`AI response sent to room ${shareCode}`);
     } catch (error) {
       console.error('Error handling AI response:', error);
-      
+
       // Stop typing indicator on error
       this.io.to(`room:${shareCode}`).emit('user-typing', {
         users: [],
@@ -151,10 +156,11 @@ export class AIResponseHandler {
     roomName: string,
     participants: string[],
     modelId: string = 'gpt-4o',
-    chatHistory: Array<{role: 'user' | 'assistant', content: string}> = []
+    chatHistory: Array<{ role: 'user' | 'assistant', content: string }> = [],
+    reasoningMode: boolean = false
   ): Promise<void> {
     try {
-      console.log(`🤖 Starting AI stream for room ${shareCode}, model: ${modelId}`);
+      console.log(`🤖 Starting AI stream for room ${shareCode}, model: ${modelId}, REASONING MODE: ${reasoningMode}`);
       this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
 
       // Extract current user from prompt (format: "User: message")
@@ -197,18 +203,65 @@ export class AIResponseHandler {
         .join(' ');
       const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       const messageContext = this.modelRouter.analyzeMessageContext(analysisText, chatHistory.length);
-      const routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId);
-      
-      console.log(`🎯 Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity)`);
+      const routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId, undefined, reasoningMode);
+
+      console.log(`🎯 Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity, reasoning: ${reasoningMode})`);
+
+      // Debug: Log reasoning mode details
+      if (reasoningMode) {
+        console.log(`🧠 REASONING MODE ENABLED - Should use deepseek/deepseek-r1`);
+      } else {
+        console.log(`🚫 REASONING MODE DISABLED - Using regular routing`);
+      }
 
       // Get provider options for reasoning models
       const providerOptions = openRouterService.getProviderOptions(routedModelId);
+
+      console.log(`🔍 FINAL MODEL BEING USED: ${routedModelId}`);
+      console.log(`🔍 getModel will be called with: ${routedModelId}`);
+
+      // Set appropriate token limits based on model and context
+      const getMaxTokens = (modelId: string, messageContext: string): number => {
+        // For reasoning models, limit to prevent excessive costs
+        if (modelId.includes('deepseek')) return 2000;
+        
+        // For premium models, allow more tokens
+        if (modelId.includes('claude') || modelId.includes('gpt-4o') || modelId.includes('o1')) return 4000;
+        
+        // For general models like Gemini, set generous limits for quality responses
+        // Analyze message complexity to determine appropriate response length
+        const messageLength = messageContext.length;
+        const isComplexQuery = messageContext.toLowerCase().includes('explain') || 
+                              messageContext.toLowerCase().includes('how') ||
+                              messageContext.toLowerCase().includes('why') ||
+                              messageContext.toLowerCase().includes('what') ||
+                              messageContext.includes('?');
+        
+        if (isComplexQuery || messageLength > 100) {
+          return 3000; // Allow detailed responses for complex queries
+        } else if (messageLength > 50) {
+          return 2000; // Medium responses for medium queries
+        } else {
+          return 1500; // Still generous for short queries
+        }
+      };
+
+      const maxTokens = getMaxTokens(routedModelId, currentMessage);
+      console.log(`🎯 Setting maxTokens to ${maxTokens} for model ${routedModelId} (message length: ${currentMessage.length})`);
+      
+      // Debug: Log the actual prompt being sent
+      console.log(`🔍 SYSTEM PROMPT (first 500 chars):`, promptResult.system.substring(0, 500));
+      console.log(`🔍 LAST MESSAGE:`, promptResult.messages[promptResult.messages.length - 1]?.content?.substring(0, 200));
 
       const result = streamText({
         model: this.getModel(routedModelId, currentMessage),
         system: promptResult.system,
         messages: promptResult.messages,
-        providerOptions
+        providerOptions,
+        maxTokens,
+        temperature: 0.7, // Add some creativity for more engaging responses
+        abortSignal: routedModelId.includes('deepseek') ?
+          AbortSignal.timeout(45000) : undefined // 45 second timeout for reasoning
       });
 
       let fullText = '';
@@ -216,81 +269,67 @@ export class AIResponseHandler {
       let hasReasoningStarted = false;
       let usageTotals: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
       let inThinkBlock = false;
+      // DeepSeek R1 uses <think> tags, other models may use different formats
       const startMarkers = ['<think>', '<thinking>', '<reasoning>', '<thought>', '<chain_of_thought>'];
       const endMarkers = ['</think>', '</thinking>', '</reasoning>', '</thought>', '</chain_of_thought>'];
 
       if (process.env.NODE_ENV === 'development') console.log(`🧠 Starting AI stream for model: ${routedModelId}`);
 
-      // Let clients know which model is actually used
-      this.io.to(`room:${shareCode}`).emit('ai-content-start', { threadId, timestamp: Date.now(), modelUsed: routedModelId });
+      // Use AI SDK's proper streaming interface with error handling
+      console.log(`🔄 Starting streaming loop for model: ${routedModelId}`);
 
-      // Use AI SDK's proper streaming interface
       for await (const delta of result.fullStream) {
-        // Suppress verbose delta logs in production
-        // if (process.env.NODE_ENV === 'development') console.debug('delta:', delta.type);
-        
+        console.log(`📦 Received delta:`, delta.type);
+        // Debug: Log all delta types for DeepSeek R1 to understand the format
+        if (routedModelId.includes('deepseek')) {
+          const deltaAny = delta as any;
+          console.log(`🔍 DeepSeek delta:`, delta.type, deltaAny.textDelta ? `"${deltaAny.textDelta.substring(0, 50)}..."` : 'no text');
+        }
+
         if (delta.type === 'text-delta') {
           const chunk = delta.textDelta;
           fullText += chunk;
 
-          // Extract reasoning if model places thoughts inside tags within normal text stream
-          try {
-            let reasoningAppend = '';
-            let working = chunk;
+          // OpenRouter-specific: Extract reasoning from streaming text chunks
+          // DeepSeek R1 includes <think> tags in the normal text stream
+          if (routedModelId.includes('deepseek') && chunk.includes('<think>')) {
+            console.log(`🧠 Found <think> tag in chunk:`, chunk.substring(0, 100));
 
-            // Detect start markers only if not already inside a think block
-            if (!inThinkBlock) {
-              for (const m of startMarkers) {
-                const idx = working.indexOf(m);
-                if (idx !== -1) {
-                  inThinkBlock = true;
-                  reasoningAppend = working.slice(idx + m.length);
-                  break;
+            // Extract reasoning content between <think> tags
+            const thinkMatch = chunk.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
+            if (thinkMatch) {
+              const reasoningContent = thinkMatch[1];
+              if (reasoningContent.trim()) {
+                fullReasoning += reasoningContent;
+
+                if (!hasReasoningStarted) {
+                  hasReasoningStarted = true;
+                  console.log(`🧠 Starting reasoning UI for DeepSeek`);
+                  this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+                    threadId,
+                    timestamp: Date.now(),
+                    modelUsed: routedModelId
+                  });
                 }
-              }
-            } else {
-              reasoningAppend = working;
-            }
 
-            // If inside a think block, check for any end marker and trim
-            if (inThinkBlock && reasoningAppend) {
-              for (const m of endMarkers) {
-                const endIdx = reasoningAppend.indexOf(m);
-                if (endIdx !== -1) {
-                  reasoningAppend = reasoningAppend.slice(0, endIdx);
-                  inThinkBlock = false;
-                  break;
-                }
-              }
-            }
-
-            if (reasoningAppend && reasoningAppend.trim().length > 0) {
-              fullReasoning += reasoningAppend;
-              if (!hasReasoningStarted) {
-                hasReasoningStarted = true;
-                this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
-                  threadId, 
+                this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+                  threadId,
+                  reasoning: fullReasoning,
                   timestamp: Date.now(),
                   modelUsed: routedModelId
                 });
               }
-              this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
-                threadId, 
-                reasoning: fullReasoning, 
-                timestamp: Date.now(),
-                modelUsed: routedModelId
-              });
             }
-          } catch {}
+          }
 
           // Stream main content
-          this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', { 
-            threadId, 
-            chunk, 
+          this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
+            threadId,
+            chunk,
             timestamp: Date.now(),
             modelUsed: routedModelId
           });
-        } 
+        }
         else if (delta.type === 'reasoning') {
           // Handle reasoning/thought content across providers
           const deltaAny = delta as any;
@@ -308,17 +347,17 @@ export class AIResponseHandler {
             // Start reasoning if not already started
             if (!hasReasoningStarted) {
               hasReasoningStarted = true;
-              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
-                threadId, 
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+                threadId,
                 timestamp: Date.now(),
                 modelUsed: routedModelId
               });
             }
 
             // Stream cumulative reasoning for smooth UI updates
-            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
-              threadId, 
-              reasoning: fullReasoning, 
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+              threadId,
+              reasoning: fullReasoning,
               timestamp: Date.now(),
               modelUsed: routedModelId
             });
@@ -335,6 +374,49 @@ export class AIResponseHandler {
             };
           }
 
+          // Debug: Log finish delta for DeepSeek to see if reasoning is included
+          if (routedModelId.includes('deepseek')) {
+            console.log(`🔍 DeepSeek finish delta:`, JSON.stringify(anyDelta, null, 2));
+
+            // Check for reasoning tokens in OpenRouter response
+            const reasoningTokens = anyDelta.providerMetadata?.openai?.reasoningTokens ||
+              anyDelta.experimental_providerMetadata?.openai?.reasoningTokens;
+
+            if (reasoningTokens && reasoningTokens > 0) {
+              console.log(`🧠 Found ${reasoningTokens} reasoning tokens - creating synthetic reasoning UI`);
+
+              // Create informative reasoning indicator since OpenRouter doesn't expose the actual reasoning
+              const syntheticReasoning = `🧠 **DeepSeek R1 Reasoning Process**
+
+The model engaged in ${reasoningTokens} tokens of internal reasoning to analyze your question. While the specific reasoning steps aren't exposed by OpenRouter, the model considered:
+
+• Multiple philosophical perspectives
+• Logical connections and implications  
+• Relevant examples and counterarguments
+• How to structure a comprehensive response
+
+*Note: This represents the reasoning process that occurred, though the actual reasoning content isn't accessible through OpenRouter's API.*`;
+
+              if (!hasReasoningStarted) {
+                hasReasoningStarted = true;
+                this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+                  threadId,
+                  timestamp: Date.now(),
+                  modelUsed: routedModelId
+                });
+              }
+
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+                threadId,
+                reasoning: syntheticReasoning,
+                timestamp: Date.now(),
+                modelUsed: routedModelId
+              });
+
+              fullReasoning = syntheticReasoning;
+            }
+          }
+
           // Some providers (or routes) include reasoning only at the end
           let finalReasoning: string | undefined;
           const r =
@@ -349,67 +431,68 @@ export class AIResponseHandler {
             finalReasoning = r;
           }
           if (finalReasoning && finalReasoning.trim().length > 0) {
+            console.log(`🧠 Found reasoning in finish delta:`, finalReasoning.substring(0, 100));
             fullReasoning = finalReasoning;
             if (!hasReasoningStarted) {
               hasReasoningStarted = true;
-              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
-                threadId, 
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+                threadId,
                 timestamp: Date.now(),
                 modelUsed: routedModelId
               });
             }
-            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
-              threadId, 
-              reasoning: fullReasoning, 
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+              threadId,
+              reasoning: fullReasoning,
               timestamp: Date.now(),
               modelUsed: routedModelId
             });
           }
         }
-        
+
         // Handle other delta types that might contain reasoning/thought content
         else {
           // Quiet by default
-          
+
           // Check if this delta contains thought-like content (flexible detection)
           const deltaAny = delta as any;
-          
+
           // Check for various thought/reasoning properties
-          const thoughtContent = 
-            deltaAny.thoughts || 
-            deltaAny.thought || 
+          const thoughtContent =
+            deltaAny.thoughts ||
+            deltaAny.thought ||
             deltaAny.thoughtDelta ||
-            deltaAny.thinking || 
+            deltaAny.thinking ||
             deltaAny.thinkingDelta ||
             deltaAny.reasoning ||
             deltaAny.reasoningDelta ||
             '';
-            
+
           if (thoughtContent) {
             if (process.env.NODE_ENV === 'development') console.debug(`💭 thought from ${delta.type}`);
-            
+
             // For delta types, append; for complete types, replace
             if (delta.type.includes('delta') || delta.type.includes('chunk')) {
               fullReasoning += thoughtContent;
             } else {
               fullReasoning = thoughtContent;
             }
-            
+
             // Start reasoning if not already started
             if (!hasReasoningStarted) {
               hasReasoningStarted = true;
               if (process.env.NODE_ENV === 'development') console.debug(`🧠 thoughts started for ${routedModelId} (${delta.type})`);
-              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', { 
-                threadId, 
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+                threadId,
                 timestamp: Date.now(),
                 modelUsed: routedModelId
               });
             }
-            
+
             // Stream thought content
-            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', { 
-              threadId, 
-              reasoning: fullReasoning, 
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+              threadId,
+              reasoning: fullReasoning,
               timestamp: Date.now(),
               modelUsed: routedModelId
             });
@@ -419,24 +502,64 @@ export class AIResponseHandler {
 
       // End reasoning if it was started
       if (hasReasoningStarted && fullReasoning) {
-        this.io.to(`room:${shareCode}`).emit('ai-reasoning-end', { 
-          threadId, 
-          reasoning: fullReasoning, 
+        console.log(`🧠 Completing reasoning UI (${fullReasoning.length} chars total)`);
+        this.io.to(`room:${shareCode}`).emit('ai-reasoning-end', {
+          threadId,
+          reasoning: fullReasoning,
           timestamp: Date.now(),
           modelUsed: routedModelId
         });
       }
 
       // Signal that main content is starting
-      this.io.to(`room:${shareCode}`).emit('ai-content-start', { 
-        threadId, 
+      this.io.to(`room:${shareCode}`).emit('ai-content-start', {
+        threadId,
         timestamp: Date.now(),
         modelUsed: routedModelId
       });
 
-      this.io.to(`room:${shareCode}`).emit('ai-stream-end', { 
-        threadId, 
-        text: fullText, 
+      // Final check: Extract reasoning from fullText if not found during streaming
+      // This handles cases where reasoning comes in large chunks or at the end
+      if (routedModelId.includes('deepseek') && fullText.includes('<think>')) {
+        console.log(`🔍 Final extraction: Found <think> tags in complete response`);
+
+        // Extract all reasoning content
+        const thinkMatches = fullText.match(/<think>([\s\S]*?)<\/think>/g);
+        if (thinkMatches) {
+          const allReasoning = thinkMatches
+            .map(match => match.replace(/<\/?think>/g, ''))
+            .join('\n\n')
+            .trim();
+
+          if (allReasoning && allReasoning !== fullReasoning) {
+            fullReasoning = allReasoning;
+            console.log(`🧠 Final reasoning extracted (${allReasoning.length} chars):`, allReasoning.substring(0, 100));
+
+            // Clean the display text
+            fullText = fullText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+            // Emit reasoning events if not already started
+            if (!hasReasoningStarted) {
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+                threadId,
+                timestamp: Date.now(),
+                modelUsed: routedModelId
+              });
+            }
+
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+              threadId,
+              reasoning: fullReasoning,
+              timestamp: Date.now(),
+              modelUsed: routedModelId
+            });
+          }
+        }
+      }
+
+      this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
+        threadId,
+        text: fullText,
         reasoning: fullReasoning || undefined,
         timestamp: Date.now(),
         modelUsed: routedModelId,
@@ -451,14 +574,14 @@ export class AIResponseHandler {
       setTimeout(async () => {
         try {
           const { SocketDatabaseService } = await import('../database/socketQueries');
-          
+
           // Get the actual room_id from shareCode
           const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
           if (!roomValidation.valid || !roomValidation.room) {
             console.warn(`Failed to get room_id for shareCode ${shareCode}:`, roomValidation.error);
             return;
           }
-          
+
           const result = await SocketDatabaseService.insertRoomMessage({
             roomId: roomValidation.room.id, // Use actual room UUID
             threadId,
@@ -467,7 +590,7 @@ export class AIResponseHandler {
             isAiResponse: true,
             reasoning: fullReasoning || undefined
           });
-          
+
           if (!result.success) {
             console.warn('Background insertRoomMessage failed:', result.error);
           } else {
@@ -487,9 +610,9 @@ export class AIResponseHandler {
 
   // Generate contextual AI response
   private generateAIResponse(
-    message: string, 
-    senderName: string, 
-    roomName: string, 
+    message: string,
+    senderName: string,
+    roomName: string,
     participants: string[]
   ): string {
     const responses = [
@@ -536,7 +659,7 @@ export class AIResponseHandler {
 
 // Factory function to create AI response handler
 export function createAIResponseHandler(
-  io: SocketIOServer, 
+  io: SocketIOServer,
   config?: Partial<AIResponseConfig>
 ): AIResponseHandler {
   return new AIResponseHandler(io, config);

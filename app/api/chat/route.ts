@@ -2,21 +2,29 @@ import { type NextRequest, NextResponse } from 'next/server';
 import type { Message, Attachment } from 'ai';
 import { streamText, convertToCoreMessages } from 'ai';
 import { saveChatToSupbabase } from './SaveToDb';
-import { Ratelimit } from '@upstash/ratelimit';
-import { redis } from '@/lib/server/server';
+// Rate limiting removed - using new tier-based system
 import { getSession } from '@/lib/server/supabase';
 import { searchUserDocument } from './tools/documentChat';
 import { websiteSearchTool } from './tools/WebsiteSearchTool';
 import { openRouterService } from '@/lib/ai/openRouterService';
 import { ModelRouter } from '@/lib/ai/modelRouter';
 import { userTierService } from '@/lib/ai/userTierService';
+import { tierRateLimiter } from '@/lib/limits/rateLimiter';
 
 export const dynamic = 'force-dynamic';
 
 export const maxDuration = 60;
 
-const getSystemPrompt = (selectedFiles: string[]) => {
-  const basePrompt = `You are a helpful assistant. Answer all questions to the best of your ability. Use tools when necessary. Strive to only use a tool one time per question.
+const getSystemPrompt = (selectedFiles: string[], reasoningMode: boolean = false) => {
+  const reasoningGuidelines = reasoningMode ? `
+
+REASONING GUIDELINES (512 Token Limit):
+- Think in 2-3 essential steps only
+- Maximum 100 words of reasoning
+- No repetition or elaboration
+- Be extremely concise and direct` : '';
+
+  const basePrompt = `You are a helpful assistant. Answer all questions to the best of your ability. Use tools when necessary. Strive to only use a tool one time per question.${reasoningGuidelines}
 
 FORMATTING: Your responses are rendered using react-markdown with the following capabilities:
 - GitHub Flavored Markdown (GFM) support through remarkGfm plugin
@@ -59,14 +67,14 @@ function errorHandler(error: unknown) {
 
 const modelRouter = new ModelRouter();
 
-const getModel = (selectedModel: string, userTier: string = 'free', messageContent?: string) => {
+const getModel = (selectedModel: string, userTier: string = 'free', messageContent?: string, reasoningMode?: boolean) => {
   // Analyze message context for smart routing
   const context = modelRouter.analyzeMessageContext(messageContent || '', 1);
   
   // Route model based on user tier and context
-  const routedModel = modelRouter.routeModel({ tier: userTier as any }, context, selectedModel);
+  const routedModel = modelRouter.routeModel({ tier: userTier as any }, context, selectedModel, undefined, reasoningMode);
   
-  console.log(`🎯 Chat model routing: ${selectedModel} → ${routedModel} (tier: ${userTier})`);
+  console.log(`🎯 Chat model routing: ${selectedModel} → ${routedModel} (tier: ${userTier}, reasoning: ${reasoningMode})`);
   
   return openRouterService.getModel(routedModel);
 };
@@ -82,25 +90,7 @@ export async function POST(req: NextRequest) {
       }
     });
   }
-  const ratelimit = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(30, '24h') // 30 msg per 24 hours
-  });
-
-  const { success, limit, reset, remaining } = await ratelimit.limit(
-    `ratelimit_${session.id}`
-  );
-  if (!success) {
-    return new NextResponse('Rate limit exceeded. Please try again later.', {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-RateLimit-Limit': limit.toString(),
-        'X-RateLimit-Remaining': remaining.toString(),
-        'X-RateLimit-Reset': new Date(reset * 1000).toISOString()
-      }
-    });
-  }
+  // Rate limiting now handled by tier-based system in userTierService
 
   const body = await req.json();
   const messages: Message[] = body.messages ?? [];
@@ -127,14 +117,15 @@ export async function POST(req: NextRequest) {
   }
 
   const selectedModel = body.option ?? 'auto';
+  const reasoningMode = body.reasoningMode ?? false; // New reasoning toggle
   const userId = session.id;
   
-  // Get user tier and check if request is allowed
+  // Get user tier
   const userSubscription = await userTierService.getUserTier(userId);
-  const canMakeRequest = await userTierService.canMakeRequest(userId);
-  
-  if (!canMakeRequest.allowed) {
-    return new NextResponse(canMakeRequest.reason, {
+  // Enforce new tier-based request limits
+  const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, 'ai_requests');
+  if (!limiterCheck.allowed) {
+    return new NextResponse(limiterCheck.reason || 'Limit reached', {
       status: 429,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -154,7 +145,8 @@ export async function POST(req: NextRequest) {
       requestCount: userSubscription.monthlyUsage,
       warningThreshold: userSubscription.warningThreshold,
       hardLimit: userSubscription.hardLimit
-    }
+    },
+    reasoningMode // Pass reasoning mode flag
   );
   const providerOptions = openRouterService.getProviderOptions(routedModel);
 
@@ -164,8 +156,8 @@ export async function POST(req: NextRequest) {
   }
 
   const result = streamText({
-    model: getModel(selectedModel, userSubscription.tier, lastMessageContent),
-    system: getSystemPrompt(selectedFiles),
+    model: getModel(selectedModel, userSubscription.tier, lastMessageContent, reasoningMode),
+    system: getSystemPrompt(selectedFiles, reasoningMode),
     messages: convertToCoreMessages(messages),
     abortSignal: signal,
     providerOptions,
@@ -221,6 +213,7 @@ export async function POST(req: NextRequest) {
         
         // Update user usage
         await userTierService.updateUsage(userId, totalTokens, estimatedCost, routedModel, 'chat');
+        await tierRateLimiter.increment(userId, userSubscription.tier as any, 'ai_requests', 1);
         
         console.log(`💰 Usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost`);
       }

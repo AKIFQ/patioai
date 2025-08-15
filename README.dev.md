@@ -25,7 +25,7 @@
 - **Web Search**: Tavily API for real-time web information
 
 ### Infrastructure
-- **Rate Limiting**: Upstash Redis (optional)
+- **Rate Limiting**: PostgreSQL tier-based (no Redis required)
 - **Telemetry**: Langfuse for AI observability (optional)
 - **Deployment**: Vercel-ready with environment configuration
 - **Monitoring**: Built-in memory management and performance monitoring
@@ -78,9 +78,7 @@ GITHUB_SECRET_ID=your_github_client_secret
 # Document Processing (Optional)
 LLAMA_CLOUD_API_KEY=your_llamaindex_api_key
 
-# Redis for Rate Limiting (Optional)
-UPSTASH_REDIS_REST_URL=your_upstash_redis_url
-UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
+# Tier-based limits (no Redis required)
 
 # Web Search (Optional)
 TAVILY_API_KEY=your_tavily_api_key
@@ -618,12 +616,7 @@ NEXT_PUBLIC_SOCKET_URL=https://your-domain.com
 
 ### Rate Limiting
 
-Configure rate limiting with Upstash Redis:
-
-```env
-UPSTASH_REDIS_REST_URL=...
-UPSTASH_REDIS_REST_TOKEN=...
-```
+Tier-based limits are enforced with the `user_usage_counters` table and `upsert_usage_counter` function in PostgreSQL. No Redis setup is required.
 
 ## 🐛 Troubleshooting
 
@@ -730,7 +723,7 @@ POST /api/monitoring/memory
 - **Encryption**: All data encrypted at rest and in transit
 - **CORS Configuration**: Properly configured cross-origin policies
 - **Input Validation**: Comprehensive input sanitization
-- **Rate Limiting**: Protection against abuse
+- **Rate Limiting**: Tier-based protection against abuse
 
 ### Environment Security
 

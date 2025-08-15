@@ -134,21 +134,7 @@ export class SecurityMiddleware {
         }
       }
 
-      // 4. Rate limiting check
-      const rateLimitResult = this.checkRateLimit(clientIP, path);
-      if (!rateLimitResult.allowed) {
-        auditLogger.logSecurityViolation('rate_limit_exceeded', {
-          attempts: rateLimitResult.attempts,
-          limit: rateLimitResult.limit,
-          path,
-          method
-        }, {
-          clientIP,
-          userAgent
-        });
 
-        return this.createErrorResponse('Rate limit exceeded', 429);
-      }
 
       // Log successful request processing
       if (this.config.enableAuditLogging) {
@@ -264,43 +250,7 @@ export class SecurityMiddleware {
     return null;
   }
 
-  // Rate limiting implementation
-  private rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-  
-  private checkRateLimit(identifier: string, path: string): {
-    allowed: boolean;
-    attempts: number;
-    limit: number;
-  } {
-    const now = Date.now();
-    const windowMs = 15 * 60 * 1000; // 15 minutes
-    
-    // Different limits for different endpoints
-    const limit = this.getRateLimitForPath(path);
-    
-    const key = `${identifier}_${path}`;
-    const record = this.rateLimitStore.get(key);
-    
-    if (!record || now > record.resetTime) {
-      this.rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
-      return { allowed: true, attempts: 1, limit };
-    }
 
-    record.count++;
-    
-    return {
-      allowed: record.count <= limit,
-      attempts: record.count,
-      limit
-    };
-  }
-
-  private getRateLimitForPath(path: string): number {
-    if (path.includes('/api/auth')) return 10; // Strict for auth endpoints
-    if (path.includes('/api/chat')) return 100; // More lenient for chat
-    if (path.includes('/api/room')) return 50; // Moderate for room operations
-    return 200; // Default limit
-  }
 
   // Helper methods
   private shouldSkipPath(path: string): boolean {
@@ -367,7 +317,6 @@ export class SecurityMiddleware {
   // Statistics
   getSecurityStats() {
     return {
-      rateLimitEntries: this.rateLimitStore.size,
       config: this.config,
       timestamp: new Date().toISOString()
     };

@@ -1,3 +1,28 @@
+-- New counters for tier-based limits
+CREATE TABLE IF NOT EXISTS public.user_usage_counters (
+  user_id uuid NOT NULL,
+  resource text NOT NULL,
+  period text NOT NULL CHECK (period IN ('hour','day','month')),
+  period_start timestamptz NOT NULL,
+  count integer DEFAULT 0,
+  PRIMARY KEY (user_id, resource, period, period_start)
+);
+
+CREATE OR REPLACE FUNCTION public.upsert_usage_counter(
+  p_user_id uuid,
+  p_resource text,
+  p_period text,
+  p_period_start timestamptz,
+  p_amount integer
+) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO public.user_usage_counters(user_id, resource, period, period_start, count)
+  VALUES (p_user_id, p_resource, p_period, p_period_start, p_amount)
+  ON CONFLICT (user_id, resource, period, period_start)
+  DO UPDATE SET count = public.user_usage_counters.count + p_amount;
+END;
+$$;
+
 -- Add subscription tier and usage tracking to users table
 ALTER TABLE users 
 ADD COLUMN IF NOT EXISTS subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'basic', 'premium')),
@@ -50,12 +75,12 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Insert default plans
+-- Insert default plans (aligned with new limits)
 INSERT INTO subscription_plans (id, name, description, monthly_limit, cost_limit, price, features) 
 VALUES 
-  ('free', 'Free', 'Smart auto-routing to best free models', 50, 0.00, 0.00, '["Auto model selection", "50 requests/month", "Community support"]'::jsonb),
-  ('basic', 'Pro Basic', 'Choose from fast, efficient models', 200, 15.00, 20.00, '["Model selection", "200 requests/month", "Email support", "DeepSeek Reasoning"]'::jsonb),
-  ('premium', 'Pro Premium', 'Access to flagship models', 500, 40.00, 50.00, '["All models", "500 requests/month", "Priority support", "GPT-4o", "Claude Sonnet", "Advanced reasoning"]'::jsonb)
+  ('free', 'Free', 'Gemini Flash + DeepSeek R1 (explicit reasoning) with generous limits', 400, 0.00, 0.00, '["Auto model selection", "Gemini 2.0 Flash", "DeepSeek R1 (opt-in reasoning)", "2,000 reasoning msgs/mo"]'::jsonb),
+  ('basic', 'Basic', 'Same models as free with higher limits and features', 1500, 15.00, 10.00, '["Model selection", "Higher limits", "Priority support"]'::jsonb),
+  ('premium', 'Premium', 'Claude/GPT-4o/O1 + enterprise features', 4000, 40.00, 50.00, '["Top-tier models", "Enterprise collaboration", "Advanced reasoning"]'::jsonb)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,

@@ -5,9 +5,14 @@ export class OpenRouterService {
   private client: ReturnType<typeof createOpenAI>;
 
   constructor() {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY environment variable is required');
+    }
+    
     this.client = createOpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
+      apiKey: apiKey,
       headers: {
         'HTTP-Referer': process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
         'X-Title': 'PatioAI'
@@ -80,10 +85,17 @@ export class OpenRouterService {
       };
     }
 
-    // DeepSeek and other reasoning models use the unified OpenRouter `reasoning` param
-    if (modelId.includes('deepseek')) {
+    // DeepSeek R1 reasoning configuration with cost controls
+    if (modelId.includes('deepseek/deepseek-r1')) {
       return {
-        ...baseReasoning
+        // OpenRouter-specific configuration for DeepSeek R1
+        openai: {
+          // These parameters may not work with OpenRouter, but we'll try
+          max_reasoning_tokens: 512,
+          // DeepSeek R1 reasoning appears in <think> tags within the response
+          stream: true,
+          temperature: 0.7
+        }
       };
     }
 

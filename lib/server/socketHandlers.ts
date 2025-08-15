@@ -291,11 +291,13 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       participants: string[];
       modelId?: string;
       chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+      reasoningMode?: boolean;
     }) => {
       try {
-        const { shareCode, threadId, prompt, roomName, participants, modelId, chatHistory } = data;
+        const { shareCode, threadId, prompt, roomName, participants, modelId, chatHistory, reasoningMode } = data;
+        console.log(`🔍 Socket invoke-ai received:`, { modelId, reasoningMode, shareCode });
         // Cast to any to avoid potential type mismatches if typings lag behind implementation
-        (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || []);
+        (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || [], reasoningMode || false);
       } catch (error) {
         console.error('Error invoking AI stream:', error);
         socket.emit('ai-error', { error: 'Failed to invoke AI stream' });
