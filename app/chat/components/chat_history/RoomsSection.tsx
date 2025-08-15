@@ -215,29 +215,31 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                           </div>
                         ) : sessions.length > 0 ? (
                           sessions.map((session) => (
-                            <SidebarMenuButton
-                              key={session.id}
-                              asChild
-                              size="sm"
-                              className={`text-xs ${isExpired ? 'pointer-events-none opacity-50' : ''}`}
-                            >
-                              <Link
-                                href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${session.id}`}
-                                onClick={(e) => {
-                                  if (isExpired) {
-                                    e.preventDefault();
-                                    return;
-                                  }
-                                  handleRoomClick(e, room.shareCode);
-                                }}
-                                className="flex items-center gap-2"
+                            <div key={session.id} className="space-y-1">
+                              <SidebarMenuButton
+                                asChild
+                                size="sm"
+                                className={`text-xs ${isExpired ? 'pointer-events-none opacity-50' : ''}`}
                               >
-                                <MessageSquare className="h-3 w-3" />
-                                <span className="truncate">
-                                  {session.chat_title || `Chat with ${session.display_name}`}
-                                </span>
-                              </Link>
-                            </SidebarMenuButton>
+                                <Link
+                                  href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${session.id}`}
+                                  onClick={(e) => {
+                                    if (isExpired) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    handleRoomClick(e, room.shareCode);
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span className="truncate">
+                                    {session.chat_title || `Chat with ${session.display_name}`}
+                                  </span>
+                                </Link>
+                              </SidebarMenuButton>
+
+                            </div>
                           ))
                         ) : (
                           <div className="text-xs text-muted-foreground py-2">

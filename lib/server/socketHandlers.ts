@@ -27,27 +27,27 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
     } catch (e) {
       console.warn('SocketMonitor onConnect error:', e);
     }
-    
+
     // Set up event handlers
     handleRoomEvents(socket);
     handleChatEvents(socket);
     handleSidebarEvents(socket);
-    
+
     // Send connection confirmation
     socket.emit('connection-confirmed', {
       socketId: socket.id,
       timestamp: new Date().toISOString()
     });
-    
+
     // Set up health monitoring
     socket.on('health-ping', (data: { id: string; timestamp: number }, callback: (response: any) => void) => {
       // Respond immediately to health pings
       const responseTime = Date.now();
-      callback({ 
-        id: data.id, 
+      callback({
+        id: data.id,
         serverTimestamp: responseTime,
         clientTimestamp: data.timestamp,
-        roundTripTime: responseTime - data.timestamp 
+        roundTripTime: responseTime - data.timestamp
       });
     });
   };
@@ -61,7 +61,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
     } catch (e) {
       console.warn('SocketMonitor onDisconnect error:', e);
     }
-    
+
     try {
       // Snapshot room names without mutating the socket
       const userRooms = Array.from(socket.rooms || new Set<string>()).filter((room) => room.startsWith('room:'));
@@ -140,7 +140,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
 
       if (userSockets.length === 0) {
         console.log(`Cleaning up abandoned sessions for user ${userId}`);
-        
+
         // Clean up empty room chat sessions
         const { data: emptySessions } = await supabase
           .from('room_chat_sessions')
@@ -162,7 +162,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
                 .from('room_chat_sessions')
                 .delete()
                 .eq('id', session.id);
-              
+
               console.log(`Deleted empty room chat session ${session.id}`);
             }
           }
@@ -178,7 +178,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       await measurePerformance('room.join', async () => {
         // Use optimized room validation
         const validation = await SocketDatabaseService.validateRoomAccess(shareCode);
-        
+
         if (!validation.valid) {
           socket.emit('room-error', { error: validation.error });
           return;
@@ -189,7 +189,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         // Join room by share code
         socket.join(`room:${shareCode}`);
         console.log(`User ${socket.userId} joined room ${shareCode} (${room.name})`);
-        
+
         // Add participant to database
         await SocketDatabaseService.addRoomParticipant({
           roomId: room.id,
@@ -197,15 +197,15 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           displayName: socket.userId, // Will be enhanced with actual display name
           sessionId: socket.id
         });
-        
+
         // Confirm join to user first
-        socket.emit('room-joined', { 
-          shareCode, 
+        socket.emit('room-joined', {
+          shareCode,
           roomName: room.name,
           participantCount: room.active_participants,
           maxParticipants: room.max_participants
         });
-        
+
         // Notify other room members
         socket.to(`room:${shareCode}`).emit('user-joined-room', {
           userId: socket.userId,
@@ -220,11 +220,50 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       });
     });
 
+    // Handle thread switching within a room
+    socket.on('switch-thread', (data: { roomId: string; threadId: string; displayName: string }) => {
+      try {
+        const { roomId, threadId, displayName } = data;
+
+        // Update user's current thread
+        if (!socket.currentThread) socket.currentThread = {};
+        const previousThread = socket.currentThread[roomId];
+        socket.currentThread[roomId] = threadId;
+
+        // Notify room about thread switch
+        if (previousThread && previousThread !== threadId) {
+          socket.to(`room:${roomId}`).emit('user-thread-switch', {
+            displayName,
+            fromThread: previousThread,
+            toThread: threadId,
+            roomId,
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        // Update cross-thread activity
+        socket.to(`room:${roomId}`).emit('cross-thread-activity', {
+          roomId,
+          activities: [{
+            threadId,
+            threadName: 'other thread',
+            activeUsers: [displayName],
+            typingUsers: []
+          }],
+          timestamp: new Date().toISOString()
+        });
+
+        console.log(`User ${displayName} switched to thread ${threadId} in room ${roomId}`);
+      } catch (error) {
+        console.error('Error handling thread switch:', error);
+      }
+    });
+
     socket.on('leave-room', async (shareCode: string) => {
       try {
         socket.leave(`room:${shareCode}`);
         console.log(`User ${socket.userId} left room ${shareCode}`);
-        
+
         // Get room info for notification
         const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(
@@ -237,10 +276,10 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           .select('name')
           .eq('share_code', shareCode)
           .single();
-        
+
         // Confirm leave to user first
         socket.emit('room-left', { shareCode });
-        
+
         // Notify other room members
         socket.to(`room:${shareCode}`).emit('user-left-room', {
           userId: socket.userId,
@@ -302,24 +341,24 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       roomName: string;
       participants: string[];
       modelId?: string;
-      chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+      chatHistory?: Array<{ role: 'user' | 'assistant', content: string }>;
       reasoningMode?: boolean;
     }, callback: (response: any) => void) => {
       try {
         const { shareCode, threadId, prompt, roomName, participants, modelId, chatHistory, reasoningMode } = data;
         console.log(`🔍 Socket invoke-ai received:`, { modelId, reasoningMode, shareCode });
-        
+
         // Acknowledge receipt immediately
         callback({ success: true, message: 'AI invocation started' });
-        
+
         // Cast to any to avoid potential type mismatches if typings lag behind implementation
         (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || [], reasoningMode || false);
       } catch (error) {
         console.error('Error invoking AI stream:', error);
-        
+
         // Send error acknowledgment
         callback({ success: false, error: 'Failed to invoke AI stream' });
-        
+
         socket.emit('ai-error', { error: 'Failed to invoke AI stream' });
       }
     });
@@ -347,12 +386,12 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         socket.emit('ai-error', { error: 'Failed to toggle AI' });
       }
     });
-    
+
     // Handle chat session creation
     socket.on('chat-session-created', async (data: { sessionId: string; title?: string }) => {
       try {
         const { sessionId, title } = data;
-        
+
         // Emit to user's personal channel for sidebar updates
         socket.to(`user:${socket.userId}`).emit('chat-session-created', {
           new: {
@@ -375,15 +414,15 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
     });
 
     // Handle chat message sent
-    socket.on('chat-message-sent', async (data: { 
-      sessionId: string; 
-      content: string; 
+    socket.on('chat-message-sent', async (data: {
+      sessionId: string;
+      content: string;
       isUserMessage: boolean;
       attachments?: any[];
     }) => {
       try {
         const { sessionId, content, isUserMessage, attachments } = data;
-        
+
         // Emit to user's personal channel for sidebar updates
         socket.to(`user:${socket.userId}`).emit('chat-message-created', {
           new: {
@@ -407,15 +446,15 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
     });
 
     // Handle document upload
-    socket.on('document-uploaded', async (data: { 
-      documentId: string; 
-      title: string; 
+    socket.on('document-uploaded', async (data: {
+      documentId: string;
+      title: string;
       totalPages: number;
       filterTags: string;
     }) => {
       try {
         const { documentId, title, totalPages, filterTags } = data;
-        
+
         // Emit to user's personal channel for sidebar updates
         socket.to(`user:${socket.userId}`).emit('document-uploaded', {
           new: {
@@ -438,33 +477,54 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         socket.emit('document-error', { error: 'Failed to process document upload' });
       }
     });
-    
+
     // Handle request for missed messages when user returns from background
     socket.on('request-missed-messages', (data: { timestamp: number; lastActiveTime: number }) => {
       try {
         console.log(`📬 User ${socket.userId} requesting missed messages since ${new Date(data.lastActiveTime).toISOString()}`);
-        
+
         // For now, just acknowledge - in a full implementation, you'd query recent messages
         // and re-emit any that the client might have missed
-        socket.emit('missed-messages-response', { 
-          success: true, 
+        socket.emit('missed-messages-response', {
+          success: true,
           timestamp: Date.now(),
-          message: 'Connection verified, no missed messages' 
+          message: 'Connection verified, no missed messages'
         });
       } catch (error) {
         console.error('Error handling missed messages request:', error);
       }
     });
 
-    socket.on('typing-start', (data: { roomId?: string; displayName?: string }) => {
+    // Thread-aware typing system
+    socket.on('typing-start', (data: { roomId?: string; displayName?: string; threadId?: string }) => {
       try {
-        const { roomId, displayName } = data;
-        
-        if (roomId && displayName) {
-          // Emit to all room members with current typing users (roomId is actually shareCode)
+        const { roomId, displayName, threadId } = data;
+
+        if (roomId && displayName && threadId) {
+          // Store user's current thread and typing status
+          if (!socket.currentThread) socket.currentThread = {};
+          socket.currentThread[roomId] = threadId;
+          socket.isTyping = true;
+
+          console.log(`👤 ${displayName} started typing in thread ${threadId} of room ${roomId}`);
+
+          // Emit ONLY to users in the SAME thread
           socket.to(`room:${roomId}`).emit('user-typing', {
-            users: [displayName], // Simple array of typing users
+            users: [displayName],
             roomId,
+            threadId, // Include threadId so clients can filter
+            timestamp: new Date().toISOString()
+          });
+
+          // Emit cross-thread activity to ALL room participants (they'll filter by thread)
+          socket.to(`room:${roomId}`).emit('cross-thread-activity', {
+            roomId,
+            activities: [{
+              threadId,
+              threadName: 'other thread',
+              activeUsers: [],
+              typingUsers: [displayName]
+            }],
             timestamp: new Date().toISOString()
           });
         }
@@ -473,15 +533,32 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       }
     });
 
-    socket.on('typing-stop', (data: { roomId?: string; displayName?: string }) => {
+    socket.on('typing-stop', (data: { roomId?: string; displayName?: string; threadId?: string }) => {
       try {
-        const { roomId, displayName } = data;
-        
-        if (roomId) {
-          // Emit empty typing users array when user stops typing (roomId is actually shareCode)
+        const { roomId, displayName, threadId } = data;
+
+        if (roomId && threadId) {
+          socket.isTyping = false;
+
+          console.log(`👤 ${displayName} stopped typing in thread ${threadId} of room ${roomId}`);
+
+          // Emit ONLY to users in the SAME thread
           socket.to(`room:${roomId}`).emit('user-typing', {
             users: [], // Empty array when user stops typing
             roomId,
+            threadId,
+            timestamp: new Date().toISOString()
+          });
+
+          // Update cross-thread activity (user still active, just not typing)
+          socket.to(`room:${roomId}`).emit('cross-thread-activity', {
+            roomId,
+            activities: [{
+              threadId,
+              threadName: 'other thread',
+              activeUsers: [displayName],
+              typingUsers: []
+            }],
             timestamp: new Date().toISOString()
           });
         }
@@ -506,14 +583,14 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       }
     });
 
-    socket.on('notify-sidebar-change', async (data: { 
+    socket.on('notify-sidebar-change', async (data: {
       changeType: 'chat_created' | 'room_joined' | 'document_uploaded' | 'message_sent';
       entityId: string;
       metadata?: any;
     }) => {
       try {
         const { changeType, entityId, metadata } = data;
-        
+
         // Broadcast to user's personal channel with timestamp
         socket.to(`user:${socket.userId}`).emit('sidebar-change-notification', {
           changeType,
@@ -534,7 +611,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       await measurePerformance('sidebar.getData', async () => {
         // Use optimized sidebar data retrieval
         const result = await SocketDatabaseService.getSidebarData(socket.userId);
-        
+
         if (!result.success) {
           socket.emit('sidebar-error', { error: result.error });
           return;
@@ -558,7 +635,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         // Join user's personal channel for sidebar updates
         socket.join(`user:${socket.userId}`);
         console.log(`User ${socket.userId} joined personal channel`);
-        
+
         // Confirm channel join
         socket.emit('user-channel-joined', {
           userId: socket.userId,
@@ -575,7 +652,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         // Leave user's personal channel
         socket.leave(`user:${socket.userId}`);
         console.log(`User ${socket.userId} left personal channel`);
-        
+
         // Confirm channel leave
         socket.emit('user-channel-left', {
           userId: socket.userId,

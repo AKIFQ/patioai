@@ -22,6 +22,13 @@ interface RoomSocketHookProps {
   onReasoningChunk?: (threadId: string, reasoning: string) => void;
   onReasoningEnd?: (threadId: string, reasoning: string) => void;
   onContentStart?: (threadId: string) => void;
+  // Cross-thread activity
+  onCrossThreadActivity?: (activities: Array<{
+    threadId: string;
+    threadName: string;
+    activeUsers: string[];
+    typingUsers: string[];
+  }>) => void;
 }
 
 export function useRoomSocket({
@@ -37,7 +44,8 @@ export function useRoomSocket({
   onReasoningStart,
   onReasoningChunk,
   onReasoningEnd,
-  onContentStart
+  onContentStart,
+  onCrossThreadActivity
 }: RoomSocketHookProps) {
   const { socket, isConnected } = useSocket(displayName);
   const [connectionStatus, setConnectionStatus] = useState<string>('DISCONNECTED');
@@ -96,14 +104,22 @@ export function useRoomSocket({
     onNewMessage(message);
   }, [displayName, chatSessionId, onNewMessage]);
 
-  // Handle typing updates from Socket.IO
+  // Handle typing updates from Socket.IO - only for SAME thread
   const handleTypingUpdate = useCallback((data: any) => {
     if (process.env.NODE_ENV === 'development') console.debug('Typing update received:', data);
+    
+    // Only show typing if it's from the SAME thread
+    if (data.threadId && chatSessionId && data.threadId !== chatSessionId) {
+      if (process.env.NODE_ENV === 'development') console.debug('Ignoring typing from different thread:', data.threadId, 'vs', chatSessionId);
+      onTypingUpdate([]); // Clear typing indicators for different threads
+      return;
+    }
+    
     const typingUsers = data.users || [];
     const filteredUsers = typingUsers.filter((name: string) => name && name !== displayName);
-    if (process.env.NODE_ENV === 'development') console.debug('Typing users updated:', filteredUsers);
+    if (process.env.NODE_ENV === 'development') console.debug('Typing users updated for same thread:', filteredUsers);
     onTypingUpdate(filteredUsers);
-  }, [displayName, onTypingUpdate]);
+  }, [displayName, chatSessionId, onTypingUpdate]);
 
   // Handle participant changes from Socket.IO
   const handleParticipantChange = useCallback((data: any) => {
@@ -159,6 +175,7 @@ export function useRoomSocket({
             messageQueueRef.current.enqueue('typing-start', {
               roomId: shareCode,
               displayName,
+              threadId: chatSessionId,
               timestamp: Date.now()
             }, 'high');
           } else {
@@ -166,6 +183,7 @@ export function useRoomSocket({
             socket.emit('typing-start', {
               roomId: shareCode,
               displayName,
+              threadId: chatSessionId,
               timestamp: Date.now()
             });
           }
@@ -197,13 +215,15 @@ export function useRoomSocket({
         if (messageQueueRef.current) {
           messageQueueRef.current.enqueue('typing-stop', {
             roomId: shareCode,
-            displayName
+            displayName,
+            threadId: chatSessionId
           }, 'high');
         } else {
           // Fallback to direct emit
           socket.emit('typing-stop', {
             roomId: shareCode,
-            displayName
+            displayName,
+            threadId: chatSessionId
           });
         }
         
@@ -253,6 +273,15 @@ export function useRoomSocket({
 
         // Join the room
         socket.emit('join-room', shareCode);
+        
+        // Emit thread switch when joining
+        if (chatSessionId) {
+          socket.emit('switch-thread', {
+            roomId: shareCode,
+            threadId: chatSessionId,
+            displayName
+          });
+        }
 
         // Set up event listeners with tracking
         const addTrackedListener = (event: string, handler: (...args: any[]) => void) => {
@@ -298,6 +327,22 @@ export function useRoomSocket({
         
         addTrackedListener('ai-reasoning-start', aiReasoningStartHandler);
         addTrackedListener('ai-reasoning-chunk', aiReasoningChunkHandler);
+        
+        // Cross-thread activity listener
+        const crossThreadActivityHandler = (payload: { 
+          roomId: string; 
+          activities: Array<{
+            threadId: string;
+            threadName: string;
+            activeUsers: string[];
+            typingUsers: string[];
+          }>;
+          timestamp: string;
+        }) => {
+          if (process.env.NODE_ENV === 'development') console.debug('Cross-thread activity:', payload);
+          onCrossThreadActivity?.(payload.activities);
+        };
+        addTrackedListener('cross-thread-activity', crossThreadActivityHandler);
         addTrackedListener('ai-reasoning-end', aiReasoningEndHandler);
         
         // Content events with tracking
