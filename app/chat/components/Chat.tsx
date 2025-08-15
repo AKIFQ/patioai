@@ -368,6 +368,23 @@ const ChatComponent: React.FC<ChatProps> = ({
           if (!response.ok) {
             throw new Error(`API call failed: ${response.status}`);
           }
+
+          // CRITICAL: Trigger sidebar refresh for new thread visibility
+          // This ensures all users see the new thread immediately
+          if (realtimeMessages.length === 0) {
+            console.log('🔄 First message in thread - triggering sidebar refresh');
+            // Dispatch custom event to trigger sidebar refresh
+            window.dispatchEvent(new CustomEvent('forceThreadRefresh', { 
+              detail: { 
+                threadId: roomContext.chatSessionId,
+                shareCode: roomContext.shareCode,
+                roomName: roomContext.roomName,
+                senderName: roomContext.displayName,
+                firstMessage: message
+              } 
+            }));
+          }
+
           // Then invoke streaming via socket (only once per submission)
           if (invokeAIRef.current && isConnected && submissionInfo) {
             // Prepare chat history for context (last 10 messages)
@@ -421,6 +438,20 @@ const ChatComponent: React.FC<ChatProps> = ({
 
           if (!response.ok) {
             throw new Error(`API call failed: ${response.status}`);
+          }
+
+          // CRITICAL: Trigger sidebar refresh for new thread visibility
+          if (realtimeMessages.length === 0) {
+            console.log('🔄 First message in thread (no AI) - triggering sidebar refresh');
+            window.dispatchEvent(new CustomEvent('forceThreadRefresh', { 
+              detail: { 
+                threadId: roomContext.chatSessionId,
+                shareCode: roomContext.shareCode,
+                roomName: roomContext.roomName,
+                senderName: roomContext.displayName,
+                firstMessage: message
+              } 
+            }));
           }
 
           console.log('✅ Room chat: User message sent (no AI)');
@@ -976,34 +1007,48 @@ const ChatComponent: React.FC<ChatProps> = ({
       {/* Mobile Header with Hamburger Menu */}
       <div className="sticky top-0 z-20 bg-background border-b border-border h-12 shadow-sm w-full md:hidden">
         <div className="flex items-center justify-between w-full h-full px-4">
-          {/* Hamburger Menu Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={openMobileSidebar}
-            className="h-8 w-8 text-foreground hover:bg-transparent transition-colors bg-transparent border-0 shadow-none"
-            aria-label="Open sidebar"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-
-          {/* Chat Title - Centered with cross-thread activity */}
-          <div className="flex flex-col items-center justify-center flex-1 min-w-0">
+          {/* Left side - Hamburger Menu + Logo + Room Name */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Hamburger Menu Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={openMobileSidebar}
+              className="h-8 w-8 text-foreground hover:bg-transparent transition-colors bg-transparent border-0 shadow-none flex-shrink-0"
+              aria-label="Open sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            
+            {/* PatioAI Logo */}
+            <div className="flex-shrink-0">
+              <Image
+                src="/icons/icon-512x512.png"
+                alt="PatioAI"
+                width={20}
+                height={20}
+                className="rounded-sm"
+              />
+            </div>
+            
+            {/* Room Name */}
             <h1 className="text-base font-medium tracking-tight truncate">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
             </h1>
-            {/* Mobile cross-thread activity */}
+          </div>
+
+          {/* Right side - Activity Indicators */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Mobile cross-thread activity indicators */}
             {roomContext && crossThreadActivities.some(activity => 
               activity.threadId !== (roomContext.chatSessionId || '') && 
               (activity.activeUsers.length > 0 || activity.typingUsers.length > 0)
             ) && (
-              <div className="text-xs text-muted-foreground/60 truncate max-w-full">
-                <CrossThreadActivity
-                  currentThreadId={roomContext.chatSessionId || ''}
-                  activities={crossThreadActivities}
-                  currentUser={roomContext.displayName}
-                />
-              </div>
+              <CrossThreadActivity
+                currentThreadId={roomContext.chatSessionId || ''}
+                activities={crossThreadActivities}
+                currentUser={roomContext.displayName}
+              />
             )}
           </div>
 
@@ -1040,34 +1085,42 @@ const ChatComponent: React.FC<ChatProps> = ({
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
               <>
+                {/* Room name on the left */}
                 <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
                   <h1 className="text-base sm:text-lg md:text-xl font-medium tracking-tight truncate overflow-hidden">{roomContext.roomName}</h1>
                 </div>
-                <div className="hidden sm:flex items-center text-xs sm:text-sm text-muted-foreground/80 flex-shrink-0">
-                  <span>{roomContext.participants.length} online</span>
-                  {/* Cross-thread activity in header */}
+                
+                {/* Indicators on the right */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Participant count - styled indicator */}
+                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full border border-green-200/50 dark:border-green-800/30">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                    <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                      {roomContext.participants.length} online
+                    </span>
+                  </div>
+                  
+                  {/* Cross-thread activity indicator */}
                   {crossThreadActivities.some(activity =>
                     activity.threadId !== (roomContext.chatSessionId || '') &&
                     (activity.activeUsers.length > 0 || activity.typingUsers.length > 0)
                   ) && (
-                      <>
-                        <span className="mx-2">•</span>
-                        <CrossThreadActivity
-                          currentThreadId={roomContext.chatSessionId || ''}
-                          activities={crossThreadActivities}
-                          currentUser={roomContext.displayName}
-                        />
-                      </>
-                    )}
-                </div>
-                {/* Mobile cross-thread activity */}
-                <div className="sm:hidden flex-shrink-0">
-                  <CrossThreadActivity
-                    currentThreadId={roomContext.chatSessionId || ''}
-                    activities={crossThreadActivities}
-                    currentUser={roomContext.displayName}
-                  />
+                    <CrossThreadActivity
+                      currentThreadId={roomContext.chatSessionId || ''}
+                      activities={crossThreadActivities}
+                      currentUser={roomContext.displayName}
+                    />
+                  )}
+                  
+                  {/* Mobile cross-thread activity */}
+                  <div className="sm:hidden">
+                    <CrossThreadActivity
+                      currentThreadId={roomContext.chatSessionId || ''}
+                      activities={crossThreadActivities}
+                      currentUser={roomContext.displayName}
+                    />
+                  </div>
                 </div>
               </>
             ) : (

@@ -66,7 +66,7 @@ async function saveRoomMessage(
     });
 
     // Emit Socket.IO event for room message (use share code for room identification)
-    const { emitRoomMessageCreated, getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+    const { emitRoomMessageCreated, emitRoomEvent, getSocketIOInstance } = await import('@/lib/server/socketEmitter');
     emitRoomMessageCreated(shareCode, {
       id: result.messageId || `msg-${Date.now()}`,
       room_id: roomId,
@@ -78,6 +78,19 @@ async function saveRoomMessage(
       sources: sources ? JSON.stringify(sources) : null,
       created_at: new Date().toISOString()
     });
+
+    // CRITICAL: Emit specific new thread event for sidebar refresh
+    if (isFirstMessage && !isAiResponse) {
+      console.log(`🆕 NEW THREAD CREATED - emitting thread-created event for ${shareCode}`);
+      emitRoomEvent(shareCode, 'thread-created', {
+        threadId,
+        roomId,
+        shareCode,
+        senderName,
+        firstMessage: content,
+        createdAt: new Date().toISOString()
+      });
+    }
 
     // Trigger AI response for user messages
     if (!isAiResponse && isFirstMessage) {
