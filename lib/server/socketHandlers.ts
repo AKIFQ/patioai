@@ -38,6 +38,18 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       socketId: socket.id,
       timestamp: new Date().toISOString()
     });
+    
+    // Set up health monitoring
+    socket.on('health-ping', (data: { id: string; timestamp: number }, callback: (response: any) => void) => {
+      // Respond immediately to health pings
+      const responseTime = Date.now();
+      callback({ 
+        id: data.id, 
+        serverTimestamp: responseTime,
+        clientTimestamp: data.timestamp,
+        roundTripTime: responseTime - data.timestamp 
+      });
+    });
   };
 
   const handleDisconnection = async (socket: AuthenticatedSocket, reason: string) => {
@@ -282,7 +294,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   const handleChatEvents = (socket: AuthenticatedSocket) => {
     // Removed legacy non-streaming AI path (trigger-ai-response). Streaming is handled via invoke-ai.
 
-    // NEW: Streaming AI via Socket.IO
+    // NEW: Streaming AI via Socket.IO with acknowledgment
     socket.on('invoke-ai', async (data: {
       shareCode: string;
       threadId: string;
@@ -292,14 +304,22 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       modelId?: string;
       chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
       reasoningMode?: boolean;
-    }) => {
+    }, callback: (response: any) => void) => {
       try {
         const { shareCode, threadId, prompt, roomName, participants, modelId, chatHistory, reasoningMode } = data;
         console.log(`🔍 Socket invoke-ai received:`, { modelId, reasoningMode, shareCode });
+        
+        // Acknowledge receipt immediately
+        callback({ success: true, message: 'AI invocation started' });
+        
         // Cast to any to avoid potential type mismatches if typings lag behind implementation
         (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || [], reasoningMode || false);
       } catch (error) {
         console.error('Error invoking AI stream:', error);
+        
+        // Send error acknowledgment
+        callback({ success: false, error: 'Failed to invoke AI stream' });
+        
         socket.emit('ai-error', { error: 'Failed to invoke AI stream' });
       }
     });
@@ -419,7 +439,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       }
     });
     
-    socket.on('send-message', (data: { roomId?: string; message: string; threadId?: string }) => {
+    socket.on('send-message', (data: { roomId?: string; message: string; threadId?: string }, callback: (response: any) => void) => {
       try {
         const { roomId, message, threadId } = data;
         
@@ -454,8 +474,14 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
             schema: 'public'
           });
         }
+        
+        // Send acknowledgment
+        callback({ success: true, message: 'Message sent successfully' });
       } catch (error) {
         console.error('Error sending message:', error);
+        
+        // Send error acknowledgment
+        callback({ success: false, error: 'Failed to send message' });
         socket.emit('message-error', { error: 'Failed to send message' });
       }
     });

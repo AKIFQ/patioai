@@ -53,6 +53,87 @@ export class AIResponseHandler {
     return openRouterService.getModel(modelId);
   }
 
+  // Auto-fallback system: Try free models first, fallback to paid on any failure
+  private async streamWithAutoFallback(params: {
+    primaryModelId: string;
+    currentMessage: string;
+    promptResult: any;
+    providerOptions: any;
+    maxTokens: number;
+    shareCode: string;
+    threadId: string;
+    messageContext: any;
+    reasoningMode?: boolean;
+  }) {
+    const { primaryModelId, currentMessage, promptResult, providerOptions, maxTokens, shareCode, threadId, messageContext, reasoningMode } = params;
+
+    // Define fallback models
+    const getFallbackModel = (failedModel: string): string => {
+      if (reasoningMode) {
+        return 'google/gemini-2.0-flash-001'; // Reliable paid model for reasoning
+      }
+      return 'google/gemini-2.0-flash-001'; // Reliable paid model for general use
+    };
+
+    // Try primary model first
+    try {
+      console.log(`🚀 Attempting primary model: ${primaryModelId}`);
+
+      return streamText({
+        model: this.getModel(primaryModelId, currentMessage),
+        system: promptResult.system,
+        messages: promptResult.messages,
+        providerOptions,
+        maxTokens,
+        temperature: 0.7,
+        abortSignal: primaryModelId.includes('deepseek') ?
+          AbortSignal.timeout(45000) : undefined
+      });
+
+    } catch (error: any) {
+      console.log(`⚠️ Primary model ${primaryModelId} failed:`, error.message);
+
+      // Determine if this is a rate limit or other recoverable error
+      const isRecoverableError =
+        error.message?.includes('rate limit') ||
+        error.message?.includes('quota') ||
+        error.message?.includes('429') ||
+        error.statusCode === 429 ||
+        error.message?.includes('Model error') ||
+        error.message?.includes('Rate limit exceeded');
+
+      if (isRecoverableError) {
+        const fallbackModelId = getFallbackModel(primaryModelId);
+        console.log(`🔄 Auto-fallback triggered: ${primaryModelId} → ${fallbackModelId}`);
+
+        // Emit fallback notification to client
+        this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
+          threadId,
+          primaryModel: primaryModelId,
+          fallbackModel: fallbackModelId,
+          reason: 'rate_limit_or_error',
+          timestamp: Date.now()
+        });
+
+        // Try fallback model
+        console.log(`🚀 Attempting fallback model: ${fallbackModelId}`);
+        return streamText({
+          model: this.getModel(fallbackModelId, currentMessage),
+          system: promptResult.system,
+          messages: promptResult.messages,
+          providerOptions,
+          maxTokens,
+          temperature: 0.7,
+          abortSignal: fallbackModelId.includes('deepseek') ?
+            AbortSignal.timeout(45000) : undefined
+        });
+      }
+
+      // Re-throw non-recoverable errors
+      throw error;
+    }
+  }
+
   // Check if a message should trigger an AI response
   shouldTriggerAI(message: string, senderName: string): boolean {
     if (!this.config.enabled) return false;
@@ -203,7 +284,9 @@ export class AIResponseHandler {
         .join(' ');
       const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       const messageContext = this.modelRouter.analyzeMessageContext(analysisText, chatHistory.length);
-      const routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId, undefined, reasoningMode);
+
+      // Simple model routing for now (remove complex fallback logic)
+      let routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId, undefined, reasoningMode);
 
       console.log(`🎯 Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity, reasoning: ${reasoningMode})`);
 
@@ -224,19 +307,19 @@ export class AIResponseHandler {
       const getMaxTokens = (modelId: string, messageContext: string): number => {
         // For reasoning models, limit to prevent excessive costs
         if (modelId.includes('deepseek')) return 2000;
-        
+
         // For premium models, allow more tokens
         if (modelId.includes('claude') || modelId.includes('gpt-4o') || modelId.includes('o1')) return 4000;
-        
+
         // For general models like Gemini, set generous limits for quality responses
         // Analyze message complexity to determine appropriate response length
         const messageLength = messageContext.length;
-        const isComplexQuery = messageContext.toLowerCase().includes('explain') || 
-                              messageContext.toLowerCase().includes('how') ||
-                              messageContext.toLowerCase().includes('why') ||
-                              messageContext.toLowerCase().includes('what') ||
-                              messageContext.includes('?');
-        
+        const isComplexQuery = messageContext.toLowerCase().includes('explain') ||
+          messageContext.toLowerCase().includes('how') ||
+          messageContext.toLowerCase().includes('why') ||
+          messageContext.toLowerCase().includes('what') ||
+          messageContext.includes('?');
+
         if (isComplexQuery || messageLength > 100) {
           return 3000; // Allow detailed responses for complex queries
         } else if (messageLength > 50) {
@@ -248,20 +331,22 @@ export class AIResponseHandler {
 
       const maxTokens = getMaxTokens(routedModelId, currentMessage);
       console.log(`🎯 Setting maxTokens to ${maxTokens} for model ${routedModelId} (message length: ${currentMessage.length})`);
-      
+
       // Debug: Log the actual prompt being sent
       console.log(`🔍 SYSTEM PROMPT (first 500 chars):`, promptResult.system.substring(0, 500));
       console.log(`🔍 LAST MESSAGE:`, promptResult.messages[promptResult.messages.length - 1]?.content?.substring(0, 200));
 
-      const result = streamText({
-        model: this.getModel(routedModelId, currentMessage),
-        system: promptResult.system,
-        messages: promptResult.messages,
+      // Auto-fallback system: Try free models first, fallback to paid on failure
+      const result = await this.streamWithAutoFallback({
+        primaryModelId: routedModelId,
+        currentMessage,
+        promptResult,
         providerOptions,
         maxTokens,
-        temperature: 0.7, // Add some creativity for more engaging responses
-        abortSignal: routedModelId.includes('deepseek') ?
-          AbortSignal.timeout(45000) : undefined // 45 second timeout for reasoning
+        shareCode,
+        threadId,
+        messageContext,
+        reasoningMode
       });
 
       let fullText = '';
@@ -280,6 +365,137 @@ export class AIResponseHandler {
 
       for await (const delta of result.fullStream) {
         console.log(`📦 Received delta:`, delta.type);
+
+        // Handle error deltas - trigger fallback if possible
+        if (delta.type === 'error') {
+          const deltaAny = delta as any;
+          console.error(`❌ Model error delta:`, deltaAny);
+
+          // Check if this is a rate limit error that we can fallback from
+          const errorMessage = deltaAny.error?.message || JSON.stringify(deltaAny.error);
+          const isRateLimitError = errorMessage.includes('rate limit') ||
+            errorMessage.includes('Rate limit exceeded') ||
+            errorMessage.includes('429');
+
+          if (isRateLimitError && routedModelId.includes(':free')) {
+            console.log(`🔄 Rate limit detected, attempting fallback from ${routedModelId}`);
+
+            // Try fallback model
+            const fallbackModelId = 'google/gemini-2.0-flash-001';
+
+            // Emit fallback notification
+            this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
+              threadId,
+              primaryModel: routedModelId,
+              fallbackModel: fallbackModelId,
+              reason: 'rate_limit',
+              timestamp: Date.now()
+            });
+
+            // Start new stream with fallback model
+            try {
+              const fallbackResult = streamText({
+                model: this.getModel(fallbackModelId, currentMessage),
+                system: promptResult.system,
+                messages: promptResult.messages,
+                providerOptions,
+                maxTokens,
+                temperature: 0.7
+              });
+
+              // Continue with fallback stream
+              for await (const fallbackDelta of fallbackResult.fullStream) {
+                // Process fallback deltas normally
+                if (fallbackDelta.type === 'text-delta') {
+                  const chunk = fallbackDelta.textDelta;
+                  fullText += chunk;
+
+                  this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
+                    threadId,
+                    chunk,
+                    timestamp: Date.now(),
+                    modelUsed: fallbackModelId
+                  });
+                }
+                // Handle other delta types for fallback...
+              }
+
+              // End fallback stream
+              this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
+                threadId,
+                text: fullText,
+                timestamp: Date.now(),
+                modelUsed: fallbackModelId
+              });
+
+              // CRITICAL FIX: Save fallback AI message to database AND broadcast to all users
+              try {
+                const { SocketDatabaseService } = await import('../database/socketQueries');
+                const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
+                
+                if (roomValidation.valid && roomValidation.room) {
+                  const result = await SocketDatabaseService.insertRoomMessage({
+                    roomId: roomValidation.room.id,
+                    threadId,
+                    senderName: 'AI Assistant',
+                    content: fullText,
+                    isAiResponse: true
+                  });
+
+                  if (result.success) {
+                    console.log(`✅ Fallback AI message saved to DB: ${result.messageId}`);
+                    
+                    // Broadcast fallback AI message to ALL users in the room
+                    this.io.to(`room:${shareCode}`).emit('room-message-created', {
+                      new: {
+                        id: result.messageId,
+                        room_id: roomValidation.room.id,
+                        thread_id: threadId,
+                        sender_name: 'AI Assistant',
+                        content: fullText,
+                        is_ai_response: true,
+                        created_at: new Date().toISOString()
+                      },
+                      eventType: 'INSERT',
+                      table: 'room_messages',
+                      schema: 'public'
+                    });
+                    
+                    console.log(`📡 Fallback AI message broadcasted to all users in room ${shareCode}`);
+                  }
+                }
+              } catch (saveError) {
+                console.error('❌ Failed to save/broadcast fallback AI message:', saveError);
+              }
+
+              return; // Exit after successful fallback
+
+            } catch (fallbackError) {
+              console.error(`❌ Fallback model also failed:`, fallbackError);
+              // Fall through to error handling below
+            }
+          }
+
+          // If no fallback or fallback failed, emit error
+          this.io.to(`room:${shareCode}`).emit('ai-error', {
+            threadId,
+            error: 'Model failed to generate response',
+            details: errorMessage,
+            timestamp: Date.now()
+          });
+
+          // End the stream with error
+          this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
+            threadId,
+            text: 'Sorry, I encountered an error while processing your request. Please try again.',
+            timestamp: Date.now(),
+            modelUsed: routedModelId,
+            error: true
+          });
+
+          return; // Exit early on error
+        }
+
         // Debug: Log all delta types for DeepSeek R1 to understand the format
         if (routedModelId.includes('deepseek')) {
           const deltaAny = delta as any;
@@ -566,40 +782,54 @@ The model engaged in ${reasoningTokens} tokens of internal reasoning to analyze 
         usage: usageTotals
       });
 
-      // NOTE: Don't emit room-message-created here as it causes duplicates
-      // The client handles the final message via ai-stream-end event
-      // The deferred DB save below is just for persistence
+      // CRITICAL FIX: Save AI message to database AND broadcast to all users
+      try {
+        const { SocketDatabaseService } = await import('../database/socketQueries');
 
-      // Defer DB persistence to avoid blocking
-      setTimeout(async () => {
-        try {
-          const { SocketDatabaseService } = await import('../database/socketQueries');
-
-          // Get the actual room_id from shareCode
-          const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
-          if (!roomValidation.valid || !roomValidation.room) {
-            console.warn(`Failed to get room_id for shareCode ${shareCode}:`, roomValidation.error);
-            return;
-          }
-
-          const result = await SocketDatabaseService.insertRoomMessage({
-            roomId: roomValidation.room.id, // Use actual room UUID
-            threadId,
-            senderName: 'AI Assistant',
-            content: fullText,
-            isAiResponse: true,
-            reasoning: fullReasoning || undefined
-          });
-
-          if (!result.success) {
-            console.warn('Background insertRoomMessage failed:', result.error);
-          } else {
-            console.log(`✅ AI message saved to DB: ${result.messageId}`);
-          }
-        } catch (e) {
-          console.warn('Background insertRoomMessage failed:', e);
+        // Get the actual room_id from shareCode
+        const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
+        if (!roomValidation.valid || !roomValidation.room) {
+          console.warn(`Failed to get room_id for shareCode ${shareCode}:`, roomValidation.error);
+          return;
         }
-      }, 0);
+
+        // Save AI message to database IMMEDIATELY (not deferred)
+        const result = await SocketDatabaseService.insertRoomMessage({
+          roomId: roomValidation.room.id, // Use actual room UUID
+          threadId,
+          senderName: 'AI Assistant',
+          content: fullText,
+          isAiResponse: true,
+          reasoning: fullReasoning || undefined
+        });
+
+        if (!result.success) {
+          console.error('❌ Failed to save AI message to DB:', result.error);
+        } else {
+          console.log(`✅ AI message saved to DB: ${result.messageId}`);
+          
+          // CRITICAL FIX: Broadcast AI message to ALL users in the room
+          this.io.to(`room:${shareCode}`).emit('room-message-created', {
+            new: {
+              id: result.messageId,
+              room_id: roomValidation.room.id,
+              thread_id: threadId,
+              sender_name: 'AI Assistant',
+              content: fullText,
+              is_ai_response: true,
+              reasoning: fullReasoning || null,
+              created_at: new Date().toISOString()
+            },
+            eventType: 'INSERT',
+            table: 'room_messages',
+            schema: 'public'
+          });
+          
+          console.log(`📡 AI message broadcasted to all users in room ${shareCode}`);
+        }
+      } catch (e) {
+        console.error('❌ Critical error saving/broadcasting AI message:', e);
+      }
     } catch (error) {
       console.error('❌ Error streaming AI response:', error);
       this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });

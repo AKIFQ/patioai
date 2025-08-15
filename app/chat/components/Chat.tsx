@@ -36,6 +36,8 @@ import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
 import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
 import { useReasoningStream } from '../hooks/useReasoningStream';
+import { useChatSubmissionState } from '@/lib/client/atomicStateManager';
+import { logger } from '@/lib/utils/logger';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
@@ -139,8 +141,15 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Message deduplication and loading state for room chats
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  
+  // Atomic state management to prevent race conditions
+  const {
+    state: submissionState,
+    startSubmission,
+    finishSubmission,
+    isSubmitting
+  } = useChatSubmissionState();
 
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
@@ -302,18 +311,25 @@ const ChatComponent: React.FC<ChatProps> = ({
     }
   }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
 
-  // Handle message submission from MessageInput
+  // Handle message submission from MessageInput with atomic state management
   const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true, reasoningModeEnabled: boolean = false) => {
-    // Prevent duplicate submissions
-    if (isSubmitting) {
-      console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
-      return;
-    }
-
-    setIsSubmitting(true);
-    console.log(`🚀 CHAT: Handling submission: "${message.substring(0, 50)}"`);
+    const messageId = crypto.randomUUID();
+    logger.chatSubmission(messageId, { 
+      roomContext: roomContext?.shareCode, 
+      messagePreview: message.substring(0, 50),
+      triggerAI,
+      reasoningMode: reasoningModeEnabled 
+    });
 
     try {
+      // Atomic submission start - prevents race conditions
+      const submissionInfo = await startSubmission(messageId);
+      if (!submissionInfo) {
+        logger.warn('Chat submission blocked by atomic state manager', { messageId });
+        return;
+      }
+
+      logger.debug('Chat submission started atomically', { messageId });
       if (roomContext) {
         if (triggerAI) {
           // For room chats with AI response: Direct API call with loading state
@@ -331,7 +347,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                 {
                   role: 'user',
                   content: message,
-                  id: crypto.randomUUID(),
+                  id: messageId, // Use consistent message ID
                   createdAt: new Date()
                 }
               ],
@@ -345,8 +361,8 @@ const ChatComponent: React.FC<ChatProps> = ({
           if (!response.ok) {
             throw new Error(`API call failed: ${response.status}`);
           }
-          // Then invoke streaming via socket
-          if (invokeAI && isConnected) {
+          // Then invoke streaming via socket (only once per submission)
+          if (invokeAI && isConnected && submissionInfo) {
             // Prepare chat history for context (last 10 messages)
             const chatHistory = realtimeMessages
               .slice(-10) // Last 10 messages for context
@@ -357,7 +373,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                   : msg.content
               }));
 
-            console.log(`🔍 Chat invokeAI called with reasoningMode:`, reasoningModeEnabled);
+            console.log(`🔍 Chat invokeAI called with messageId:${messageId}, reasoningMode:`, reasoningModeEnabled);
             invokeAI({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
@@ -385,7 +401,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                 {
                   role: 'user',
                   content: message,
-                  id: crypto.randomUUID(),
+                  id: messageId, // Use consistent message ID
                   createdAt: new Date()
                 }
               ],
@@ -450,7 +466,17 @@ const ChatComponent: React.FC<ChatProps> = ({
         }
       }
     } catch (error) {
-      console.error('❌ CHAT: Error in handleSubmit:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorInstance = error instanceof Error ? error : new Error(errorMessage);
+      
+      logger.chatError(messageId, errorInstance, { 
+        roomContext: roomContext?.shareCode,
+        messagePreview: message.substring(0, 50)
+      });
+      
+      // Use atomic state manager to handle error
+      finishSubmission(messageId, errorMessage);
+      
       if (roomContext) {
         toast.error('Failed to send message. Please try again.');
       }
@@ -458,12 +484,13 @@ const ChatComponent: React.FC<ChatProps> = ({
       if (roomContext) {
         setIsRoomLoading(false);
       }
-      // Reset submission flag after a delay to prevent rapid-fire submissions
-      setTimeout(() => {
-        setIsSubmitting(false);
-      }, 1000);
+      
+      // Ensure submission is marked as finished (success case)
+      if (!submissionState.errors.length) {
+        finishSubmission(messageId);
+      }
     }
-  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting, setMessages, stableChatId]);
+  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, setMessages, stableChatId, startSubmission, finishSubmission, submissionState.errors.length]);
 
   const { mutate } = useSWRConfig();
 
@@ -549,24 +576,14 @@ const ChatComponent: React.FC<ChatProps> = ({
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
     
-    const newPermanentId = `ai-final-${Date.now()}`;
+    // CRITICAL FIX: For room chats, don't create a temporary permanent message
+    // The database will send the real message via room-message-created event
+    // Just remove the streaming message and let the database message take over
+    setRealtimeMessages(prev => prev.filter(m => m.id !== currentId));
     
-    // Convert the temporary streaming message to a permanent one
-    setRealtimeMessages(prev => prev.map(m => 
-      m.id === currentId 
-        ? { 
-            ...m, 
-            id: newPermanentId, 
-            content: text,
-            reasoning: reasoning || undefined
-          }
-        : m
-    ));
-    
-    // Update reasoning state to use the new permanent message ID
+    // Clear reasoning state - the database message will have the final reasoning
     setRoomReasoningState(prev => ({
       ...prev,
-      messageId: newPermanentId,
       isStreaming: false,
       isComplete: true
     }));

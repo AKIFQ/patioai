@@ -1,4 +1,4 @@
-import { FREE_MODEL_ROUTING, getModelInfo, isModelAvailableForTier } from './modelConfig';
+import { FREE_MODEL_ROUTING, PAID_FALLBACK_ROUTING, getModelInfo, isModelAvailableForTier } from './modelConfig';
 
 interface UserTier {
   tier: 'free' | 'basic' | 'premium';

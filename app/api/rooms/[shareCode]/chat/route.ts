@@ -13,10 +13,6 @@ export const maxDuration = 60;
 // Room chat API - handles message persistence only
 // AI responses are handled via Socket.IO streaming
 
-// Removed unused getRoomMessages function - we load messages directly in the page
-
-// Removed unused session management functions
-
 // Simplified: Save message directly to thread
 async function saveRoomMessage(
   roomId: string,
@@ -148,9 +144,6 @@ async function saveRoomMessage(
   }
 }
 
-// Removed unused daily usage functions - can be re-added later if needed
-
-// Duplicate request handling removed - using new tier-based system
 
 export async function POST(
   req: NextRequest,

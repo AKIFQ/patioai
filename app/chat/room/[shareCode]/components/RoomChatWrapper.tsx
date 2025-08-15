@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ChatComponent from '../../../components/Chat';
+import { ChatErrorBoundary } from '@/components/ErrorBoundary';
 import type { Message } from 'ai';
 
 
@@ -130,19 +131,26 @@ export default function RoomChatWrapper({
   });
 
   return (
-    <div className="flex w-full h-full overflow-hidden">
-      <div className="flex-1">
-        <ChatComponent
-          key={`room_${shareCode}_${roomContext.chatSessionId}`}
-          currentChat={chatMessages}
-          chatId={`room_session_${roomContext.chatSessionId}`}
-          initialModelType={initialModelType}
-          initialSelectedOption={initialSelectedOption}
-          roomContext={roomContext}
-          userData={userData}
-          sidebarData={sidebarData}
-        />
+    <ChatErrorBoundary 
+      critical={true}
+      onError={(error, errorInfo, errorId) => {
+        console.error('🚨 Room Chat Error:', { error, errorInfo, errorId, shareCode, roomContext });
+      }}
+    >
+      <div className="flex w-full h-full overflow-hidden">
+        <div className="flex-1">
+          <ChatComponent
+            key={`room_${shareCode}_${roomContext.chatSessionId}`}
+            currentChat={chatMessages}
+            chatId={`room_session_${roomContext.chatSessionId}`}
+            initialModelType={initialModelType}
+            initialSelectedOption={initialSelectedOption}
+            roomContext={roomContext}
+            userData={userData}
+            sidebarData={sidebarData}
+          />
+        </div>
       </div>
-    </div>
+    </ChatErrorBoundary>
   );
 }
