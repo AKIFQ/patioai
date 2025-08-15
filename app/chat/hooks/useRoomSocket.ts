@@ -159,6 +159,11 @@ export function useRoomSocket({
       return;
     }
 
+    // Do not broadcast when tab is hidden (visibility-safe typing)
+    if (typeof document !== 'undefined' && document.hidden) {
+      return;
+    }
+
     try {
       if (isTyping) {
         // Clear existing timeout
@@ -250,6 +255,23 @@ export function useRoomSocket({
     
     // Track all event listeners for proper cleanup
     const eventListeners = new Map<string, (...args: any[]) => void>();
+    
+    // Define reconnection handler for cleanup access
+    let handleConnect: (() => void) | null = null;
+
+    // Pause typing timers when tab hidden (visibility-safe typing)
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+        isTypingActiveRef.current = false;
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
 
     const initializeRoomSocket = async () => {
       try {
@@ -271,17 +293,25 @@ export function useRoomSocket({
         roomUuidRef.current = room.id;
         if (process.env.NODE_ENV === 'development') console.debug('Setting up room socket for room:', room.id);
 
-        // Join the room
-        socket.emit('join-room', shareCode);
+        // Re-join the room after reconnects
+        handleConnect = () => {
+          socket.emit('join-room', shareCode);
+          // Re-emit thread switch on reconnect
+          if (chatSessionId) {
+            socket.emit('switch-thread', {
+              roomId: shareCode,
+              threadId: chatSessionId,
+              displayName
+            });
+          }
+        };
         
-        // Emit thread switch when joining
-        if (chatSessionId) {
-          socket.emit('switch-thread', {
-            roomId: shareCode,
-            threadId: chatSessionId,
-            displayName
-          });
-        }
+        // Join the room initially
+        handleConnect();
+        
+        // Set up reconnection handlers
+        socket.on('connect', handleConnect);
+        socket.on('reconnect', handleConnect as any);
 
         // Set up event listeners with tracking
         const addTrackedListener = (event: string, handler: (...args: any[]) => void) => {
@@ -455,6 +485,12 @@ export function useRoomSocket({
         // Clear the tracking map
         eventListeners.clear();
 
+        // Clean up reconnection handlers
+        if (handleConnect) {
+          socket.off('connect', handleConnect);
+          socket.off('reconnect', handleConnect as any);
+        }
+
         // Leave room (use message queue if available)
         if (shareCode) {
           if (messageQueueRef.current) {
@@ -475,6 +511,11 @@ export function useRoomSocket({
       if (messageQueueRef.current) {
         messageQueueRef.current.clear();
         messageQueueRef.current = null;
+      }
+
+      // Clean up visibility handler
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
       }
       
       console.log('✅ Room socket cleanup completed for:', shareCode);

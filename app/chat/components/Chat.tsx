@@ -369,7 +369,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             throw new Error(`API call failed: ${response.status}`);
           }
           // Then invoke streaming via socket (only once per submission)
-          if (invokeAI && isConnected && submissionInfo) {
+          if (invokeAIRef.current && isConnected && submissionInfo) {
             // Prepare chat history for context (last 10 messages)
             const chatHistory = realtimeMessages
               .slice(-10) // Last 10 messages for context
@@ -381,7 +381,7 @@ const ChatComponent: React.FC<ChatProps> = ({
               }));
 
             console.log(`🔍 Chat invokeAI called with messageId:${messageId}, reasoningMode:`, reasoningModeEnabled);
-            invokeAI({
+            invokeAIRef.current({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
               prompt: `${roomContext.displayName}: ${message}`,
@@ -556,7 +556,11 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Streaming UI glue: add a temporary assistant message and append chunks
   const handleStreamStart = useCallback((threadId: string) => {
-    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    if (!roomContext) return;
+    // Accept first stream for this session even if threadId differs, when no temp assistant exists yet
+    if (roomContext.chatSessionId && threadId !== roomContext.chatSessionId && streamingAssistantIdRef.current) {
+      return;
+    }
     const tempId = `ai-temp-${Date.now()}`;
     streamingAssistantIdRef.current = tempId;
     setStreamingAssistantId(tempId);
@@ -700,6 +704,12 @@ const ChatComponent: React.FC<ChatProps> = ({
     invokeAI,
     isAIStreaming = false
   } = (realtimeHook as any) || {};
+
+  // Avoid temporal-dead-zone issues by referencing invokeAI via a ref
+  const invokeAIRef = useRef<any>(null);
+  useEffect(() => {
+    invokeAIRef.current = invokeAI;
+  }, [invokeAI]);
 
   // Listen for dev-only modelUsed announcements via socket
   useEffect(() => {
