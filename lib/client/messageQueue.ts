@@ -119,7 +119,7 @@ export class MessageQueue {
 
     try {
       // For critical events that need acknowledgment to ensure delivery
-      const criticalEvents = ['invoke-ai', 'join-room', 'leave-room', 'send-message', 'chat-message-sent'];
+      const criticalEvents = ['invoke-ai', 'join-room', 'leave-room'];
       const usesAck = criticalEvents.includes(message.event);
       
       if (usesAck) {

@@ -500,6 +500,8 @@ export class AIResponseHandler {
         if (routedModelId.includes('deepseek')) {
           const deltaAny = delta as any;
           console.log(`🔍 DeepSeek delta:`, delta.type, deltaAny.textDelta ? `"${deltaAny.textDelta.substring(0, 50)}..."` : 'no text');
+          
+          // Only log DeepSeek deltas for debugging - don't interfere with normal processing
         }
 
         if (delta.type === 'text-delta') {

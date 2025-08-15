@@ -64,10 +64,18 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const [removingUser, setRemovingUser] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
-  // Mobile detection
+  // Mobile detection - use more reliable method
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => {
+      // Use multiple indicators for mobile detection
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth < 768;
+      const isMobileUserAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      setIsMobile(isTouchDevice && (isSmallScreen || isMobileUserAgent));
+    };
+    
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -169,9 +177,12 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const SettingsContent = (
     <div 
       className="flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-6 min-h-0"
-      style={{ WebkitOverflowScrolling: 'touch' }}
+      style={{ 
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y'
+      }}
     >
-      <div className="space-y-4">
+      <div className="space-y-5 pb-safe">
         {/* Room Information */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -197,7 +208,12 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                   className="flex-1 h-8 text-sm"
                   autoFocus
                 />
-                <Button size="sm" onClick={handleUpdateRoomName} className="h-8 px-2">
+                <Button 
+                  size="sm" 
+                  onClick={handleUpdateRoomName} 
+                  className="h-9 px-3 touch-manipulation"
+                  style={{ minHeight: '36px' }}
+                >
                   {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
                 </Button>
                 <Button 
@@ -207,7 +223,8 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     setEditingName(false);
                     setNewRoomName(roomContext.roomName);
                   }}
-                  className="h-8 px-2"
+                  className="h-9 px-3 touch-manipulation"
+                  style={{ minHeight: '36px' }}
                 >
                   Cancel
                 </Button>
@@ -218,7 +235,13 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                   {roomContext.roomName}
                 </div>
                 {isCreator && (
-                  <Button size="sm" variant="outline" onClick={() => setEditingName(true)} className="h-8 px-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => setEditingName(true)} 
+                    className="h-9 px-3 touch-manipulation"
+                    style={{ minHeight: '36px' }}
+                  >
                     Edit
                   </Button>
                 )}
@@ -237,9 +260,10 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 size="sm" 
                 variant="outline" 
                 onClick={handleCopyShareLink}
-                className={`h-8 w-8 p-0 ${isCopied ? 'text-green-600' : ''}`}
+                className={`h-9 w-9 p-0 touch-manipulation ${isCopied ? 'text-green-600' : ''}`}
+                style={{ minHeight: '36px', minWidth: '36px' }}
               >
-                {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -260,15 +284,17 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           
           <div className="space-y-2">
             {roomContext.participants.map((participant, index) => (
-              <div key={index} className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-medium text-xs flex items-center justify-center">
+              <div key={index} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-medium text-sm flex items-center justify-center">
                     {participant.displayName.charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-sm font-medium">{participant.displayName}</span>
-                  {participant.displayName === roomContext.createdBy && (
-                    <Crown className="h-3 w-3 text-yellow-500" />
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{participant.displayName}</span>
+                    {participant.displayName === roomContext.createdBy && (
+                      <Crown className="h-4 w-4 text-yellow-500" />
+                    )}
+                  </div>
                 </div>
                 {isCreator && participant.displayName !== roomContext.createdBy && (
                   <Button
@@ -276,12 +302,13 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     variant="ghost"
                     onClick={() => handleRemoveUser(participant.sessionId || '', participant.displayName)}
                     disabled={removingUser === participant.displayName}
-                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 touch-manipulation"
+                    style={{ minHeight: '32px', minWidth: '32px' }}
                   >
                     {removingUser === participant.displayName ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <X className="h-3 w-3" />
+                      <X className="h-4 w-4" />
                     )}
                   </Button>
                 )}
@@ -302,22 +329,24 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
               <Button
                 variant="destructive"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="w-full h-9"
+                className="w-full h-11 touch-manipulation"
+                style={{ minHeight: '44px' }}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete Room
               </Button>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <p className="text-sm text-red-600 font-medium">
                   Are you sure? This action cannot be undone.
                 </p>
-                <div className="flex gap-1">
+                <div className="flex gap-2">
                   <Button
                     variant="destructive"
                     onClick={handleDeleteRoom}
                     disabled={isPending}
-                    className="flex-1 h-9"
+                    className="flex-1 h-11 touch-manipulation"
+                    style={{ minHeight: '44px' }}
                   >
                     {isPending ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -329,7 +358,8 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                   <Button
                     variant="outline"
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="flex-1 h-9"
+                    className="flex-1 h-11 touch-manipulation"
+                    style={{ minHeight: '44px' }}
                   >
                     Cancel
                   </Button>
@@ -349,15 +379,23 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 px-1 hover:bg-muted/50 transition-colors"
+            className="h-9 w-9 p-0 hover:bg-muted/50 transition-colors touch-manipulation"
             aria-label="Room settings"
+            style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="bottom" className="h-[75vh] p-0 gap-0 flex flex-col rounded-t-xl">
-          {/* Drag handle */}
-          <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-2 mb-1" />
+        <SheetContent 
+          side="bottom" 
+          className="h-[80vh] max-h-[600px] p-0 gap-0 flex flex-col rounded-t-xl border-t-2"
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-y'
+          }}
+        >
+          {/* Drag handle - make it more prominent */}
+          <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-2" />
           {SettingsHeader}
           {SettingsContent}
         </SheetContent>
@@ -371,18 +409,16 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 sm:h-8 w-7 sm:w-8 hover:bg-muted/50 transition-colors flex-shrink-0"
+          className="h-8 w-8 hover:bg-muted/50 transition-colors flex-shrink-0 touch-manipulation"
           aria-label="Room settings"
+          style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
         >
-          <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+          <Settings className="h-4 w-4" />
         </Button>
       </DialogTrigger>
 
       <DialogContent 
-        className={`${isMobile 
-          ? 'w-[96vw] max-w-[340px] h-[90vh] max-h-[600px] m-0 p-0 gap-0 flex flex-col rounded-xl' 
-          : 'sm:max-w-[500px] max-h-[85vh] p-0 gap-0 flex flex-col'
-        } overflow-hidden`}
+        className="sm:max-w-[500px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"
         onPointerDownOutside={() => setIsOpen(false)}
         onEscapeKeyDown={() => setIsOpen(false)}
       >

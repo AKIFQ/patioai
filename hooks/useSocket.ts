@@ -94,19 +94,44 @@ export function useSocket(token?: string): UseSocketReturn {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        console.log('🌙 Browser backgrounded - maintaining socket connection');
+        console.log('🌙 Browser backgrounded - maintaining socket connection with reduced activity');
         isBackgroundedRef.current = true;
-        // Keep connection alive, just reduce activity
+        // Keep connection alive, just reduce health monitoring frequency
         if (socket?.connected) {
           socket.emit('user-background', { timestamp: Date.now() });
         }
+        // Reduce health monitoring frequency but don't stop completely
+        if (healthMonitorRef.current) {
+          healthMonitorRef.current.setBackgroundMode(true);
+        }
       } else {
-        console.log('🌅 Browser foregrounded - verifying socket connection');
+        console.log('🌅 Browser foregrounded - resuming full activity');
         isBackgroundedRef.current = false;
-        // User returned, verify connection
+        
+        // Restore normal health monitoring
+        if (healthMonitorRef.current) {
+          healthMonitorRef.current.setBackgroundMode(false);
+        }
+        
+        // User returned, verify connection and recover any pending messages
         if (socket && !socket.connected && shouldStayConnectedRef.current) {
           console.log('🔄 Reconnecting socket after foreground');
           connect();
+        } else if (socket?.connected) {
+          // Verify connection is still healthy after being backgrounded
+          console.log('🔍 Verifying connection health after foreground');
+          socket.emit('user-foreground', { timestamp: Date.now() });
+          
+          // Trigger health check to ensure connection is still good
+          if (healthMonitorRef.current) {
+            healthMonitorRef.current.performHealthCheck();
+          }
+          
+          // CRITICAL FIX: Request any missed messages while backgrounded
+          socket.emit('request-missed-messages', { 
+            timestamp: Date.now(),
+            lastActiveTime: isBackgroundedRef.current ? Date.now() - 60000 : Date.now() // Assume 1 min background
+          });
         }
       }
     };

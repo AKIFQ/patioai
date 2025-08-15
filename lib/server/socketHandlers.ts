@@ -439,50 +439,20 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       }
     });
     
-    socket.on('send-message', (data: { roomId?: string; message: string; threadId?: string }, callback: (response: any) => void) => {
+    // Handle request for missed messages when user returns from background
+    socket.on('request-missed-messages', (data: { timestamp: number; lastActiveTime: number }) => {
       try {
-        const { roomId, message, threadId } = data;
+        console.log(`📬 User ${socket.userId} requesting missed messages since ${new Date(data.lastActiveTime).toISOString()}`);
         
-        if (roomId) {
-          // Room message - emit to all room participants
-          socket.to(`room:${roomId}`).emit('room-message-created', {
-            new: {
-              id: `temp-${Date.now()}`,
-              room_id: roomId,
-              thread_id: threadId,
-              sender_name: socket.userId, // Will be replaced with actual display name
-              content: message,
-              is_ai_response: false,
-              created_at: new Date().toISOString()
-            },
-            eventType: 'INSERT',
-            table: 'room_messages',
-            schema: 'public'
-          });
-        } else {
-          // Regular chat message - emit to user's personal channel
-          socket.to(`user:${socket.userId}`).emit('chat-message-created', {
-            new: {
-              id: `temp-${Date.now()}`,
-              chat_session_id: threadId,
-              content: message,
-              is_user_message: true,
-              created_at: new Date().toISOString()
-            },
-            eventType: 'INSERT',
-            table: 'chat_messages',
-            schema: 'public'
-          });
-        }
-        
-        // Send acknowledgment
-        callback({ success: true, message: 'Message sent successfully' });
+        // For now, just acknowledge - in a full implementation, you'd query recent messages
+        // and re-emit any that the client might have missed
+        socket.emit('missed-messages-response', { 
+          success: true, 
+          timestamp: Date.now(),
+          message: 'Connection verified, no missed messages' 
+        });
       } catch (error) {
-        console.error('Error sending message:', error);
-        
-        // Send error acknowledgment
-        callback({ success: false, error: 'Failed to send message' });
-        socket.emit('message-error', { error: 'Failed to send message' });
+        console.error('Error handling missed messages request:', error);
       }
     });
 

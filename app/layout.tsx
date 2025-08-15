@@ -31,6 +31,7 @@ export const metadata: Metadata = {
     initialScale: 1,
     maximumScale: 1,
     userScalable: false,
+    viewportFit: 'cover', // For devices with notches
   },
   icons: {
     icon: [

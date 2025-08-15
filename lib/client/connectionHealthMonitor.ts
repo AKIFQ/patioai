@@ -25,11 +25,16 @@ export class ConnectionHealthMonitor {
   private pingInterval: NodeJS.Timer | null = null;
   private pendingPings: Map<string, { timestamp: number; timeout: NodeJS.Timeout }> = new Map();
   private connectionStartTime: number = Date.now();
+  private isBackgroundMode: boolean = false;
+  private normalInterval: number;
+  private backgroundInterval: number;
 
   constructor(socket: Socket, options: Partial<HealthMonitorOptions> = {}) {
     this.socket = socket;
+    this.normalInterval = options.pingInterval ?? 30000; // 30 seconds
+    this.backgroundInterval = (options.pingInterval ?? 30000) * 4; // 2 minutes
     this.options = {
-      pingInterval: options.pingInterval ?? 30000, // 30 seconds
+      pingInterval: this.normalInterval,
       pingTimeout: options.pingTimeout ?? 5000, // 5 seconds
       maxFailures: options.maxFailures ?? 3,
       onStatusChange: options.onStatusChange ?? (() => {}),
@@ -84,6 +89,27 @@ export class ConnectionHealthMonitor {
     // Clear pending pings
     this.pendingPings.forEach(({ timeout }) => clearTimeout(timeout));
     this.pendingPings.clear();
+  }
+
+  /**
+   * Set background mode - reduces ping frequency to save battery
+   */
+  setBackgroundMode(isBackground: boolean): void {
+    if (this.isBackgroundMode === isBackground) {
+      return;
+    }
+
+    console.log('🏥 Setting background mode:', isBackground);
+    this.isBackgroundMode = isBackground;
+    
+    // Update interval and restart monitoring
+    this.options.pingInterval = isBackground ? this.backgroundInterval : this.normalInterval;
+    
+    if (this.pingInterval) {
+      // Restart with new interval
+      this.stop();
+      this.start();
+    }
   }
 
   /**
