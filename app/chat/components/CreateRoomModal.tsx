@@ -135,13 +135,11 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
               </div>
               
               <div className="bg-muted/30 p-3 rounded-lg space-y-2 border border-border/40">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
-                  <Users className="h-4 w-4" />
+                <div className="text-sm text-muted-foreground/80">
                   <span className="hidden sm:inline">Free tier: 5 participants max</span>
                   <span className="sm:hidden">5 participants max</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
-                  <Clock className="h-4 w-4" />
+                <div className="text-sm text-muted-foreground/80">
                   <span>Expires in 7 days</span>
                 </div>
               </div>

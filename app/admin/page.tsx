@@ -96,7 +96,6 @@ export default function AdminPage() {
           className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
         >
           <Link href="/admin" target="_blank" className="flex items-center">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Try to log in
           </Link>
         </Button>

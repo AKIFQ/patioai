@@ -533,7 +533,6 @@ const MessageInput = ({
 
             {selectedBlobs.length > 0 && (
               <div className="hidden sm:flex items-center rounded-full text-xs px-2 h-8 bg-primary/10 border border-primary/30 flex-shrink-0">
-                <Paperclip className="mr-1 h-4 w-4 text-primary" />
                 <span className="text-primary font-medium">
                   {selectedBlobs.length} file
                   {selectedBlobs.length > 1 ? 's' : ''} attached

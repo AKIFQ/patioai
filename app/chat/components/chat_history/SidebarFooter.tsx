@@ -83,7 +83,6 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           className="w-full justify-start gap-3 h-12 px-3 touch-manipulation"
           style={{ minHeight: '44px' }}
         >
-          <User className="h-5 w-5" />
           <span className="text-sm">Profile Settings</span>
         </Button>
         
@@ -103,7 +102,6 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           style={{ minHeight: '44px' }}
           onClick={() => setIsOpen(false)}
         >
-          <LogOut className="h-5 w-5" />
           <SignOut />
         </Button>
       </div>
@@ -168,7 +166,6 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           <DropdownMenuSeparator />
           
           <DropdownMenuItem className="gap-2">
-            <User className="h-4 w-4" />
             Profile Settings
           </DropdownMenuItem>
           
@@ -183,7 +180,6 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           <DropdownMenuSeparator />
           
           <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
-            <LogOut className="h-4 w-4" />
             <SignOut />
           </DropdownMenuItem>
         </DropdownMenuContent>

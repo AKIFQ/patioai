@@ -277,8 +277,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
         {/* Participants */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Users className="h-4 w-4" />
+          <div className="text-sm font-semibold text-foreground">
             Participants ({roomContext.participants.length})
           </div>
           
@@ -332,7 +331,6 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 className="w-full h-11 touch-manipulation"
                 style={{ minHeight: '44px' }}
               >
-                <Trash2 className="h-4 w-4 mr-2" />
                 Delete Room
               </Button>
             ) : (
@@ -348,11 +346,6 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     className="flex-1 h-11 touch-manipulation"
                     style={{ minHeight: '44px' }}
                   >
-                    {isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4 mr-2" />
-                    )}
                     {isPending ? 'Deleting...' : 'Yes, Delete'}
                   </Button>
                   <Button

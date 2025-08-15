@@ -250,8 +250,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
         
         <CardContent className="space-y-4">
           <div className="bg-muted/50 p-3 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Users className="h-4 w-4" />
+            <div className="text-sm">
               <span>
                 {roomInfo.participantCount}/{roomInfo.room.maxParticipants} participants
               </span>
@@ -259,8 +258,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
                 ({roomInfo.room.tier} tier)
               </span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
+            <div className="text-sm text-muted-foreground">
               <span>Expires in {formatExpirationDate(roomInfo.room.expiresAt)}</span>
             </div>
           </div>
@@ -313,7 +311,6 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
               >
                 {isJoining ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Joining...
                   </>
                 ) : (

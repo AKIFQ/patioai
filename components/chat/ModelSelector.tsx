@@ -44,12 +44,7 @@ export function ModelSelector({
     onModelChange(model.id);
   };
 
-  const getModelIcon = (model: ModelInfo) => {
-    if (model.reasoning) return <Brain className="w-4 h-4" />;
-    if (model.specialization?.includes('code')) return <Code className="w-4 h-4" />;
-    if (model.specialization?.includes('fast')) return <Zap className="w-4 h-4" />;
-    return <ShoppingCart className="w-4 h-4" />;
-  };
+  // Icons removed - text labels are sufficient
 
   const getCostBadge = (model: ModelInfo) => {
     const colors = {
@@ -75,18 +70,12 @@ export function ModelSelector({
         <Select value="auto" onValueChange={() => {}}>
           <SelectTrigger className="h-8 px-2 text-xs rounded-md border border-border/40 bg-background/60 hover:bg-background/80 w-28">
             <SelectValue>
-              <div className="flex items-center gap-1.5">
-                <Brain className="w-3.5 h-3.5" />
-                <span className="text-xs">Auto</span>
-              </div>
+              <span className="text-xs">Auto</span>
             </SelectValue>
           </SelectTrigger>
           <SelectContent className="w-40">
             <SelectItem value="auto">
-              <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4" />
-                <span className="text-sm">Auto</span>
-              </div>
+              <span className="text-sm">Auto</span>
             </SelectItem>
           </SelectContent>
         </Select>
@@ -106,7 +95,6 @@ export function ModelSelector({
           <SelectValue>
             {availableModels[currentModelKey] && (
               <div className="flex items-center gap-2">
-                {getModelIcon(availableModels[currentModelKey])}
                 {availableModels[currentModelKey].name}
                 {getCostBadge(availableModels[currentModelKey])}
               </div>
@@ -117,7 +105,6 @@ export function ModelSelector({
           {Object.entries(availableModels).map(([key, model]) => (
             <SelectItem key={key} value={key}>
               <div className="flex items-center gap-2 w-full">
-                {getModelIcon(model)}
                 <div className="flex-1">
                   <div className="font-medium">{model.name}</div>
                   {model.specialization && (
@@ -145,14 +132,12 @@ export function ModelSelector({
                   className="opacity-50"
                 >
                   <div className="flex items-center gap-2 w-full">
-                    {getModelIcon(model)}
                     <div className="flex-1">
                       <div className="font-medium">{model.name}</div>
                       <div className="text-xs text-muted-foreground">
                         Requires Premium
                       </div>
                     </div>
-                    {/* Crown icon removed from premium models as per new UX */}
                   </div>
                 </SelectItem>
               ))}

@@ -369,6 +369,11 @@ export function useRoomSocket({
           }>;
           timestamp: string;
         }) => {
+          // Only process cross-thread activity for the current room
+          if (payload.roomId !== shareCode) {
+            if (process.env.NODE_ENV === 'development') console.debug('Ignoring cross-thread activity from different room:', payload.roomId, 'current:', shareCode);
+            return;
+          }
           if (process.env.NODE_ENV === 'development') console.debug('Cross-thread activity:', payload);
           onCrossThreadActivity?.(payload.activities);
         };

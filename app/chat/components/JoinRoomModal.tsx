@@ -185,8 +185,7 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
               <span className="hidden sm:inline">You can paste the full room link or just the share code</span>
               <span className="sm:hidden">Paste full link or share code</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
-              <Users className="h-4 w-4" />
+            <div className="text-sm text-muted-foreground/80">
               <span className="hidden sm:inline">You'll be asked for a display name when joining</span>
               <span className="sm:hidden">Display name required</span>
             </div>
