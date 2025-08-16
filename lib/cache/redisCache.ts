@@ -49,10 +49,23 @@ export class RedisCache {
     const startTime = Date.now();
     
     try {
-      // Only import Redis in production or when explicitly needed
-      if (process.env.NODE_ENV === 'production' || process.env.REDIS_URL) {
-        const Redis = await import('ioredis');
-        
+      // Only import Redis in production or when explicitly enabled and available
+      const shouldUseRedis = (process.env.NODE_ENV === 'production' || !!process.env.REDIS_URL) && !!process.env.REDIS_HOST;
+
+      if (shouldUseRedis) {
+        let Redis: any;
+        try {
+          // Optional dependency - guard the import
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          Redis = await import('ioredis');
+        } catch (e: any) {
+          console.warn('ioredis not installed; falling back to in-memory cache');
+          this.connected = false;
+          this.performanceMonitor.recordMetric('redis.connect', startTime, false, 'ioredis missing');
+          return;
+        }
+
         this.client = new Redis.default({
           host: this.config.host,
           port: this.config.port,
@@ -82,12 +95,12 @@ export class RedisCache {
 
         await this.client.connect();
       } else {
-        console.log('Redis not available, using in-memory fallback cache');
+        console.log('Redis disabled/not configured, using in-memory fallback cache');
         this.connected = false;
       }
 
       this.performanceMonitor.recordMetric('redis.connect', startTime, true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to connect to Redis:', error);
       this.connected = false;
       this.performanceMonitor.recordMetric('redis.connect', startTime, false, error.message);
@@ -127,7 +140,7 @@ export class RedisCache {
         this.performanceMonitor.recordMetric('fallback.miss', startTime, true, undefined, { key });
         return null;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Redis get error:', error);
       this.performanceMonitor.recordMetric('redis.get', startTime, false, error.message, { key });
       
@@ -172,7 +185,7 @@ export class RedisCache {
         
         this.performanceMonitor.recordMetric('fallback.set', startTime, true, undefined, { key, ttl: ttlSeconds });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Redis set error:', error);
       this.performanceMonitor.recordMetric('redis.set', startTime, false, error.message, { key });
       
@@ -199,7 +212,7 @@ export class RedisCache {
       }
       
       return deleted;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Redis delete error:', error);
       this.performanceMonitor.recordMetric('redis.delete', startTime, false, error.message, { key });
       return this.fallbackCache.delete(fullKey);
@@ -241,7 +254,7 @@ export class RedisCache {
       }
       
       return cleared;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Redis clear error:', error);
       this.performanceMonitor.recordMetric('redis.clear', startTime, false, error.message, { pattern });
       return 0;
@@ -271,7 +284,7 @@ export class RedisCache {
       }
 
       return stats;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Redis stats error:', error);
       return {
         connected: false,
@@ -320,7 +333,7 @@ export class RedisCache {
 // Factory function to create Redis cache instance
 export function createRedisCache(): RedisCache {
   const config: RedisConfig = {
-    host: process.env.REDIS_HOST || 'localhost',
+    host: process.env.REDIS_HOST || '',
     port: parseInt(process.env.REDIS_PORT || '6379'),
     password: process.env.REDIS_PASSWORD,
     db: parseInt(process.env.REDIS_DB || '0'),

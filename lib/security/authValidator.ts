@@ -9,14 +9,13 @@ interface SessionValidationResult {
     error?: string;
     securityFlags?: {
         suspicious: boolean;
-        rateLimited: boolean;
+
         ipChanged: boolean;
         userAgentChanged: boolean;
     };
 }
 
-// Rate limiting store (in production, use Redis)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
 const sessionStore = new Map<string, {
     userId: string;
     lastIP: string;
@@ -31,9 +30,6 @@ export class AuthValidator {
 
     private constructor() {
         this.errorTracker = ErrorTracker.getInstance();
-
-        // Clean up expired rate limits every 5 minutes
-        setInterval(() => this.cleanupRateLimits(), 5 * 60 * 1000);
 
         // Clean up expired sessions every hour
         setInterval(() => this.cleanupExpiredSessions(), 60 * 60 * 1000);
@@ -60,25 +56,13 @@ export class AuthValidator {
                 return { valid: false, error: 'Missing session credentials' };
             }
 
-            // Rate limiting check
-            const rateLimitResult = this.checkRateLimit(clientIP);
-            if (!rateLimitResult.allowed) {
-                this.logSecurityEvent('auth_rate_limited', {
-                    sessionId, userId, clientIP,
-                    attempts: rateLimitResult.attempts
-                });
-                return {
-                    valid: false,
-                    error: 'Rate limit exceeded',
-                    securityFlags: { suspicious: true, rateLimited: true, ipChanged: false, userAgentChanged: false }
-                };
-            }
+
 
             // Session consistency checks
             const sessionData = sessionStore.get(sessionId);
             const securityFlags = {
                 suspicious: false,
-                rateLimited: false,
+
                 ipChanged: false,
                 userAgentChanged: false
             };
@@ -199,28 +183,6 @@ export class AuthValidator {
         return realIP || remoteAddr || 'unknown';
     }
 
-    // Rate limiting implementation
-    private checkRateLimit(identifier: string): { allowed: boolean; attempts: number } {
-        const now = Date.now();
-        const windowMs = 15 * 60 * 1000; // 15 minutes
-        const maxAttempts = 100; // Max 100 requests per 15 minutes
-
-        const record = rateLimitStore.get(identifier);
-
-        if (!record || now > record.resetTime) {
-            rateLimitStore.set(identifier, { count: 1, resetTime: now + windowMs });
-            return { allowed: true, attempts: 1 };
-        }
-
-        record.count++;
-
-        if (record.count > maxAttempts) {
-            return { allowed: false, attempts: record.count };
-        }
-
-        return { allowed: true, attempts: record.count };
-    }
-
     // Additional security checks
     private async performAdditionalSecurityChecks(
         request: NextRequest,
@@ -273,16 +235,6 @@ export class AuthValidator {
         console.log(`🔒 Security Event [${event}]:`, context);
     }
 
-    // Cleanup expired rate limits
-    private cleanupRateLimits() {
-        const now = Date.now();
-        for (const [key, record] of rateLimitStore.entries()) {
-            if (now > record.resetTime) {
-                rateLimitStore.delete(key);
-            }
-        }
-    }
-
     // Cleanup expired sessions
     private cleanupExpiredSessions() {
         const now = Date.now();
@@ -300,7 +252,6 @@ export class AuthValidator {
     getSessionStats() {
         return {
             activeSessions: sessionStore.size,
-            rateLimitEntries: rateLimitStore.size,
             timestamp: new Date().toISOString()
         };
     }

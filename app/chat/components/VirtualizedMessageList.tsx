@@ -16,6 +16,10 @@ interface VirtualizedMessageListProps {
   currentUserDisplayName?: string; // For room chats to identify current user's messages
   showLoading?: boolean; // Show AI loading indicator
   isRoomChat?: boolean; // Whether this is a room chat (affects reasoning display)
+  streamingMessageId?: string; // ID of currently streaming message
+  streamingReasoning?: string; // Current streaming reasoning text
+  isReasoningStreaming?: boolean; // Whether reasoning is currently streaming
+  isReasoningComplete?: boolean; // Whether reasoning is complete
 }
 
 interface MessageItemProps {
@@ -25,6 +29,10 @@ interface MessageItemProps {
     messages: Message[];
     currentUserDisplayName?: string;
     isRoomChat?: boolean;
+    streamingMessageId?: string;
+    streamingReasoning?: string;
+    isReasoningStreaming?: boolean;
+    isReasoningComplete?: boolean;
   };
 }
 
@@ -37,6 +45,9 @@ const MessageItem = memo(({ index, style, data }: MessageItemProps) => {
     ? (message as any).senderName === data.currentUserDisplayName
     : message.role === 'user';
 
+  // Check if this message is currently streaming
+  const isStreaming = data.streamingMessageId === message.id;
+
   return (
     <div style={style}>
       <ChatMessage
@@ -44,6 +55,10 @@ const MessageItem = memo(({ index, style, data }: MessageItemProps) => {
         index={index}
         isUserMessage={isUserMessage}
         isRoomChat={data.isRoomChat}
+        isStreaming={isStreaming}
+        streamingReasoning={isStreaming ? data.streamingReasoning : undefined}
+        isReasoningStreaming={isStreaming ? data.isReasoningStreaming : false}
+        isReasoningComplete={isStreaming ? data.isReasoningComplete : false}
       />
     </div>
   );
@@ -57,7 +72,11 @@ const VirtualizedMessageList = memo(({
   itemHeight = 80,
   currentUserDisplayName,
   showLoading = false,
-  isRoomChat = false
+  isRoomChat = false,
+  streamingMessageId,
+  streamingReasoning,
+  isReasoningStreaming = false,
+  isReasoningComplete = false
 }: VirtualizedMessageListProps) => {
   const listRef = useRef<List>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -155,15 +174,19 @@ const VirtualizedMessageList = memo(({
   const itemData = useMemo(() => ({
     messages,
     currentUserDisplayName,
-    isRoomChat
-  }), [messages, currentUserDisplayName, isRoomChat]);
+    isRoomChat,
+    streamingMessageId,
+    streamingReasoning,
+    isReasoningStreaming,
+    isReasoningComplete
+  }), [messages, currentUserDisplayName, isRoomChat, streamingMessageId, streamingReasoning, isReasoningStreaming, isReasoningComplete]);
 
   // Don't virtualize if there are few messages
   if (messages.length < 20) {
     return (
       <div 
         ref={containerRef}
-        className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 flex flex-col overflow-hidden"
+        className="flex-1 w-full min-w-0 px-4 sm:px-8 md:px-16 lg:px-24 xl:px-32 2xl:px-48 flex flex-col overflow-hidden"
         data-chat-container
       >
         <div 
@@ -178,6 +201,9 @@ const VirtualizedMessageList = memo(({
               const isUserMessage = currentUserDisplayName 
                 ? (message as any).senderName === currentUserDisplayName
                 : message.role === 'user';
+              
+              // Check if this message is currently streaming
+              const isStreaming = streamingMessageId === message.id;
                 
               return (
                 <ChatMessage
@@ -186,6 +212,10 @@ const VirtualizedMessageList = memo(({
                   index={index}
                   isUserMessage={isUserMessage}
                   isRoomChat={isRoomChat}
+                  isStreaming={isStreaming}
+                  streamingReasoning={isStreaming ? streamingReasoning : undefined}
+                  isReasoningStreaming={isStreaming ? isReasoningStreaming : false}
+                  isReasoningComplete={isStreaming ? isReasoningComplete : false}
                 />
               );
             })}
@@ -209,7 +239,7 @@ const VirtualizedMessageList = memo(({
   return (
     <div 
       ref={containerRef}
-      className="flex-1 w-full min-w-0 px-1 sm:px-2 md:px-4 lg:px-6 flex flex-col overflow-hidden relative" 
+      className="flex-1 w-full min-w-0 px-4 sm:px-8 md:px-16 lg:px-24 xl:px-32 2xl:px-48 flex flex-col overflow-hidden relative" 
       data-chat-container
     >
       <List

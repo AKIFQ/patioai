@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { streamText, convertToCoreMessages, Message } from 'ai';
 import { createClient } from '@supabase/supabase-js';
-import { websiteSearchTool } from '@/app/api/chat/tools/WebsiteSearchTool';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
-import { AnthropicProviderOptions } from '@ai-sdk/anthropic';
-import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
-import { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
-import { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
-import { RoomPromptEngine } from '@/lib/ai/roomPromptEngine';
-import { openai } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { google } from '@ai-sdk/google';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,48 +10,8 @@ const supabase = createClient(
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-// Initialize the centralized prompt engine
-const roomPromptEngine = new RoomPromptEngine();
-
-const getModel = (selectedModel: string) => {
-  switch (selectedModel) {
-    case 'claude-3.7-sonnet':
-      return anthropic('claude-4-sonnet-20250514');
-    case 'gpt-4.1':
-      return openai('gpt-4.1-2025-04-14');
-    case 'gpt-4.1-mini':
-      return openai('gpt-4.1-mini');
-    case 'o3':
-      return openai('o3-2025-04-16');
-    case 'gemini-2.5-pro':
-      return google('gemini-2.5-pro');
-    case 'gemini-2.5-flash':
-      return google('gemini-2.5-flash');
-    default:
-      console.error('Invalid model selected:', selectedModel);
-      return openai('gpt-4.1-2025-04-14');
-  }
-};
-
-function errorHandler(error: unknown) {
-  if (error == null) {
-    return 'unknown error';
-  }
-
-  if (typeof error === 'object' && 'message' in error) {
-    return (error as Error).message;
-  }
-
-  if (typeof error === 'string') {
-    return error;
-  }
-
-  return 'unknown error';
-}
-
-// Removed unused getRoomMessages function - we load messages directly in the page
-
-// Removed unused session management functions
+// Room chat API - handles message persistence only
+// AI responses are handled via Socket.IO streaming
 
 // Simplified: Save message directly to thread
 async function saveRoomMessage(
@@ -116,7 +66,7 @@ async function saveRoomMessage(
     });
 
     // Emit Socket.IO event for room message (use share code for room identification)
-    const { emitRoomMessageCreated, getSocketIOInstance } = await import('@/lib/server/socketEmitter');
+    const { emitRoomMessageCreated, emitRoomEvent, getSocketIOInstance } = await import('@/lib/server/socketEmitter');
     emitRoomMessageCreated(shareCode, {
       id: result.messageId || `msg-${Date.now()}`,
       room_id: roomId,
@@ -128,6 +78,24 @@ async function saveRoomMessage(
       sources: sources ? JSON.stringify(sources) : null,
       created_at: new Date().toISOString()
     });
+
+    // CRITICAL: Emit specific new thread event for sidebar refresh
+    if (isFirstMessage && !isAiResponse) {
+      console.log(`🆕 NEW THREAD CREATED - emitting thread-created event for ${shareCode}`);
+      
+      // Emit to room channel for users currently in the room
+      // This will reach all users who have joined the room via socket
+      emitRoomEvent(shareCode, 'thread-created', {
+        threadId,
+        roomId,
+        shareCode,
+        senderName,
+        firstMessage: content,
+        createdAt: new Date().toISOString()
+      });
+
+      console.log(`📢 Emitted thread-created event to room:${shareCode} for new thread ${threadId}`);
+    }
 
     // Trigger AI response for user messages
     if (!isAiResponse && isFirstMessage) {
@@ -194,11 +162,6 @@ async function saveRoomMessage(
   }
 }
 
-// Removed unused daily usage functions - can be re-added later if needed
-
-// Simple in-memory cache to prevent duplicate requests
-const recentRequests = new Map<string, number>();
-const REQUEST_DEBOUNCE_MS = 2000; // 2 second debounce
 
 export async function POST(
   req: NextRequest,
@@ -215,44 +178,18 @@ export async function POST(
     // Anonymous users are identified by sessionId parameter
 
     const body = await req.json();
-    const { messages, displayName, option, threadId, triggerAI = true } = body;
+    const { messages, displayName, threadId, triggerAI = true } = body;
 
     console.log(`📨 [${requestId}] Room chat API received:`, {
       shareCode,
       displayName,
       threadId,
-      option,
       triggerAI,
       messagesCount: messages?.length,
       lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50)
     });
 
-    // Create a unique request key for deduplication
-    const lastUserMessage = messages?.[messages.length - 1];
-    const requestKey = `${shareCode}-${threadId}-${displayName}-${lastUserMessage?.content?.substring(0, 100)}`;
-    const now = Date.now();
-    
-    // Check if we've seen this exact request recently
-    if (recentRequests.has(requestKey)) {
-      const lastRequestTime = recentRequests.get(requestKey)!;
-      if (now - lastRequestTime < REQUEST_DEBOUNCE_MS) {
-        console.log(`🚫 [${requestId}] Duplicate request detected, ignoring:`, requestKey);
-        return new NextResponse('Duplicate request ignored', { status: 429 });
-      }
-    }
-    
-    // Record this request
-    recentRequests.set(requestKey, now);
-    
-    // Clean up old entries (keep only last 100)
-    if (recentRequests.size > 100) {
-      const entries = Array.from(recentRequests.entries());
-      entries.sort((a, b) => b[1] - a[1]); // Sort by timestamp, newest first
-      recentRequests.clear();
-      entries.slice(0, 50).forEach(([key, time]) => {
-        recentRequests.set(key, time);
-      });
-    }
+    // Duplicate request handling removed - using new tier-based system
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new NextResponse('No messages provided', {
@@ -264,7 +201,6 @@ export async function POST(
     // Extract the last message (current user message)
     const lastMessage = messages[messages.length - 1];
     const message = lastMessage?.content;
-    const selectedModel = option || 'gpt-4.1';
 
     if (!message || !displayName || !threadId) {
       return new NextResponse('Missing required fields', {
@@ -326,112 +262,12 @@ export async function POST(
     }
     console.log(`✅ [${requestId}] User message saved successfully`);
 
-    // If triggerAI is false, just return success without generating AI response
-    if (!triggerAI) {
-      console.log(`📤 [${requestId}] Message saved without AI response (triggerAI: false)`);
-      return new NextResponse('Message saved successfully', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Simplified: Skip daily usage tracking for now
-
-    // Get recent messages from this thread for AI context
-    const { data: recentMessages } = await supabase
-      .from('room_messages')
-      .select('*')
-      .eq('room_id', room.id)
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: true })
-      .limit(30);
-
-    // Get current participants for system prompt
-    const { data: participants } = await supabase
-      .from('room_participants')
-      .select('display_name')
-      .eq('room_id', room.id);
-
-    const participantNames = participants?.map((p: any) => p.display_name) || [];
-
-    // Use the sophisticated prompt engine for advanced conversational AI
-    const promptResult = roomPromptEngine.generatePrompt(
-      recentMessages || [],
-      room.name,
-      participantNames,
-      displayName,
-      message
-    );
-
-    const providerOptions: LanguageModelV1ProviderMetadata = {};
-    if (selectedModel === 'claude-3.7-sonnet') {
-      providerOptions.anthropic = {
-        thinking: { type: 'enabled', budgetTokens: 12000 }
-      } satisfies AnthropicProviderOptions;
-    }
-
-    if (selectedModel === 'gemini-2.5-pro' || selectedModel === 'gemini-2.5-flash') {
-      providerOptions.google = {
-        thinkingConfig: {
-          thinkingBudget: 2048,
-          includeThoughts: true
-        }
-      } satisfies GoogleGenerativeAIProviderOptions;
-    }
-
-    if (selectedModel === 'o3') {
-      providerOptions.openai = {
-        reasoningEffort: 'high'
-      } satisfies OpenAIResponsesProviderOptions;
-    }
-
-    const result = streamText({
-      model: getModel(selectedModel),
-      system: promptResult.system,
-      messages: convertToCoreMessages(promptResult.messages),
-      providerOptions,
-      tools: {
-        websiteSearchTool: websiteSearchTool
-      },
-      experimental_activeTools: ['websiteSearchTool'],
-      maxSteps: 3,
-      // Removed telemetry for simplicity
-      onFinish: async (event) => {
-        const { text, reasoning, sources } = event;
-
-        console.log(`🤖 [${requestId}] AI response generated, saving: "${text.substring(0, 50)}..."`);
-
-        // Save AI response to thread
-        const aiSaved = await saveRoomMessage(
-          room.id,
-          shareCode,
-          threadId,
-          'AI Assistant',
-          text,
-          true,
-          sources,
-          reasoning
-        );
-
-        if (aiSaved) {
-          console.log(`✅ [${requestId}] AI response saved successfully`);
-          // Socket.IO event already emitted by saveRoomMessage function
-        } else {
-          console.log(`❌ [${requestId}] Failed to save AI response`);
-        }
-      },
-      onError: async (error) => {
-        console.error('Error processing room chat:', error);
-      }
-    });
-
-    result.consumeStream();
-
-    console.log(`🎯 [${requestId}] Returning streaming response`);
-    return result.toDataStreamResponse({
-      sendReasoning: false,
-      sendSources: true,
-      getErrorMessage: errorHandler
+    // Room chats always use triggerAI: false and handle AI via Socket.IO streaming
+    // Return success after saving user message
+    console.log(`📤 [${requestId}] Message saved successfully (AI handled via Socket.IO)`);
+    return new NextResponse('Message saved successfully', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (error) {

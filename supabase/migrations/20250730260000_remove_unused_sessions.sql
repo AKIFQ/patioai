@@ -3,14 +3,22 @@
 
 BEGIN;
 
--- Drop all policies for room_chat_sessions
-DROP POLICY IF EXISTS "authenticated_users_can_view_sessions" ON room_chat_sessions;
-DROP POLICY IF EXISTS "session_users_can_view_sessions" ON room_chat_sessions;
-DROP POLICY IF EXISTS "authenticated_users_can_create_sessions" ON room_chat_sessions;
-DROP POLICY IF EXISTS "session_users_can_create_sessions" ON room_chat_sessions;
-DROP POLICY IF EXISTS "Participants can create room chat sessions" ON room_chat_sessions;
-DROP POLICY IF EXISTS "Participants can view room chat sessions" ON room_chat_sessions;
-DROP POLICY IF EXISTS "room_chat_sessions_policy" ON room_chat_sessions;
+-- Safely drop policies only if the table exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'room_chat_sessions'
+  ) THEN
+    DROP POLICY IF EXISTS "authenticated_users_can_view_sessions" ON room_chat_sessions;
+    DROP POLICY IF EXISTS "session_users_can_view_sessions" ON room_chat_sessions;
+    DROP POLICY IF EXISTS "authenticated_users_can_create_sessions" ON room_chat_sessions;
+    DROP POLICY IF EXISTS "session_users_can_create_sessions" ON room_chat_sessions;
+    DROP POLICY IF EXISTS "Participants can create room chat sessions" ON room_chat_sessions;
+    DROP POLICY IF EXISTS "Participants can view room chat sessions" ON room_chat_sessions;
+    DROP POLICY IF EXISTS "room_chat_sessions_policy" ON room_chat_sessions;
+  END IF;
+END $$;
 
 -- Drop the table (this will also drop all indexes and constraints)
 DROP TABLE IF EXISTS room_chat_sessions CASCADE;

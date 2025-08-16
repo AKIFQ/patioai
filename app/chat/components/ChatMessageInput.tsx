@@ -14,13 +14,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
+import { ModelSelector } from '@/components/chat/ModelSelector';
+import { Crown } from 'lucide-react';
+// Removed model type Select as every chat is standard by default
 
 // Icons from Lucide React
 import {
@@ -30,7 +26,9 @@ import {
   Paperclip,
   X,
   FileIcon,
-  Zap
+  Zap,
+  Plus,
+  Check
 } from 'lucide-react';
 
 // Memoized FilePreview component outside MessageInput (before MessageInput)
@@ -109,11 +107,7 @@ const FilePreview = React.memo(
 // Add display name for debugging
 FilePreview.displayName = 'FilePreview';
 
-const modelTypes = [
-  { value: 'standart', label: 'Standard' },
-  { value: 'perplex', label: 'Perplexity' },
-  { value: 'website', label: 'Website' }
-];
+// Removed modelTypes; all chats are already standard
 
 interface RoomContext {
   shareCode: string;
@@ -129,29 +123,37 @@ interface RoomContext {
 const MessageInput = ({
   chatId,
   currentChatId,
-  modelType,
   selectedOption,
-  handleModelTypeChange,
   handleOptionChange,
   roomContext,
   onTyping,
   onSubmit,
   isLoading,
   input,
-  setInput
+  setInput,
+  webSearchEnabled,
+  setWebSearchEnabled,
+  reasoningMode = false,
+  setReasoningMode,
+  userTier = 'free',
+  onUpgrade
 }: {
   chatId: string;
   currentChatId: string;
-  modelType: string;
   selectedOption: string;
-  handleModelTypeChange: (value: string) => void;
   handleOptionChange: (value: string) => void;
   roomContext?: RoomContext;
   onTyping?: (isTyping: boolean) => void;
-  onSubmit: (message: string, attachments?: File[], triggerAI?: boolean) => void;
+  onSubmit: (message: string, attachments?: File[], triggerAI?: boolean, reasoningMode?: boolean) => void;
   isLoading: boolean;
   input: string;
   setInput: (value: string) => void;
+  webSearchEnabled: boolean;
+  setWebSearchEnabled: (value: boolean) => void;
+  reasoningMode?: boolean;
+  setReasoningMode?: (value: boolean) => void;
+  userTier?: 'free' | 'basic' | 'premium';
+  onUpgrade?: () => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
@@ -167,18 +169,11 @@ const MessageInput = ({
 
   // Create a safe typing handler using ref
   const safeOnTyping = useCallback((isTyping: boolean) => {
-    console.log('🔧 safeOnTyping called:', isTyping);
     try {
-      const currentOnTyping = onTypingRef.current;
-      console.log('🔧 currentOnTyping exists:', !!currentOnTyping);
-      if (currentOnTyping && typeof currentOnTyping === 'function') {
-        console.log('🔧 Calling onTyping function');
-        currentOnTyping(isTyping);
-      } else {
-        console.log('🔧 No onTyping function available');
-      }
+      const fn = onTypingRef.current;
+      if (typeof fn === 'function') fn(isTyping);
     } catch (error) {
-      console.warn('❌ Error calling onTyping:', error);
+      if (process.env.NODE_ENV !== 'production') console.warn('Error calling onTyping:', error);
     }
   }, []); // No dependencies needed since we use ref
 
@@ -192,11 +187,9 @@ const MessageInput = ({
   }, []);
 
   // Removed unused chatSessionIdForRoom calculation
-
+  
   // Only log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`📝 MESSAGE INPUT: Component initialized as controlled component`);
-  }
+  // (Removed noisy init log)
   
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -224,8 +217,6 @@ const MessageInput = ({
   const handleTyping = useCallback(() => {
     if (!roomContext) return;
 
-    console.log('🎯 handleTyping called for room:', roomContext.shareCode);
-    
     // Start typing
     safeOnTyping(true);
 
@@ -236,7 +227,6 @@ const MessageInput = ({
 
     // Stop typing after 1 second of inactivity
     typingTimeoutRef.current = setTimeout(() => {
-      console.log('⏰ Typing timeout - stopping typing');
       safeOnTyping(false);
     }, 1000);
   }, [roomContext, safeOnTyping]);
@@ -268,12 +258,9 @@ const MessageInput = ({
     
     // Handle typing indicators for room chats
     if (roomContext) {
-      console.log('📝 Input changed, value length:', e.target.value.length);
       if (e.target.value.length > 0) {
-        console.log('📝 Starting typing indicator');
         handleTyping();
       } else {
-        console.log('📝 Stopping typing indicator (empty input)');
         safeOnTyping(false);
       }
     }
@@ -332,7 +319,7 @@ const MessageInput = ({
     const submissionId = Math.random().toString(36).substring(7);
     console.log(`📤 [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
     
-    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false);
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false, reasoningMode);
     
     // Clear form
     setInput('');
@@ -366,7 +353,7 @@ const MessageInput = ({
     const submissionId = Math.random().toString(36).substring(7);
     console.log(`⚡ [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
     
-    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true);
+    onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true, reasoningMode);
     
     // Clear form
     setInput('');
@@ -420,7 +407,7 @@ const MessageInput = ({
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative w-full mb-1 rounded-2xl overflow-hidden border-1 shadow-sm flex flex-col transition-all duration-200 shadow-md dark:shadow-lg focus-within:shadow-lg dark:focus-within:shadow-xl hover:border-gray-300 dark:hover:border-gray-700 focus-within:border-gray-300 dark:focus-within:border-gray-700 cursor-text bg-background/95 backdrop-blur-sm"
+        className="relative w-full mb-1 rounded-2xl overflow-hidden border border-border/40 shadow-sm flex flex-col transition-all duration-200 hover:border-border/60 focus-within:border-border/60 bg-background/80 backdrop-blur-md"
       >
         <input
           type="file"
@@ -437,91 +424,115 @@ const MessageInput = ({
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
           disabled={isLoading}
-          className="w-full pt-3 pb-1.5 min-h-0 max-h-40 resize-none border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none bg-transparent focus:bg-transparent dark:bg-transparent dark:focus:bg-transparent"
+          className="w-full pt-3 pb-1.5 min-h-0 max-h-40 resize-none border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none bg-transparent"
           rows={1}
         />
 
         {/* Bottom controls row with buttons */}
         <div className="flex px-2 sm:px-2.5 pb-1 pt-1.5 items-center gap-1.5 sm:gap-2 justify-between min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
-            {attachedFiles.length === 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                className="h-7 sm:h-8 cursor-pointer text-xs rounded-md flex items-center gap-1.5 hover:bg-primary/5 dark:hover:bg-primary/10 flex-shrink-0"
-                disabled={isLoading}
-              >
-                <Paperclip className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                <span className="hidden sm:inline">Attach file</span>
-              </Button>
-            )}
-
-            <div className="flex-1 max-w-[120px] sm:max-w-[160px] min-w-0">
-              <Select value={modelType} onValueChange={handleModelTypeChange}>
-                <SelectTrigger className="w-full h-7 sm:h-8 text-xs min-w-0">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {modelTypes.map((model) => (
-                    <SelectItem
-                      key={model.value}
-                      value={model.value}
-                      className="text-xs"
+            {/* Plus menu with Attach and Web search toggle */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 sm:h-8 cursor-pointer text-xs rounded-md flex items-center gap-1.5 border border-border/40 bg-background/60 hover:bg-background/80 transition-colors flex-shrink-0"
+                  disabled={isLoading}
+                  aria-label="More tools"
+                >
+                  <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <span className="hidden sm:inline">More</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 border border-border/40 bg-background/90 backdrop-blur-md">
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs">
+                  <Paperclip className="h-3.5 w-3.5 mr-2" /> Attach file
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setWebSearchEnabled(!webSearchEnabled);
+                  }}
+                  className="text-xs flex items-center justify-between"
+                >
+                  <span>Web search</span>
+                  <span
+                    className={`ml-2 inline-flex h-4 w-7 items-center rounded-full border transition-colors ${
+                      webSearchEnabled
+                        ? 'bg-emerald-500/70 border-emerald-400/60'
+                        : 'bg-muted/40 border-border/40'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3 w-3 rounded-full bg-background shadow transition-transform ${
+                        webSearchEnabled ? 'translate-x-3' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </span>
+                </DropdownMenuItem>
+                {/* Reasoning toggle - only for free users */}
+                {userTier === 'free' && setReasoningMode && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (!reasoningMode) {
+                        // Show warning when enabling reasoning mode
+                        const confirmed = window.confirm(
+                          'Reasoning mode uses DeepSeek R1 with 512 token reasoning limit (~$0.0005 per message). Continue?'
+                        );
+                        if (confirmed) {
+                          setReasoningMode(true);
+                          // Show success toast
+                          if (typeof window !== 'undefined' && (window as any).toast) {
+                            (window as any).toast.success('Reasoning mode enabled - using DeepSeek R1');
+                          }
+                        }
+                      } else {
+                        setReasoningMode(false);
+                      }
+                    }}
+                    className="text-xs flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <div className="h-3.5 w-3.5 mr-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 flex items-center justify-center">
+                        <div className="h-2 w-2 rounded-full bg-white" />
+                      </div>
+                      <span>Reasoning mode</span>
+                      {reasoningMode && (
+                        <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">($)</span>
+                      )}
+                    </div>
+                    <span
+                      className={`ml-2 inline-flex h-4 w-7 items-center rounded-full border transition-colors ${
+                        reasoningMode
+                          ? 'bg-amber-500/70 border-amber-400/60'
+                          : 'bg-muted/40 border-border/40'
+                      }`}
                     >
-                      {model.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {modelType === 'standart' && (
-              <div className="flex-1 max-w-[120px] sm:max-w-[160px] min-w-0">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full h-7 sm:h-8 justify-between text-xs min-w-0"
-                    >
-                      <span className="truncate">{selectedOption}</span>
-                      <ChevronDown className="h-3 w-3 ml-2 flex-shrink-0 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56">
-                    {[
-                      { value: 'gpt-4.1', label: 'GPT-4.1' },
-                      { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-                      { value: 'o3', label: 'OpenAI O3' },
-                      {
-                        value: 'claude-3.7-sonnet',
-                        label: 'Claude 3.7 Sonnet'
-                      },
-                      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-                      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
-                    ].map((option) => (
-                      <DropdownMenuItem
-                        key={option.value}
-                        onClick={() => handleOptionChange(option.value)}
-                        className={`text-xs ${
-                          selectedOption === option.value
-                            ? 'bg-primary/20 dark:bg-primary/30 text-primary dark:text-primary-foreground'
-                            : ''
+                      <span
+                        className={`inline-block h-3 w-3 rounded-full bg-background shadow transition-transform ${
+                          reasoningMode ? 'translate-x-3' : 'translate-x-0.5'
                         }`}
-                      >
-                        {option.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
+                      />
+                    </span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="flex-1 min-w-0">
+              <ModelSelector
+                selectedModel={selectedOption}
+                userTier={userTier}
+                onModelChange={(modelId) => handleOptionChange(modelId)}
+                onUpgradeClick={onUpgrade}
+              />
+            </div>
 
             {selectedBlobs.length > 0 && (
               <div className="hidden sm:flex items-center rounded-full text-xs px-2 h-8 bg-primary/10 border border-primary/30 flex-shrink-0">
-                <Paperclip className="mr-1 h-4 w-4 text-primary" />
                 <span className="text-primary font-medium">
                   {selectedBlobs.length} file
                   {selectedBlobs.length > 1 ? 's' : ''} attached
@@ -562,7 +573,7 @@ const MessageInput = ({
                 size="icon"
                 variant="ghost"
                 disabled={!input.trim() && attachedFiles.length === 0}
-                className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-primary/30 rounded-lg cursor-pointer flex-shrink-0"
+                className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-border/40 rounded-lg cursor-pointer flex-shrink-0"
                 title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
               >
                 <Send className="text-primary w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />

@@ -49,15 +49,27 @@ export function emitRoomMessageCreated(roomIdOrShareCode: string, messageData: a
     return;
   }
 
-  // Emit to all users in the room (using share code for room identification)
-  socketIO.to(`room:${roomIdOrShareCode}`).emit('room-message-created', {
+  const eventPayload = {
     new: messageData,
     eventType: 'INSERT',
     table: 'room_messages',
     schema: 'public'
+  };
+
+  // Emit to all users in the room (using share code for room identification)
+  socketIO.to(`room:${roomIdOrShareCode}`).emit('room-message-created', eventPayload);
+
+  console.log(`📡 Emitted room-message-created event for room ${roomIdOrShareCode}:`, {
+    threadId: messageData.thread_id,
+    sender: messageData.sender_name,
+    isAI: messageData.is_ai_response,
+    content: messageData.content?.substring(0, 30)
   });
 
-  console.log(`Emitted room message created event for room ${roomIdOrShareCode}`);
+  // Get room info to count connected users
+  const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${roomIdOrShareCode}`);
+  const connectedUsers = roomSockets ? roomSockets.size : 0;
+  console.log(`📊 Room ${roomIdOrShareCode} has ${connectedUsers} connected users`);
 }
 
 export function emitChatMessageCreated(userId: string, messageData: any) {
@@ -118,10 +130,42 @@ export function emitAPIEvent(eventType: string, data: any, target?: string) {
 
 // Helper function to emit user-specific events
 export function emitUserEvent(userId: string, eventType: string, data: any) {
+  const socketIO = getSocketIOInstance();
+  if (!socketIO) {
+    console.warn('Socket.IO not initialized, cannot emit user event');
+    return;
+  }
+
+  // Get user channel info to count connected sockets
+  const userSockets = socketIO.sockets.adapter.rooms.get(`user:${userId}`);
+  const connectedSockets = userSockets ? userSockets.size : 0;
+  
+  console.log(`📡 Emitting ${eventType} to user ${userId} (${connectedSockets} connected sockets):`, {
+    threadId: data.threadId,
+    sender: data.senderName,
+    content: data.firstMessage?.substring(0, 30)
+  });
+
   emitAPIEvent(eventType, data, `user:${userId}`);
 }
 
 // Helper function to emit room-specific events
 export function emitRoomEvent(shareCode: string, eventType: string, data: any) {
+  const socketIO = getSocketIOInstance();
+  if (!socketIO) {
+    console.warn('Socket.IO not initialized, cannot emit room event');
+    return;
+  }
+
+  // Get room info to count connected users
+  const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${shareCode}`);
+  const connectedUsers = roomSockets ? roomSockets.size : 0;
+  
+  console.log(`📡 Emitting ${eventType} to room ${shareCode} (${connectedUsers} connected users):`, {
+    threadId: data.threadId,
+    sender: data.senderName,
+    content: data.firstMessage?.substring(0, 30)
+  });
+
   emitAPIEvent(eventType, data, `room:${shareCode}`);
 }

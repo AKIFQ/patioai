@@ -31,10 +31,14 @@ import { toast } from 'sonner';
 import RoomSettingsModal from './RoomSettingsModal';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
+import CrossThreadActivity from './CrossThreadActivity';
 import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
 import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
+import { useReasoningStream } from '../hooks/useReasoningStream';
+import { useChatSubmissionState } from '@/lib/client/atomicStateManager';
+import { logger } from '@/lib/utils/logger';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
@@ -93,16 +97,38 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [optimisticOption, setOptimisticOption] = useOptimistic<string, string>(
-    initialSelectedOption,
+    (userData?.subscription_tier === 'free' ? 'auto' : initialSelectedOption),
     (_, newValue) => newValue
   );
 
+  // Reasoning mode state (only for free users)
+  const [reasoningMode, setReasoningMode] = useState(false);
+
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [crossThreadActivities, setCrossThreadActivities] = useState<Array<{
+    threadId: string;
+    threadName: string;
+    activeUsers: string[];
+    typingUsers: string[];
+  }>>([]);
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
   const [isRoomLoading, setIsRoomLoading] = useState(false);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const streamingAssistantIdRef = useRef<string | null>(null);
+
+  // Room reasoning streaming state
+  const [roomReasoningState, setRoomReasoningState] = useState<{
+    messageId: string | null;
+    reasoning: string;
+    isStreaming: boolean;
+    isComplete: boolean;
+  }>({
+    messageId: null,
+    reasoning: '',
+    isStreaming: false,
+    isComplete: false
+  });
 
   // State for reasoning display
   const [reasoningStates, setReasoningStates] = useState<Record<string, { isOpen: boolean; hasStartedStreaming: boolean }>>({});
@@ -122,7 +148,15 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Message deduplication and loading state for room chats
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+
+  // Atomic state management to prevent race conditions
+  const {
+    state: submissionState,
+    startSubmission,
+    finishSubmission,
+    isSubmitting
+  } = useChatSubmissionState();
 
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
@@ -169,15 +203,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (roomContext) {
       return `/api/rooms/${roomContext.shareCode}/chat`;
     }
-
-    switch (optimisticModelType) {
-      case 'perplex':
-        return '/api/perplexity';
-      case 'website':
-        return '/api/websitechat';
-      default:
-        return '/api/chat';
-    }
+    return '/api/chat';
   };
 
   const apiEndpoint = getApiEndpoint();
@@ -215,15 +241,19 @@ const ChatComponent: React.FC<ChatProps> = ({
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
     id: stableChatId,
     api: apiEndpoint, // Use real endpoint for both room and individual chats
-    experimental_throttle: 50,
+    // Remove client-side throttle to avoid hidden rate limiting
+    experimental_throttle: undefined as any,
     initialMessages: roomContext ? [] : (currentChat || []), // Empty for room chats
     body: roomContext ? {
       // Dummy body for room chats (won't be used)
       dummy: true
     } : {
       chatId: chatId,
-      option: optimisticOption
+      option: optimisticOption,
+      webSearch: webSearchEnabled,
+      reasoningMode: reasoningMode
     },
+
     onFinish: async () => {
       if (!roomContext) {
         console.log(`✅ CHAT: onFinish called for ${stableChatId}`);
@@ -256,6 +286,9 @@ const ChatComponent: React.FC<ChatProps> = ({
     }
   });
 
+  // Use reasoning stream hook for individual chats (after useChat hook)
+  const reasoningStream = useReasoningStream(messages, status);
+
   // Debug: Log streaming behavior
   useEffect(() => {
     if (!roomContext) {
@@ -285,18 +318,25 @@ const ChatComponent: React.FC<ChatProps> = ({
     }
   }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
 
-  // Handle message submission from MessageInput
-  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true) => {
-    // Prevent duplicate submissions
-    if (isSubmitting) {
-      console.log('🚫 CHAT: Submission already in progress, ignoring duplicate');
-      return;
-    }
-
-    setIsSubmitting(true);
-    console.log(`🚀 CHAT: Handling submission: "${message.substring(0, 50)}"`);
+  // Handle message submission from MessageInput with atomic state management
+  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true, reasoningModeEnabled: boolean = false) => {
+    const messageId = crypto.randomUUID();
+    logger.chatSubmission(messageId, {
+      roomContext: roomContext?.shareCode,
+      messagePreview: message.substring(0, 50),
+      triggerAI,
+      reasoningMode: reasoningModeEnabled
+    });
 
     try {
+      // Atomic submission start - prevents race conditions
+      const submissionInfo = await startSubmission(messageId);
+      if (!submissionInfo) {
+        logger.warn('Chat submission blocked by atomic state manager', { messageId });
+        return;
+      }
+
+      logger.debug('Chat submission started atomically', { messageId });
       if (roomContext) {
         if (triggerAI) {
           // For room chats with AI response: Direct API call with loading state
@@ -314,7 +354,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                 {
                   role: 'user',
                   content: message,
-                  id: crypto.randomUUID(),
+                  id: messageId, // Use consistent message ID
                   createdAt: new Date()
                 }
               ],
@@ -328,26 +368,45 @@ const ChatComponent: React.FC<ChatProps> = ({
           if (!response.ok) {
             throw new Error(`API call failed: ${response.status}`);
           }
-          // Then invoke streaming via socket
-          if (invokeAI && isConnected) {
+
+          // CRITICAL: Trigger sidebar refresh for new thread visibility
+          // This ensures all users see the new thread immediately
+          if (realtimeMessages.length === 0) {
+            console.log('🔄 First message in thread - triggering sidebar refresh');
+            // Dispatch custom event to trigger sidebar refresh
+            window.dispatchEvent(new CustomEvent('forceThreadRefresh', { 
+              detail: { 
+                threadId: roomContext.chatSessionId,
+                shareCode: roomContext.shareCode,
+                roomName: roomContext.roomName,
+                senderName: roomContext.displayName,
+                firstMessage: message
+              } 
+            }));
+          }
+
+          // Then invoke streaming via socket (only once per submission)
+          if (invokeAIRef.current && isConnected && submissionInfo) {
             // Prepare chat history for context (last 10 messages)
             const chatHistory = realtimeMessages
               .slice(-10) // Last 10 messages for context
               .map(msg => ({
                 role: msg.role,
-                content: msg.senderName && msg.role === 'user' 
-                  ? `${msg.senderName}: ${msg.content}` 
+                content: msg.senderName && msg.role === 'user'
+                  ? `${msg.senderName}: ${msg.content}`
                   : msg.content
               }));
 
-            invokeAI({
+            console.log(`🔍 Chat invokeAI called with messageId:${messageId}, reasoningMode:`, reasoningModeEnabled);
+            invokeAIRef.current({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
               prompt: `${roomContext.displayName}: ${message}`,
               roomName: roomContext.roomName,
               participants: roomContext.participants.map(p => p.displayName),
               modelId: optimisticOption,
-              chatHistory
+              chatHistory,
+              reasoningMode: reasoningModeEnabled
             });
           }
           console.log('✅ Room chat: User message persisted, AI stream invoked');
@@ -366,7 +425,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                 {
                   role: 'user',
                   content: message,
-                  id: crypto.randomUUID(),
+                  id: messageId, // Use consistent message ID
                   createdAt: new Date()
                 }
               ],
@@ -379,6 +438,20 @@ const ChatComponent: React.FC<ChatProps> = ({
 
           if (!response.ok) {
             throw new Error(`API call failed: ${response.status}`);
+          }
+
+          // CRITICAL: Trigger sidebar refresh for new thread visibility
+          if (realtimeMessages.length === 0) {
+            console.log('🔄 First message in thread (no AI) - triggering sidebar refresh');
+            window.dispatchEvent(new CustomEvent('forceThreadRefresh', { 
+              detail: { 
+                threadId: roomContext.chatSessionId,
+                shareCode: roomContext.shareCode,
+                roomName: roomContext.roomName,
+                senderName: roomContext.displayName,
+                firstMessage: message
+              } 
+            }));
           }
 
           console.log('✅ Room chat: User message sent (no AI)');
@@ -431,7 +504,17 @@ const ChatComponent: React.FC<ChatProps> = ({
         }
       }
     } catch (error) {
-      console.error('❌ CHAT: Error in handleSubmit:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorInstance = error instanceof Error ? error : new Error(errorMessage);
+
+      logger.chatError(messageId, errorInstance, {
+        roomContext: roomContext?.shareCode,
+        messagePreview: message.substring(0, 50)
+      });
+
+      // Use atomic state manager to handle error
+      finishSubmission(messageId, errorMessage);
+
       if (roomContext) {
         toast.error('Failed to send message. Please try again.');
       }
@@ -439,12 +522,13 @@ const ChatComponent: React.FC<ChatProps> = ({
       if (roomContext) {
         setIsRoomLoading(false);
       }
-      // Reset submission flag after a delay to prevent rapid-fire submissions
-      setTimeout(() => {
-        setIsSubmitting(false);
-      }, 1000);
+
+      // Ensure submission is marked as finished (success case)
+      if (!submissionState.errors.length) {
+        finishSubmission(messageId);
+      }
     }
-  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, isSubmitting, setMessages, stableChatId]);
+  }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, setMessages, stableChatId, startSubmission, finishSubmission, submissionState.errors.length]);
 
   const { mutate } = useSWRConfig();
 
@@ -486,23 +570,38 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, []); // Empty dependency array - stable function
 
   const handleTypingUpdate = useCallback((users: string[]) => {
-    console.log('👥 Typing users updated in Chat:', users);
+    if (process.env.NODE_ENV === 'development') console.debug('👥 Typing users:', users);
     setTypingUsers(users);
   }, []);
 
+  const handleCrossThreadActivity = useCallback((activities: Array<{
+    threadId: string;
+    threadName: string;
+    activeUsers: string[];
+    typingUsers: string[];
+  }>) => {
+    console.log('🔄 Cross-thread activity received:', activities);
+    console.log('🔄 Current thread:', roomContext?.chatSessionId);
+    setCrossThreadActivities(activities);
+  }, [roomContext?.chatSessionId]);
+
   // Streaming UI glue: add a temporary assistant message and append chunks
   const handleStreamStart = useCallback((threadId: string) => {
-    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    if (!roomContext) return;
+    // Accept first stream for this session even if threadId differs, when no temp assistant exists yet
+    if (roomContext.chatSessionId && threadId !== roomContext.chatSessionId && streamingAssistantIdRef.current) {
+      return;
+    }
     const tempId = `ai-temp-${Date.now()}`;
     streamingAssistantIdRef.current = tempId;
     setStreamingAssistantId(tempId);
     setRealtimeMessages(prev => ([
       ...prev,
-      { 
-        id: tempId, 
-        role: 'assistant', 
+      {
+        id: tempId,
+        role: 'assistant',
         content: '🤔 AI is thinking...', // Show thinking message instead of empty
-        createdAt: new Date() 
+        createdAt: new Date()
       } as EnhancedMessage
     ]));
   }, [roomContext]);
@@ -511,35 +610,86 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (!roomContext || threadId !== roomContext.chatSessionId) return;
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
-    
+
     setRealtimeMessages(prev => prev.map(m => {
       if (m.id === currentId) {
         // If this is the first chunk, replace the thinking message
         const isFirstChunk = m.content === '🤔 AI is thinking...';
-        return { 
-          ...m, 
-          content: isFirstChunk ? chunk : `${m.content}${chunk}` 
+        return {
+          ...m,
+          content: isFirstChunk ? chunk : `${m.content}${chunk}`
         };
       }
       return m;
     }));
   }, [roomContext]);
 
-  const handleStreamEnd = useCallback((threadId: string, text: string) => {
+  const handleStreamEnd = useCallback((threadId: string, text: string, reasoning?: string) => {
     if (!roomContext || threadId !== roomContext.chatSessionId) return;
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
-    
-    // Convert the temporary streaming message to a permanent one
-    setRealtimeMessages(prev => prev.map(m => 
-      m.id === currentId 
-        ? { ...m, id: `ai-final-${Date.now()}`, content: text } // Use final text and permanent ID
-        : m
-    ));
-    
+
+    // CRITICAL FIX: For room chats, don't create a temporary permanent message
+    // The database will send the real message via room-message-created event
+    // Just remove the streaming message and let the database message take over
+    setRealtimeMessages(prev => prev.filter(m => m.id !== currentId));
+
+    // Clear reasoning state - the database message will have the final reasoning
+    setRoomReasoningState(prev => ({
+      ...prev,
+      isStreaming: false,
+      isComplete: true
+    }));
+
     // Clear streaming state
     streamingAssistantIdRef.current = null;
     setStreamingAssistantId(null);
+  }, [roomContext]);
+
+  // New reasoning handlers for room chats
+  const handleReasoningStart = useCallback((threadId: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    const currentId = streamingAssistantIdRef.current;
+    if (!currentId) return;
+
+    console.log('🧠 Reasoning started for room chat:', threadId);
+    setRoomReasoningState({
+      messageId: currentId,
+      reasoning: '',
+      isStreaming: true,
+      isComplete: false
+    });
+  }, [roomContext]);
+
+  const handleReasoningChunk = useCallback((threadId: string, reasoning: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+    const currentId = streamingAssistantIdRef.current;
+    if (!currentId) return;
+
+    if (process.env.NODE_ENV === 'development') console.debug('🧠 Reasoning chunk received:', { threadId, preview: reasoning.substring(0, 60) });
+    setRoomReasoningState(prev => ({
+      ...prev,
+      reasoning
+    }));
+  }, [roomContext]);
+
+  const handleReasoningEnd = useCallback((threadId: string, reasoning: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+
+    console.log('🧠 Reasoning ended for room chat:', threadId);
+    setRoomReasoningState(prev => ({
+      ...prev,
+      reasoning,
+      isStreaming: false,
+      isComplete: true
+    }));
+  }, [roomContext]);
+
+  const handleContentStart = useCallback((threadId: string) => {
+    if (!roomContext || threadId !== roomContext.chatSessionId) return;
+
+    if (process.env.NODE_ENV === 'development') console.debug('📝 Content started for room chat:', threadId);
+    // Reasoning UI should auto-minimize when content starts
   }, [roomContext]);
 
   // Memoize realtime hook props to prevent unnecessary re-initializations
@@ -553,9 +703,28 @@ const ChatComponent: React.FC<ChatProps> = ({
       onTypingUpdate: handleTypingUpdate,
       onStreamStart: handleStreamStart,
       onStreamChunk: handleStreamChunk,
-      onStreamEnd: handleStreamEnd
+      onStreamEnd: handleStreamEnd,
+      onReasoningStart: handleReasoningStart,
+      onReasoningChunk: handleReasoningChunk,
+      onReasoningEnd: handleReasoningEnd,
+      onContentStart: handleContentStart,
+      onCrossThreadActivity: handleCrossThreadActivity
     };
-  }, [roomContext?.shareCode, roomContext?.displayName, roomContext?.chatSessionId, handleNewMessage, handleTypingUpdate, handleStreamStart, handleStreamChunk, handleStreamEnd]);
+  }, [
+    roomContext?.shareCode,
+    roomContext?.displayName,
+    roomContext?.chatSessionId,
+    handleNewMessage,
+    handleTypingUpdate,
+    handleStreamStart,
+    handleStreamChunk,
+    handleStreamEnd,
+    handleReasoningStart,
+    handleReasoningChunk,
+    handleReasoningEnd,
+    handleContentStart,
+    handleCrossThreadActivity
+  ]);
 
   // Initialize real-time hook with safe fallbacks
   const realtimeHook = realtimeProps ? useRoomSocket(realtimeProps) : null;
@@ -567,12 +736,42 @@ const ChatComponent: React.FC<ChatProps> = ({
     isAIStreaming = false
   } = (realtimeHook as any) || {};
 
+  // Avoid temporal-dead-zone issues by referencing invokeAI via a ref
+  const invokeAIRef = useRef<any>(null);
+  useEffect(() => {
+    invokeAIRef.current = invokeAI;
+  }, [invokeAI]);
+
+  // Listen for dev-only modelUsed announcements via socket
+  useEffect(() => {
+    const w = (window as any);
+    const socket = (w && w.__patio_socket) || null;
+    if (!socket) return;
+    const onStart = (payload: any) => {
+      if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-start', payload);
+    };
+    const onContentStart = (payload: any) => {
+      if (process.env.NODE_ENV === 'development') console.info('🔎 model used:', payload?.modelUsed);
+    };
+    const onEnd = (payload: any) => {
+      if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
+    };
+    socket.on?.('ai-stream-start', onStart);
+    socket.on?.('ai-content-start', onContentStart);
+    socket.on?.('ai-stream-end', onEnd);
+    return () => {
+      socket.off?.('ai-stream-start', onStart);
+      socket.off?.('ai-content-start', onContentStart);
+      socket.off?.('ai-stream-end', onEnd);
+    };
+  }, []);
+
   // Initialize realtime messages with current chat messages
   useEffect(() => {
     if (roomContext) {
       if (currentChat && currentChat.length > 0) {
         // Initialize with current chat messages
-        console.log('Initializing realtime messages with currentChat:', currentChat.length);
+        if (process.env.NODE_ENV === 'development') console.debug('Init realtime messages:', currentChat.length);
         setRealtimeMessages(currentChat);
       } else {
         // Start with empty array for fresh sessions
@@ -587,7 +786,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (roomContext) {
       // For room chats, ignore useChat messages completely
       // Only use real-time messages to ensure consistency across all users
-      console.log('🏠 Room chat: Using only real-time messages, ignoring useChat optimistic updates');
+      if (process.env.NODE_ENV === 'development') console.debug('🏠 Room chat using only realtime messages');
 
       // Don't merge - real-time messages are the single source of truth
       // This ensures User A and User B see exactly the same messages
@@ -598,7 +797,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   useEffect(() => {
     // Clear messages when switching to a different chat (only for regular chats)
     if (!roomContext && currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
-      console.log(`🧹 CHAT: Clearing messages due to chat ID change: ${currentChatId} -> ${chatId}`);
+      if (process.env.NODE_ENV === 'development') console.debug('🧹 Clear messages on chat change');
       setMessages([]);
     }
   }, [chatId, currentChatId, roomContext, setMessages]);
@@ -606,7 +805,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Force clear messages when component mounts with a new chat ID
   useEffect(() => {
     if (!roomContext && !currentChat) {
-      console.log(`🆕 CHAT: New chat detected, ensuring clean state for ${chatId}`);
+      if (process.env.NODE_ENV === 'development') console.debug('�� New chat detected, clear state');
       setMessages([]);
     }
   }, [chatId, roomContext, currentChat, setMessages]);
@@ -665,7 +864,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     let isTracking = false;
     let isHorizontal = false;
     let swipeDirection: 'open' | 'close' | null = null;
-    
+
     const SWIPE_THRESHOLD = 60; // Minimum distance to trigger action
     const EDGE_ZONE = 20; // Touch detection zone from screen edges
     const MAX_SWIPE_DISTANCE = 280; // Width of sidebar for progress calculation
@@ -675,18 +874,18 @@ const ChatComponent: React.FC<ChatProps> = ({
       startX = touch.clientX;
       startY = touch.clientY;
       currentX = startX;
-      
+
       // Detect swipe zones
       const isLeftEdge = startX <= EDGE_ZONE;
       const isRightEdge = startX >= window.innerWidth - EDGE_ZONE;
       const canOpenFromLeft = isLeftEdge && !isMobileSidebarOpen;
       const canCloseFromRight = isRightEdge && isMobileSidebarOpen;
       const canCloseFromAnywhere = isMobileSidebarOpen && startX <= MAX_SWIPE_DISTANCE;
-      
+
       if (canOpenFromLeft || canCloseFromRight || canCloseFromAnywhere) {
         isTracking = true;
         setIsSwipeActive(true);
-        
+
         if (canOpenFromLeft) swipeDirection = 'open';
         else swipeDirection = 'close';
       }
@@ -694,12 +893,12 @@ const ChatComponent: React.FC<ChatProps> = ({
 
     const onTouchMove = (e: TouchEvent) => {
       if (!isTracking) return;
-      
+
       const touch = e.touches[0];
       const deltaX = touch.clientX - startX;
       const deltaY = Math.abs(touch.clientY - startY);
       currentX = touch.clientX;
-      
+
       // Determine if this is a horizontal swipe
       if (!isHorizontal && (Math.abs(deltaX) > 10 || deltaY > 10)) {
         isHorizontal = Math.abs(deltaX) > deltaY;
@@ -711,14 +910,14 @@ const ChatComponent: React.FC<ChatProps> = ({
           return;
         }
       }
-      
+
       if (!isHorizontal) return;
-      
+
       // Prevent page scrolling during horizontal swipe
       e.preventDefault();
-      
+
       let progress = 0;
-      
+
       if (swipeDirection === 'open' && deltaX > 0) {
         // Opening: progress from 0 to 1 as we swipe right
         progress = Math.min(deltaX / MAX_SWIPE_DISTANCE, 1);
@@ -732,16 +931,16 @@ const ChatComponent: React.FC<ChatProps> = ({
           progress = Math.max(1 + (deltaX / MAX_SWIPE_DISTANCE), 0);
         }
       }
-      
+
       setSwipeProgress(progress);
     };
 
     const onTouchEnd = () => {
       if (!isTracking) return;
-      
+
       const deltaX = currentX - startX;
       let shouldTrigger = false;
-      
+
       if (swipeDirection === 'open' && deltaX > SWIPE_THRESHOLD) {
         shouldTrigger = true;
         openMobileSidebar();
@@ -749,7 +948,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         shouldTrigger = true;
         closeMobileSidebar();
       }
-      
+
       // Smooth animation to final state
       if (shouldTrigger) {
         setSwipeProgress(swipeDirection === 'open' ? 1 : 0);
@@ -757,13 +956,13 @@ const ChatComponent: React.FC<ChatProps> = ({
         // Snap back to original state
         setSwipeProgress(isMobileSidebarOpen ? 1 : 0);
       }
-      
+
       // Reset state
       setTimeout(() => {
         setIsSwipeActive(false);
         setSwipeProgress(0);
       }, 300); // Match transition duration
-      
+
       isTracking = false;
       isHorizontal = false;
       swipeDirection = null;
@@ -785,17 +984,17 @@ const ChatComponent: React.FC<ChatProps> = ({
     <div ref={touchAreaRef} className="flex h-full w-full flex-col relative">
       {/* Swipe overlay indicator (only during active swipe) */}
       {isSwipeActive && (
-        <div 
+        <div
           className="fixed inset-0 z-[100] pointer-events-none"
           style={{
             background: `linear-gradient(to right, rgba(0,0,0,${swipeProgress * 0.3}) 0%, transparent 50%)`
           }}
         />
       )}
-      
+
       {/* Swipe progress indicator */}
       {isSwipeActive && swipeProgress > 0 && (
-        <div 
+        <div
           className="fixed left-0 top-0 bottom-0 z-[99] bg-background/10 backdrop-blur-sm pointer-events-none transition-all duration-100"
           style={{
             width: `${swipeProgress * 280}px`,
@@ -808,22 +1007,49 @@ const ChatComponent: React.FC<ChatProps> = ({
       {/* Mobile Header with Hamburger Menu */}
       <div className="sticky top-0 z-20 bg-background border-b border-border h-12 shadow-sm w-full md:hidden">
         <div className="flex items-center justify-between w-full h-full px-4">
-          {/* Hamburger Menu Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={openMobileSidebar}
-            className="h-8 w-8 text-foreground hover:bg-transparent transition-colors bg-transparent border-0 shadow-none"
-            aria-label="Open sidebar"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-
-          {/* Chat Title - Centered */}
-          <div className="flex items-center justify-center flex-1">
+          {/* Left side - Hamburger Menu + Logo + Room Name */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Hamburger Menu Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={openMobileSidebar}
+              className="h-8 w-8 text-foreground hover:bg-transparent transition-colors bg-transparent border-0 shadow-none flex-shrink-0"
+              aria-label="Open sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            
+            {/* PatioAI Logo */}
+            <div className="flex-shrink-0">
+              <Image
+                src="/icons/icon-512x512.png"
+                alt="PatioAI"
+                width={20}
+                height={20}
+                className="rounded-sm"
+              />
+            </div>
+            
+            {/* Room Name */}
             <h1 className="text-base font-medium tracking-tight truncate">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
             </h1>
+          </div>
+
+          {/* Right side - Activity Indicators */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Mobile cross-thread activity indicators */}
+            {roomContext && crossThreadActivities.some(activity => 
+              activity.threadId !== (roomContext.chatSessionId || '') && 
+              (activity.activeUsers.length > 0 || activity.typingUsers.length > 0)
+            ) && (
+              <CrossThreadActivity
+                currentThreadId={roomContext.chatSessionId || ''}
+                activities={crossThreadActivities}
+                currentUser={roomContext.displayName}
+              />
+            )}
           </div>
 
           {/* Right side - New Chat Button + compact settings (mobile only) */}
@@ -859,34 +1085,43 @@ const ChatComponent: React.FC<ChatProps> = ({
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
               <>
+                {/* Room name on the left */}
                 <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
                   <h1 className="text-base sm:text-lg md:text-xl font-medium tracking-tight truncate overflow-hidden">{roomContext.roomName}</h1>
                 </div>
-                <div className="hidden sm:flex items-center text-xs sm:text-sm text-muted-foreground/80 flex-shrink-0">
-                  <span>{roomContext.participants.length} online</span>
-                  {/* Typing indicator in header */}
-                  {typingUsers.length > 0 && (
-                    <>
-                      <span className="mx-2">•</span>
-                      <span className="text-xs text-muted-foreground/60 animate-pulse">
-                        {typingUsers.length === 1
-                          ? `${typingUsers[0]} is typing...`
-                          : `${typingUsers.length} people typing...`
-                        }
-                      </span>
-                    </>
-                  )}
-                </div>
-                {/* Mobile typing indicator */}
-                {typingUsers.length > 0 && (
-                  <div className="sm:hidden text-xs text-muted-foreground/60 animate-pulse flex-shrink-0">
-                    {typingUsers.length === 1
-                      ? `${typingUsers[0]} typing...`
-                      : `${typingUsers.length} typing...`
-                    }
+                
+                {/* Indicators on the right */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Participant count - styled indicator */}
+                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full border border-green-200/50 dark:border-green-800/30">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                    <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                      {roomContext.participants.length} online
+                    </span>
                   </div>
-                )}
+                  
+                  {/* Cross-thread activity indicator */}
+                  {crossThreadActivities.some(activity =>
+                    activity.threadId !== (roomContext.chatSessionId || '') &&
+                    (activity.activeUsers.length > 0 || activity.typingUsers.length > 0)
+                  ) && (
+                    <CrossThreadActivity
+                      currentThreadId={roomContext.chatSessionId || ''}
+                      activities={crossThreadActivities}
+                      currentUser={roomContext.displayName}
+                    />
+                  )}
+                  
+                  {/* Mobile cross-thread activity */}
+                  <div className="sm:hidden">
+                    <CrossThreadActivity
+                      currentThreadId={roomContext.chatSessionId || ''}
+                      activities={crossThreadActivities}
+                      currentUser={roomContext.displayName}
+                    />
+                  </div>
+                </div>
               </>
             ) : (
               <h1 className="text-base sm:text-lg md:text-xl font-medium tracking-tight truncate overflow-hidden">Chat with AI</h1>
@@ -943,266 +1178,32 @@ const ChatComponent: React.FC<ChatProps> = ({
             <VirtualizedMessageList
               messages={roomContext ? realtimeMessages : messages}
               height={0} // Will be calculated by the flexible container using CSS
-              itemHeight={80}
+              itemHeight={88}
               currentUserDisplayName={roomContext?.displayName}
               showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
               isRoomChat={!!roomContext}
+              streamingMessageId={(roomContext ? roomReasoningState.messageId : reasoningStream.streamingMessageId) || undefined}
+              streamingReasoning={roomContext ? roomReasoningState.reasoning : reasoningStream.streamingReasoning}
+              isReasoningStreaming={roomContext ? roomReasoningState.isStreaming : status === 'streaming'}
+              isReasoningComplete={roomContext ? roomReasoningState.isComplete : reasoningStream.isReasoningComplete}
             />
-          </div>
-        )}
-
-        {/* Keep the original rendering as fallback - remove this section later */}
-        {false && (
-          <div className="w-full h-full min-w-0">
-            <ul className="w-full px-1 sm:px-2 md:px-4 lg:px-6 py-2 sm:py-4 min-w-0">
-              {(roomContext ? realtimeMessages : messages).map((message, index) => {
-
-
-                const isUserMessage = message.role === 'user';
-                const copyToClipboard = (str: string) => {
-                  window.navigator.clipboard.writeText(str);
-                };
-                const handleCopy = (content: string) => {
-                  copyToClipboard(content);
-                  setIsCopied(true);
-                  setTimeout(() => setIsCopied(false), 1000);
-                };
-
-                // First filter the tool invocation parts to check if we need the accordion
-                const toolInvocationParts = !isUserMessage
-                  ? message.parts?.filter(
-                    (part) => part.type === 'tool-invocation'
-                  ) || []
-                  : [];
-
-                const hasToolInvocations = toolInvocationParts.length > 0;
-
-                // Group parts by type for ordered rendering
-                const textParts =
-                  message.parts?.filter((part) => part.type === 'text') || [];
-                const reasoningParts =
-                  message.parts?.filter((part) => part.type === 'reasoning') || [];
-                const sourceParts =
-                  message.parts?.filter((part) => part.type === 'source') || [];
-
-                return (
-                  <li key={message.id} className="my-1.5 mx-2">
-                    <Card
-                      className={`relative gap-2 py-2 ${isUserMessage
-                        ? 'bg-primary/5 dark:bg-primary/10 border-primary/20'
-                        : 'bg-card dark:bg-card/90 border-border/50'
-                        }`}
-                    >
-                      <CardHeader className="pb-2 px-4">
-                        <div className="flex items-center gap-3">
-                          {isUserMessage ? (
-                            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                              <User className="h-4 w-4 text-primary-foreground" />
-                            </div>
-                          ) : (
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                              <Image
-                                src="/icons/icon-512x512.png"
-                                alt="AI Assistant"
-                                width={20}
-                                height={20}
-                                className="rounded-full"
-                              />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-sm">
-                              {isUserMessage ? 'You' : 'AI Assistant'}
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                              {message.createdAt
-                                ? new Date(message.createdAt).toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    hour12: false
-                                  }
-                                )
-                                : new Date().toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: false
-                                })}
-                            </p>
-                          </div>
-                          {!isUserMessage && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleCopy(message.content)}
-                            >
-                              {isCopied ? (
-                                <CheckCircle
-                                  size={14}
-                                  className="text-green-600 dark:text-green-400"
-                                />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="py-0 px-4">
-                        {/* Render text parts first (main message content) */}
-                        {textParts.length > 0 ? (
-                          textParts.map((part, partIndex) => (
-                            <MemoizedMarkdown
-                              key={`text-${partIndex}`}
-                              content={part.text}
-                              id={`${isUserMessage ? 'user' : 'assistant'}-text-${message.id
-                                }-${partIndex}`}
-                            />
-                          ))
-                        ) : (
-                          // Fallback for messages that don't have parts (like room messages)
-                          message.content && (
-                            <MemoizedMarkdown
-                              content={message.content}
-                              id={`${isUserMessage ? 'user' : 'assistant'}-content-${message.id}`}
-                            />
-                          )
-                        )}
-
-                        {/* Then render reasoning parts (only for assistant messages) */}
-                        {!isUserMessage &&
-                          reasoningParts.map((part, partIndex) => (
-                            <div key={`reasoning-${partIndex}`} className="mt-4">
-                              <ReasoningContent
-                                details={part.details}
-                                messageId={message.id}
-                              />
-                            </div>
-                          ))}
-
-                        {/* Then render source parts (only for assistant messages) */}
-                        {!isUserMessage && sourceParts.length > 0 && (
-                          <div className="mt-2">
-                            <SourceView
-                              sources={sourceParts.map((part) => part.source)}
-                            />
-                          </div>
-                        )}
-
-                        {/* Display attached files in user messages */}
-                        {isUserMessage &&
-                          message.experimental_attachments &&
-                          message.experimental_attachments.length > 0 && (
-                            <div className="mt-4 pt-4 border-t">
-                              <h4 className="text-sm font-medium mb-2">
-                                Attached Files:
-                              </h4>
-                              <div className="space-y-2">
-                                {message.experimental_attachments.map(
-                                  (attachment, idx) => (
-                                    <div
-                                      key={`attachment-${idx}`}
-                                      className="flex items-center gap-2 p-2 bg-background rounded border"
-                                    >
-                                      <FileIcon className="h-4 w-4 text-blue-500" />
-                                      <Link
-                                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex-1"
-                                        href={`?file=${attachment.name}`}
-                                      >
-                                        {attachment.name}
-                                      </Link>
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                        {/* Render all tool invocations in a single accordion */}
-                        {hasToolInvocations && (
-                          <div className="mt-6">
-                            <Accordion
-                              type="single"
-                              defaultValue="tool-invocation"
-                              collapsible
-                              className="w-full border rounded-lg"
-                            >
-                              <AccordionItem
-                                value="tool-invocation"
-                                className="border-0"
-                              >
-                                <AccordionTrigger className="px-4 py-3 font-medium hover:no-underline">
-                                  <div className="flex items-center gap-2">
-                                    <Image
-                                      src="/icons/icon-512x512.png"
-                                      alt="AI Assistant"
-                                      width={16}
-                                      height={16}
-                                      className="rounded-full"
-                                    />
-                                    <span>AI Tools Used</span>
-                                  </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 pb-4">
-                                  <div className="space-y-4">
-                                    {toolInvocationParts.map((part) => {
-                                      const toolName = part.toolInvocation.toolName;
-                                      const toolId = part.toolInvocation.toolCallId;
-                                      switch (toolName) {
-                                        case 'searchUserDocument':
-                                          return (
-                                            <DocumentSearchTool
-                                              key={toolId}
-                                              toolInvocation={part.toolInvocation}
-                                            />
-                                          );
-                                        case 'websiteSearchTool':
-                                          return (
-                                            <WebsiteSearchTool
-                                              key={toolId}
-                                              toolInvocation={part.toolInvocation}
-                                            />
-                                          );
-                                        default:
-                                          return null;
-                                      }
-                                    })}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            </Accordion>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </li>
-                );
-
-
-
-
-              })}
-              <ChatScrollAnchor trackVisibility status={status} />
-            </ul>
-
-
-
-
           </div>
         )}
       </div>
 
       <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4 bg-transparent">
+        {/* Typing indicator above message input */}
+        {roomContext && (
+          <TypingIndicator
+            typingUsers={typingUsers}
+            currentUser={roomContext.displayName}
+          />
+        )}
         {/*Separate message input component, to avoid re-rendering the chat messages when typing */}
         <MessageInput
           chatId={chatId}
           currentChatId={currentChatId}
-          modelType={optimisticModelType}
           selectedOption={optimisticOption}
-          handleModelTypeChange={handleModelTypeChange}
           handleOptionChange={handleOptionChange}
           roomContext={roomContext}
           onTyping={roomContext && typeof broadcastTyping === 'function' ? broadcastTyping : undefined}
@@ -1210,6 +1211,15 @@ const ChatComponent: React.FC<ChatProps> = ({
           isLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
           input={input}
           setInput={(value: string) => handleInputChange({ target: { value } } as any)}
+          webSearchEnabled={webSearchEnabled}
+          setWebSearchEnabled={setWebSearchEnabled}
+          reasoningMode={reasoningMode}
+          setReasoningMode={setReasoningMode}
+          userTier={(userData as any)?.subscription_tier || 'free'}
+          onUpgrade={() => {
+            // Placeholder: surface your checkout/upgrade flow here
+            console.log('Upgrade clicked');
+          }}
         />
       </div>
 

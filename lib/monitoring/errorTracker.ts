@@ -24,6 +24,8 @@ export class ErrorTracker {
   private static instance: ErrorTracker;
   private errors: ErrorEvent[] = [];
   private metrics: ErrorMetrics;
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private metricsInterval: NodeJS.Timeout | null = null;
 
   private constructor() {
     this.metrics = {
@@ -34,13 +36,12 @@ export class ErrorTracker {
       errorRate: 0
     };
 
-    // Clean up old errors every hour
-    setInterval(() => {
+    // CRITICAL: Store interval references to prevent memory leaks
+    this.cleanupInterval = setInterval(() => {
       this.cleanupErrors();
     }, 60 * 60 * 1000);
 
-    // Update error rate every minute
-    setInterval(() => {
+    this.metricsInterval = setInterval(() => {
       this.updateErrorRate();
     }, 60 * 1000);
   }
@@ -320,6 +321,36 @@ export class ErrorTracker {
   }
 
   // === Added: Safe cleanup APIs ===
+  
+  /**
+   * CRITICAL: Destroy ErrorTracker instance and clean up intervals to prevent memory leaks
+   */
+  public destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
+    
+    // Clear errors and reset metrics
+    this.errors = [];
+    this.metrics = {
+      totalErrors: 0,
+      errorsByCategory: new Map(),
+      errorsByLevel: new Map(),
+      recentErrors: 0,
+      errorRate: 0
+    };
+    
+    // Reset singleton instance
+    ErrorTracker.instance = null as any;
+    
+    console.log('🧹 ErrorTracker destroyed and cleaned up');
+  }
 
   /**
    * Trim stored errors to the last N entries to aggressively free memory

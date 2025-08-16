@@ -49,21 +49,22 @@ export class RoomPromptEngine {
     roomName: string,
     participants: string[],
     currentUser: string,
-    currentMessage: string
+    currentMessage: string,
+    historySummary?: string
   ): { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
-    
+
     // Analyze conversation context
     const conversationContext = this.analyzeConversationContext(messages, roomName, participants);
-    
+
     // Build user profiles from message history
     this.buildUserProfiles(messages);
-    
+
     // Generate sophisticated system prompt
-    const system = this.buildSystemPrompt(conversationContext, currentUser, currentMessage);
-    
+    const system = this.buildSystemPrompt(conversationContext, currentUser, currentMessage, historySummary);
+
     // Format messages with rich context
     const formattedMessages = this.formatMessagesWithContext(messages, conversationContext);
-    
+
     // Add current message
     formattedMessages.push({
       role: 'user' as const,
@@ -73,12 +74,19 @@ export class RoomPromptEngine {
     return { system, messages: formattedMessages };
   }
 
-  private buildSystemPrompt(context: ConversationContext, currentUser: string, currentMessage: string): string {
+  private buildSystemPrompt(context: ConversationContext, currentUser: string, currentMessage: string, historySummary?: string): string {
     const userProfile = this.userProfiles.get(currentUser);
     const groupDynamicsInsight = this.analyzeGroupDynamics(context);
     const conversationFlowInsight = this.analyzeConversationFlow(context);
-    
-    return `# AI Assistant for Group Chat Room: "${context.roomName}"
+
+    return `You are an intelligent AI assistant in a group chat room called "${context.roomName}".
+
+## CRITICAL INSTRUCTIONS - READ CAREFULLY:
+🎯 **PROVIDE DETAILED, COMPREHENSIVE RESPONSES** - Users want thorough, helpful answers, not brief summaries
+🎯 **AIM FOR 200-500 WORDS** when explaining concepts, answering questions, or providing help
+🎯 **INCLUDE EXAMPLES** and practical details whenever possible
+🎯 **EXPLAIN YOUR REASONING** - show your thought process
+🎯 **BE CONVERSATIONAL** but informative - like talking to a knowledgeable friend
 
 ## CONVERSATION CONTEXT & DYNAMICS
 
@@ -127,12 +135,19 @@ You are an emotionally intelligent AI assistant who:
 
 ### 🎯 **Response Guidelines**
 
-**When to be Brief**: Quick questions, acknowledgments, or when conversation is flowing well
-**When to be Detailed**: Complex topics, explanations, or when users seem confused
-**When to be Supportive**: Users expressing frustration, uncertainty, or asking for help
-**When to be Analytical**: Technical discussions, problem-solving, or decision-making scenarios
+**Default to Comprehensive**: Provide detailed, thorough responses that fully explore the topic
+**When to be Brief**: Only for simple acknowledgments like "got it" or "thanks"
+**When to be Detailed**: Complex topics, explanations, teaching moments, or when users ask questions (DEFAULT)
+**When to be Supportive**: Users expressing frustration, uncertainty, or asking for help - provide extra context and encouragement
+**When to be Analytical**: Technical discussions, problem-solving, or decision-making scenarios - show your reasoning process
 
-## CURRENT CONVERSATION ANALYSIS
+**Quality Standards**:
+- Aim for responses that are informative and valuable
+- Include examples, context, and practical insights when relevant
+- Don't just answer the question - anticipate follow-up questions and address them
+- Make your responses engaging and worth reading
+
+${historySummary ? `## CONVERSATION HISTORY SUMMARY\n\n${historySummary}\n\n` : ''}## CURRENT CONVERSATION ANALYSIS
 
 **What's Happening**: ${this.analyzeCurrentMoment(context, currentUser, currentMessage)}
 
@@ -140,18 +155,25 @@ You are an emotionally intelligent AI assistant who:
 
 ---
 
-Respond naturally as if you're a knowledgeable friend who has been following this entire conversation and understands each person's communication style and the group's dynamics.`;
+## 🚨 FINAL REMINDER:
+- **NEVER give one-sentence answers** unless it's a simple greeting
+- **ALWAYS elaborate and explain** - users want to learn and understand
+- **PROVIDE CONTEXT** - explain the "why" behind your answers
+- **BE HELPFUL** - anticipate follow-up questions and address them
+- **WRITE SUBSTANTIAL RESPONSES** - aim for multiple paragraphs when appropriate
+
+You are having a conversation with real people who want detailed, thoughtful responses. Make every response count!`;
   }
 
   private analyzeConversationContext(messages: RoomMessage[], roomName: string, participants: string[]): ConversationContext {
     const recentMessages = messages.slice(-20); // Analyze last 20 messages
-    
+
     // Analyze conversation flow
     const conversationFlow = recentMessages.map(msg => {
       const messageType = this.categorizeMessage(msg.content);
       const emotionalContext = this.analyzeEmotionalContext(msg.content);
       const respondingTo = this.findResponseTarget(msg, recentMessages);
-      
+
       return {
         speaker: msg.sender_name,
         respondingTo,
@@ -162,10 +184,10 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
 
     // Determine current topic
     const currentTopic = this.extractCurrentTopic(recentMessages);
-    
+
     // Analyze conversation phase
     const conversationPhase = this.determineConversationPhase(conversationFlow);
-    
+
     // Analyze group dynamics
     const groupDynamics = this.analyzeGroupParticipation(conversationFlow, participants);
 
@@ -181,7 +203,7 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
 
   private buildUserProfiles(messages: RoomMessage[]): void {
     const userStats = new Map<string, { messages: RoomMessage[]; totalLength: number }>();
-    
+
     // Collect user statistics
     messages.forEach(msg => {
       if (!msg.is_ai_response) {
@@ -206,14 +228,14 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
         recentActivity: stats.messages.slice(-3).map(m => m.content.substring(0, 30)),
         relationshipToOthers: this.analyzeRelationships(userName, messages)
       };
-      
+
       this.userProfiles.set(userName, profile);
     });
   }
 
   private categorizeMessage(content: string): 'question' | 'answer' | 'statement' | 'joke' | 'request' | 'greeting' {
     const lowerContent = content.toLowerCase();
-    
+
     if (lowerContent.includes('?') || lowerContent.startsWith('how') || lowerContent.startsWith('what') || lowerContent.startsWith('why')) {
       return 'question';
     }
@@ -234,7 +256,7 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
 
   private analyzeEmotionalContext(content: string): string {
     const lowerContent = content.toLowerCase();
-    
+
     if (lowerContent.includes('!') || lowerContent.includes('wow') || lowerContent.includes('great')) {
       return 'excited';
     }
@@ -252,7 +274,7 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
 
   private extractCurrentTopic(messages: RoomMessage[]): string {
     const recentContent = messages.slice(-5).map(m => m.content).join(' ');
-    
+
     // Simple keyword extraction (in a real implementation, you might use NLP)
     const keywords = recentContent.toLowerCase()
       .split(/\W+/)
@@ -261,16 +283,16 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
         acc[word] = (acc[word] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
-    
+
     const topKeyword = Object.entries(keywords)
-      .sort(([,a], [,b]) => b - a)[0];
-    
+      .sort(([, a], [, b]) => b - a)[0];
+
     return topKeyword ? topKeyword[0] : 'general conversation';
   }
 
   private determineConversationPhase(flow: any[]): ConversationContext['conversationPhase'] {
     const recentTypes = flow.slice(-5).map(f => f.messageType);
-    
+
     if (recentTypes.includes('greeting')) return 'greeting';
     if (recentTypes.filter(t => t === 'question').length >= 2) return 'exploration';
     if (recentTypes.includes('request') || recentTypes.includes('answer')) return 'problem-solving';
@@ -285,14 +307,14 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
     }, {} as Record<string, number>);
 
     const activeThreshold = Math.max(2, flow.length / participants.length);
-    
+
     return {
       activeParticipants: (Object.entries(speakerCounts) as [string, number][])
         .filter(([, count]) => count >= activeThreshold)
         .map(([name]) => name),
       quietParticipants: participants.filter(p => (speakerCounts[p] || 0) < activeThreshold),
       conversationLeaders: (Object.entries(speakerCounts) as [string, number][])
-        .sort(([,a], [,b]) => b - a)
+        .sort(([, a], [, b]) => b - a)
         .slice(0, 2)
         .map(([name]) => name),
       supportiveMembers: flow
@@ -304,7 +326,7 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
   private analyzeCommunicationStyle(messages: RoomMessage[]): UserProfile['communicationStyle'] {
     const content = messages.map(m => m.content).join(' ').toLowerCase();
     const avgLength = content.length / messages.length;
-    
+
     if (content.includes('please') || content.includes('thank you') || avgLength > 100) return 'formal';
     if (content.includes('lol') || content.includes('haha') || content.includes('hey')) return 'casual';
     if (content.includes('function') || content.includes('system') || content.includes('implementation')) return 'technical';
@@ -314,13 +336,13 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
 
   private analyzeOverallTone(messages: RoomMessage[]): UserProfile['emotionalTone'] {
     const content = messages.map(m => m.content).join(' ').toLowerCase();
-    
+
     const positiveWords = ['good', 'great', 'awesome', 'thanks', 'love', 'happy'];
     const negativeWords = ['bad', 'terrible', 'frustrated', 'annoying', 'hate', 'sad'];
-    
+
     const positiveCount = positiveWords.filter(word => content.includes(word)).length;
     const negativeCount = negativeWords.filter(word => content.includes(word)).length;
-    
+
     if (positiveCount > negativeCount * 2) return 'positive';
     if (negativeCount > positiveCount * 2) return 'negative';
     if (positiveCount > 0 && negativeCount > 0) return 'mixed';
@@ -331,20 +353,20 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
     // Simple implementation - in reality you'd use more sophisticated NLP
     const content = messages.map(m => m.content).join(' ').toLowerCase();
     const topics = ['technology', 'programming', 'design', 'business', 'education', 'science'];
-    
+
     return topics.filter(topic => content.includes(topic));
   }
 
   private analyzeRelationships(userName: string, messages: RoomMessage[]): Map<string, 'collaborative' | 'questioning' | 'supportive' | 'neutral'> {
     const relationships = new Map<string, 'collaborative' | 'questioning' | 'supportive' | 'neutral'>();
-    
+
     // This is a simplified implementation
     messages.forEach(msg => {
       if (msg.sender_name !== userName && !msg.is_ai_response) {
         relationships.set(msg.sender_name, 'neutral');
       }
     });
-    
+
     return relationships;
   }
 
@@ -353,15 +375,15 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
     const otherUsers = recentMessages
       .filter(m => m.sender_name !== msg.sender_name && !m.is_ai_response)
       .map(m => m.sender_name);
-    
+
     return otherUsers.find(user => msg.content.toLowerCase().includes(user.toLowerCase()));
   }
 
   private formatMessagesWithContext(messages: RoomMessage[], context: ConversationContext): Array<{ role: 'user' | 'assistant'; content: string }> {
     return messages.map(msg => ({
       role: msg.is_ai_response ? 'assistant' as const : 'user' as const,
-      content: msg.is_ai_response 
-        ? msg.content 
+      content: msg.is_ai_response
+        ? msg.content
         : this.enrichUserMessage(msg, context)
     }));
   }
@@ -369,18 +391,18 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
   private enrichUserMessage(msg: RoomMessage, context: ConversationContext): string {
     const profile = this.userProfiles.get(msg.sender_name);
     const flowEntry = context.conversationFlow.find(f => f.speaker === msg.sender_name);
-    
+
     let enrichedContent = `${msg.sender_name}: ${msg.content}`;
-    
+
     // Add contextual metadata for AI understanding
     if (profile) {
       enrichedContent += ` [${profile.communicationStyle} style, ${profile.emotionalTone} tone]`;
     }
-    
+
     if (flowEntry && flowEntry.respondingTo) {
       enrichedContent += ` [responding to ${flowEntry.respondingTo}]`;
     }
-    
+
     return enrichedContent;
   }
 
@@ -388,13 +410,13 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
     const profile = this.userProfiles.get(user);
     const messageType = this.categorizeMessage(message);
     const emotionalContext = this.analyzeEmotionalContext(message);
-    
+
     let formatted = `${user}: ${message}`;
-    
+
     if (profile) {
       formatted += ` [${profile.communicationStyle} style, ${emotionalContext} emotion, ${messageType} type]`;
     }
-    
+
     return formatted;
   }
 
@@ -402,14 +424,14 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
     return participants.map(participant => {
       const profile = this.userProfiles.get(participant);
       if (!profile) return `**${participant}**: New to conversation`;
-      
+
       return `**${participant}**: ${profile.communicationStyle} communicator, ${profile.emotionalTone} tone, ${profile.messageCount} messages (avg ${Math.round(profile.averageMessageLength)} chars)`;
     }).join('\n');
   }
 
   private analyzeGroupDynamics(context: ConversationContext): string {
     const { groupDynamics } = context;
-    
+
     return `
 **Active Contributors**: ${groupDynamics.activeParticipants.join(', ')} are driving the conversation
 **Conversation Leaders**: ${groupDynamics.conversationLeaders.join(', ')} are taking initiative
@@ -421,7 +443,7 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
     const recentFlow = context.conversationFlow.slice(-5);
     const messageTypes = recentFlow.map(f => f.messageType);
     const emotions = recentFlow.map(f => f.emotionalContext);
-    
+
     return `
 **Recent Pattern**: ${messageTypes.join(' → ')}
 **Emotional Flow**: ${emotions.join(' → ')}
@@ -430,7 +452,7 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
 
   private assessConversationEnergy(flow: any[]): string {
     const emotions = flow.map(f => f.emotionalContext);
-    
+
     if (emotions.includes('excited')) return 'High energy, enthusiastic';
     if (emotions.includes('frustrated')) return 'Tension present, needs resolution';
     if (emotions.includes('uncertain')) return 'Exploratory, seeking clarity';
@@ -441,23 +463,23 @@ Respond naturally as if you're a knowledgeable friend who has been following thi
   private analyzeCurrentMoment(context: ConversationContext, currentUser: string, currentMessage: string): string {
     const messageType = this.categorizeMessage(currentMessage);
     const profile = this.userProfiles.get(currentUser);
-    
-    return `${currentUser} just ${messageType === 'question' ? 'asked a question' : 
-                                  messageType === 'request' ? 'made a request' :
-                                  messageType === 'greeting' ? 'greeted the group' :
-                                  'shared their thoughts'}. ${profile ? `This is typical of their ${profile.communicationStyle} style.` : 'They\'re new to the conversation.'}`;
+
+    return `${currentUser} just ${messageType === 'question' ? 'asked a question' :
+      messageType === 'request' ? 'made a request' :
+        messageType === 'greeting' ? 'greeted the group' :
+          'shared their thoughts'}. ${profile ? `This is typical of their ${profile.communicationStyle} style.` : 'They\'re new to the conversation.'}`;
   }
 
   private recommendResponseApproach(context: ConversationContext, currentUser: string, currentMessage: string): string {
     const messageType = this.categorizeMessage(currentMessage);
     const phase = context.conversationPhase;
-    
+
     if (messageType === 'question') return 'Provide a helpful answer while encouraging others to contribute';
     if (messageType === 'request') return 'Be supportive and offer specific assistance';
     if (messageType === 'greeting') return 'Welcome them warmly and help integrate them into the current topic';
     if (phase === 'problem-solving') return 'Focus on practical solutions and next steps';
     if (context.groupDynamics.quietParticipants.length > 0) return 'Encourage broader participation while addressing the immediate message';
-    
+
     return 'Continue the natural flow while adding value to the discussion';
   }
 } 

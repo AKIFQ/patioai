@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/server/supabase';
 import { createClient } from '@supabase/supabase-js';
-import { Ratelimit } from '@upstash/ratelimit';
-import { redis } from '@/lib/server/server';
+// Rate limiting removed - using new tier-based system
 import { randomBytes } from 'crypto';
 
 const supabase = createClient(
@@ -10,12 +9,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// SECURITY FIX: Rate limiting for room creation
-const ratelimit = new Ratelimit({
-  redis: redis,
-  limiter: Ratelimit.slidingWindow(5, '1 h'), // 5 rooms per hour
-  analytics: true,
-});
+// Rate limiting now handled by tier-based system
 
 // Generate secure cryptographic share codes
 function generateShareCode(): string {
@@ -60,15 +54,7 @@ export async function POST(req: NextRequest) {
 
     const userId = session.id;
     
-    // SECURITY FIX: Apply rate limiting
-    const { success } = await ratelimit.limit(userId);
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Too many rooms created. Please wait before creating another.' },
-        { status: 429 }
-      );
-    }
-    
+    // No legacy rate limiting
     const userTier = await getUserTier(userId);
     
     // SECURITY FIX: Check user's existing room count

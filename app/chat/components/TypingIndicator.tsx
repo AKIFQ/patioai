@@ -15,24 +15,17 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({ typingUsers, currentU
 
   const getTypingText = () => {
     if (otherTypingUsers.length === 1) {
-      return `${otherTypingUsers[0]} is typing...`;
+      return `${otherTypingUsers[0]} typing`;
     } else if (otherTypingUsers.length === 2) {
-      return `${otherTypingUsers[0]} and ${otherTypingUsers[1]} are typing...`;
+      return `${otherTypingUsers[0]}, ${otherTypingUsers[1]} typing`;
     } else {
-      return `${otherTypingUsers.slice(0, -1).join(', ')} and ${otherTypingUsers[otherTypingUsers.length - 1]} are typing...`;
+      return `${otherTypingUsers.slice(0, -1).join(', ')}, ${otherTypingUsers[otherTypingUsers.length - 1]} typing`;
     }
   };
 
   return (
-    <div className="px-4 py-2 text-sm text-muted-foreground italic">
-      <div className="flex items-center gap-2">
-        <div className="flex gap-1">
-          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-        </div>
-        <span>{getTypingText()}</span>
-      </div>
+    <div className="px-4 py-1 text-xs text-muted-foreground/60">
+      {getTypingText()}
     </div>
   );
 };
