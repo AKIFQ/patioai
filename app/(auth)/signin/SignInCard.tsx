@@ -60,7 +60,16 @@ export default function SignInCard() {
         } else {
           localStorage.removeItem('rememberedEmail');
         }
-        router.push('/chat');
+        
+        // Check if there's a return URL (for room redirects)
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnUrl = urlParams.get('returnUrl');
+        if (returnUrl) {
+          // Redirect to the return URL (room)
+          window.location.href = returnUrl;
+        } else {
+          router.push('/chat');
+        }
       }
     }
   };

@@ -1,8 +1,10 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
-      "Bash(cat:*)"
-    ]
+      "Bash(cat:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)"
+    ],
+    "defaultMode": "acceptEdits"
   }
 }

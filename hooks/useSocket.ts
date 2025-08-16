@@ -43,9 +43,10 @@ export function useSocket(token?: string): UseSocketReturn {
       setIsConnected(true);
       setConnectionStatus('connected');
       
-      // Initialize health monitor
+      // CRITICAL: Properly cleanup existing health monitor to prevent multiple instances
       if (healthMonitorRef.current) {
         healthMonitorRef.current.stop();
+        healthMonitorRef.current = null;
       }
       
       healthMonitorRef.current = new ConnectionHealthMonitor(connectedSocket, {

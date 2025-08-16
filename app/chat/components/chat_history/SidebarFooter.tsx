@@ -15,21 +15,42 @@ import { ModeToggle } from '@/components/ui/toggleButton';
 import SignOut from '@/components/layout/SignOut';
 import { SmartAvatar } from '@/components/ui/Avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useRoomAuth } from '@/lib/auth/roomAuth';
 
 interface SidebarFooterProps {
   userInfo: {
     id: string;
     full_name: string;
     email: string;
-  };
+  } | null;
 }
 
 export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
+  const { signInToRoom } = useRoomAuth();
 
-  if (!userInfo) {
-    return null; // Don't show footer if user is not signed in
+  // Show user info for both authenticated and anonymous users
+  if (!userInfo || !userInfo.id) {
+    // For anonymous users, show their display name without sign-in button
+    const displayName = userInfo?.full_name || 'Anonymous User';
+    return (
+      <div className="border-t border-border p-3">
+        <div className="flex items-center gap-3 px-3 py-2">
+          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+            <User className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="text-sm font-medium truncate">
+              {displayName}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Anonymous
+            </span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Shared trigger button

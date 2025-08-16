@@ -55,13 +55,16 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
         }
       }
     });
-    
-    // Cleanup timeouts on unmount
+  }, [activities, currentThreadId]);
+  
+  // CRITICAL: Separate cleanup effect to prevent timeout leaks
+  useEffect(() => {
     return () => {
+      // Clear all timeouts on unmount to prevent memory leaks
       activityTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
       activityTimeoutsRef.current.clear();
     };
-  }, [activities, currentThreadId]); // Removed activityTimeouts from dependencies
+  }, []); // Empty dependencies - only run on mount/unmount
 
   // Filter out current thread and current user
   const otherThreadActivities = displayActivities.filter(activity => 

@@ -21,13 +21,13 @@ export class MemoryManager {
   private static instance: MemoryManager;
   private cleanupInProgress = false;
   private lastCleanup = 0;
-  private cleanupHistory: Array<{ timestamp: number; freedMemory: number; actions: string[] }> = [];
+  private cleanupHistory: { timestamp: number; freedMemory: number; actions: string[] }[] = [];
   private monitoringInterval: NodeJS.Timeout | null = null;
   
-  // Memory thresholds in MB
-  private readonly CRITICAL_THRESHOLD = 3000; // 3GB - aggressive cleanup
-  private readonly WARNING_THRESHOLD = 2000;  // 2GB - moderate cleanup
-  private readonly CLEANUP_COOLDOWN = 30000;  // 30 seconds between cleanups
+  // CRITICAL: Container-compatible memory thresholds in MB
+  private readonly CRITICAL_THRESHOLD = 768;  // 768MB - aggressive cleanup (was 3GB)
+  private readonly WARNING_THRESHOLD = 512;   // 512MB - moderate cleanup (was 2GB)
+  private readonly CLEANUP_COOLDOWN = 15000;  // 15 seconds between cleanups (more frequent)
 
   private constructor() {
     this.startMemoryMonitoring();
@@ -194,11 +194,86 @@ export class MemoryManager {
       const socketMonitor = SocketMonitor.getInstance();
       
       if (aggressive) {
-        // Trim history and prune stale connection times via public APIs
+        // CRITICAL: Clean actual Socket.IO memory, not just monitoring data
+        
+        // Get Socket.IO server instance if available
+        const io = (global as any).__socketIO;
+        if (io && typeof io.sockets === 'object') {
+          
+          // Force garbage collection on Socket.IO's internal maps
+          console.log('🧹 Cleaning Socket.IO internal memory structures');
+          
+          // Get all sockets and clean up orphaned ones
+          const allSockets = Array.from(io.sockets.sockets.values());
+          let cleanedSockets = 0;
+          
+          for (const socket of allSockets) {
+            const socketAny = socket as any;
+            
+            // Check if socket is actually connected
+            if (!socketAny.connected && !socketAny.disconnected) {
+              try {
+                socketAny.removeAllListeners();
+                cleanedSockets++;
+              } catch {
+                // Ignore cleanup errors for already cleaned sockets
+              }
+            }
+            
+            // Clean up socket properties that may be leaking memory
+            if (socketAny.currentThread && typeof socketAny.currentThread === 'object') {
+              const threadCount = Object.keys(socketAny.currentThread).length;
+              if (threadCount > 10) { // Only clean if it's grown large
+                console.log(`🧹 Cleaning ${threadCount} thread references from socket ${socketAny.id}`);
+                delete socketAny.currentThread;
+              }
+            }
+          }
+          
+          if (cleanedSockets > 0) {
+            console.log(`🧹 Cleaned up ${cleanedSockets} orphaned socket connections`);
+          }
+          
+          // Clean up room memberships for non-existent rooms
+          const rooms = io.sockets.adapter.rooms;
+          let cleanedRooms = 0;
+          
+          for (const [roomName, socketSet] of rooms.entries()) {
+            if (roomName.startsWith('room:') && socketSet.size === 0) {
+              rooms.delete(roomName);
+              cleanedRooms++;
+            }
+          }
+          
+          if (cleanedRooms > 0) {
+            console.log(`🧹 Cleaned up ${cleanedRooms} empty rooms`);
+          }
+        }
+        
+        // Trim monitoring history and prune stale connection times
         socketMonitor.trimHistoryTo(50);
         socketMonitor.removeStaleConnectionTimes(10 * 60 * 1000); // 10 minutes
+        
+        // CRITICAL: Clean up additional monitoring systems
+        try {
+          const { PerformanceMonitor } = await import('./performanceMonitor');
+          const perfMonitor = PerformanceMonitor.getInstance();
+          perfMonitor.trimMetricsTo(100); // Keep only last 100 performance metrics
+          console.log('🧹 Cleaned performance monitor metrics');
+        } catch {
+          // PerformanceMonitor might not be loaded
+        }
+        
+        try {
+          const { ErrorTracker } = await import('./errorTracker');
+          const errorTracker = ErrorTracker.getInstance();
+          errorTracker.trimErrorsTo(200); // Keep only last 200 errors
+          console.log('🧹 Cleaned error tracker data');
+        } catch {
+          // ErrorTracker might not be loaded
+        }
       } else {
-        // Just clean up old data (older than 1 hour)
+        // Just clean up old monitoring data (older than 1 hour)
         socketMonitor.removeStaleConnectionTimes(60 * 60 * 1000);
       }
     } catch (error) {

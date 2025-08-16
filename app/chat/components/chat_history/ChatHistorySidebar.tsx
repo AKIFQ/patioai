@@ -118,7 +118,7 @@ interface RoomPreview {
 }
 
 interface CombinedDrawerProps {
-  userInfo: UserInfo;
+  userInfo: UserInfo | null;
   initialChatPreviews: ChatPreview[];
   categorizedChats: CategorizedChats;
   documents: UserDocument[];
@@ -179,7 +179,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   // Use SWR to manage room data with fallback to initial rooms
   const { data: currentRooms, mutate: mutateRooms, isLoading: isLoadingRooms } = useSWR(
     'rooms', // Always use consistent key
-    userInfo.email ? fetchRooms : () => Promise.resolve([]), // Conditional function instead of conditional key
+    (userInfo && userInfo.email) ? fetchRooms : () => Promise.resolve([]), // Conditional function instead of conditional key
     {
       fallbackData: rooms,
       revalidateOnFocus: false,
@@ -190,7 +190,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   // Add SWR for room chat data with real-time updates
   const { data: currentRoomChatsData, mutate: mutateRoomChats } = useSWR(
     'roomChats',
-    userInfo.email ? fetchRoomChats : () => Promise.resolve([]),
+    (userInfo && userInfo.email) ? fetchRoomChats : () => Promise.resolve([]),
     {
       fallbackData: roomChatsData,
       revalidateOnFocus: false,

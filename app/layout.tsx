@@ -74,11 +74,9 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-  children,
-  modal
+  children
 }: {
   children: ReactNode;
-  modal: ReactNode;
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -95,7 +93,6 @@ export default function RootLayout({
           <MobileSidebarProvider>
             <main className="w-full min-w-0">{children}</main>
             <Toaster />
-            {modal}
           </MobileSidebarProvider>
         </ThemeProvider>
       </body>

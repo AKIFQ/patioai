@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSession } from '@/lib/server/supabase';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
+import { checkAnonymousRoomJoin, incrementAnonymousRoomJoin } from '@/lib/security/anonymousRateLimit';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,6 +56,18 @@ export async function POST(
     const session = await getSession();
     const userId = session?.id || null;
 
+    // Rate limit anonymous users only
+    if (!userId) {
+      const rateLimitCheck = await checkAnonymousRoomJoin(req);
+      
+      if (!rateLimitCheck.allowed) {
+        return NextResponse.json(
+          { error: 'Too many room join attempts. Please try again later.' },
+          { status: 429 }
+        );
+      }
+    }
+
     // ATOMIC OPERATION: Use upsert with capacity check
     // This prevents race conditions by handling both insert and update atomically
     const { data: result, error: upsertError } = await (supabase as any)
@@ -87,6 +100,15 @@ export async function POST(
       const err = (result as any).error || 'Failed to join room';
       const status = err === 'Room is full' ? 409 : 400;
       return NextResponse.json({ error: err }, { status });
+    }
+
+    // Increment rate limit counter for anonymous users after successful join
+    if (!userId) {
+      try {
+        await incrementAnonymousRoomJoin(req);
+      } catch (error) {
+        console.warn('Failed to increment anonymous room join counter:', error);
+      }
     }
 
     // Get updated participant list

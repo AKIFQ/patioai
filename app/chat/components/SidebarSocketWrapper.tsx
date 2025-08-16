@@ -17,13 +17,14 @@ export default function SidebarSocketWrapper({ userId, userRooms, children }: Si
 
   // CRITICAL FIX: Use the same socket token format as room sockets
   // The socket authentication expects a sessionId format like "auth_${userId}"
-  const socketToken = userId ? `auth_${userId}` : userId;
+  // For anonymous users, we don't initialize socket connections since they don't have persistent sessions
+  const socketToken = userId ? `auth_${userId}` : '';
   console.log('🔧 SIDEBAR WRAPPER: Using socket token:', socketToken);
 
-  // Initialize sidebar Socket.IO updates
+  // Initialize sidebar Socket.IO updates (only for authenticated users)
   const { triggerSidebarRefresh, isConnected } = useSidebarSocket({
     userId: socketToken, // Use the formatted token instead of raw userId
-    userRooms,
+    userRooms: socketToken ? userRooms : [], // Only pass rooms for authenticated users
     onThreadCreated: (threadData) => {
       console.log('🎉 SIDEBAR WRAPPER: New thread created in sidebar:', threadData);
       // Could show a toast notification here if desired

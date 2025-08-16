@@ -282,19 +282,23 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
 
     // CRITICAL: Join all user rooms for sidebar notifications
     // This is essential so the sidebar can detect new threads created by other users
+    const roomJoinedListeners = new Map<string, (data: any) => void>();
+    
     if (userRooms && userRooms.length > 0) {
       console.log('🔗 SIDEBAR: Joining rooms for sidebar notifications:', userRooms.map(r => r.shareCode));
       userRooms.forEach(room => {
         console.log(`🔗 SIDEBAR: Emitting join-room for ${room.shareCode} (${room.name})`);
         socket.emit('join-room', room.shareCode);
         
-        // Listen for room-joined confirmation
+        // CRITICAL: Store listener reference to prevent memory leaks
         const handleRoomJoined = (data: any) => {
           if (data.shareCode === room.shareCode) {
             console.log(`✅ SIDEBAR: Successfully joined room ${room.shareCode} for sidebar updates`);
             socket.off('room-joined', handleRoomJoined); // Remove this specific listener
+            roomJoinedListeners.delete(room.shareCode); // Remove from tracking
           }
         };
+        roomJoinedListeners.set(room.shareCode, handleRoomJoined);
         socket.on('room-joined', handleRoomJoined);
       });
     } else {
@@ -387,8 +391,14 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
       socket.off('chat-message-created', handleNewChatMessage);
       socket.off('sidebar-refresh-requested', handleSidebarRefreshRequested);
       socket.off('thread-created');
-      socket.off('pong'); // Clean up pong listener
-
+      socket.off('pong', handlePong); // Clean up pong listener with specific handler
+      
+      // CRITICAL: Clean up room-joined listeners to prevent memory leaks
+      roomJoinedListeners.forEach((handler, shareCode) => {
+        console.log(`🧹 SIDEBAR: Removing room-joined listener for ${shareCode}`);
+        socket.off('room-joined', handler);
+      });
+      roomJoinedListeners.clear();
       
       // Leave rooms
       if (userRooms && userRooms.length > 0) {

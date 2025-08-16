@@ -77,9 +77,17 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           timestamp: new Date().toISOString()
         });
 
+        // CRITICAL: Clear typing indicators for disconnected user across all threads
         socket.to(roomChannel).emit('user-typing', {
           users: [],
           roomId: shareCode,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Also clear cross-thread activity for this user
+        socket.to(roomChannel).emit('cross-thread-activity', {
+          roomId: shareCode,
+          activities: [], // Empty activities to clear disconnected user
           timestamp: new Date().toISOString()
         });
       }
@@ -99,6 +107,18 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         }
       } catch (error) {
         console.warn('Error removing event listeners:', error);
+      }
+
+      // CRITICAL: Clean up socket.currentThread memory leak
+      if ((socket as any).currentThread) {
+        const threadCount = Object.keys((socket as any).currentThread).length;
+        console.log(`🧹 Clearing ${threadCount} thread references for socket ${socket.id}`);
+        delete (socket as any).currentThread;
+      }
+      
+      // Clear other socket-specific properties to prevent memory leaks
+      if ((socket as any).isTyping !== undefined) {
+        delete (socket as any).isTyping;
       }
 
       // Clear pending cleanup timeout
@@ -128,46 +148,15 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   // Helper function to clean up abandoned sessions
   async function cleanupAbandonedSessions(userId: string) {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-
-      // Check if user has reconnected (by checking if they have active sockets)
-      const userSockets = Array.from(io.sockets.sockets.values())
-        .filter(s => (s as any).userId === userId);
-
-      if (userSockets.length === 0) {
-        console.log(`Cleaning up abandoned sessions for user ${userId}`);
-
-        // Clean up empty room chat sessions
-        const { data: emptySessions } = await supabase
-          .from('room_chat_sessions')
-          .select('id, room_id')
-          .eq('session_id', userId);
-
-        if (emptySessions && emptySessions.length > 0) {
-          for (const session of emptySessions) {
-            // Check if session has any messages
-            const { data: messages } = await supabase
-              .from('room_messages')
-              .select('id')
-              .eq('thread_id', session.id)
-              .limit(1);
-
-            if (!messages || messages.length === 0) {
-              // Delete empty session
-              await supabase
-                .from('room_chat_sessions')
-                .delete()
-                .eq('id', session.id);
-
-              console.log(`Deleted empty room chat session ${session.id}`);
-            }
-          }
-        }
+      const { SocketDatabaseService } = await import('../database/socketQueries');
+      const result = await SocketDatabaseService.cleanupAbandonedSessions(userId);
+      
+      if (!result.success) {
+        console.error(`Error cleaning up abandoned sessions for user ${userId}:`, result.error);
+        return;
       }
+      
+      console.log(`Cleaned up ${result.cleanedCount || 0} abandoned sessions for user ${userId}`);
     } catch (error) {
       console.error(`Error cleaning up abandoned sessions for user ${userId}:`, error);
     }
@@ -269,18 +258,10 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         socket.leave(`room:${shareCode}`);
         console.log(`User ${socket.userId} left room ${shareCode}`);
 
-        // Get room info for notification
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
-
-        const { data: room } = await supabase
-          .from('rooms')
-          .select('name')
-          .eq('share_code', shareCode)
-          .single();
+        // Get room info for notification using optimized database service
+        const { SocketDatabaseService } = await import('../database/socketQueries');
+        const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
+        const roomName = roomValidation.valid ? roomValidation.room?.name : 'Unknown Room';
 
         // Confirm leave to user first
         socket.emit('room-left', { shareCode });
@@ -289,7 +270,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         socket.to(`room:${shareCode}`).emit('user-left-room', {
           userId: socket.userId,
           shareCode,
-          roomName: room?.name || 'Unknown Room',
+          roomName,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
@@ -300,33 +281,17 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
 
     socket.on('get-room-participants', async (shareCode: string) => {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        const { SocketDatabaseService } = await import('../database/socketQueries');
+        const result = await SocketDatabaseService.getRoomParticipants(shareCode);
 
-        // Get room and participants
-        const { data: room } = await supabase
-          .from('rooms')
-          .select('id, name')
-          .eq('share_code', shareCode)
-          .single();
-
-        if (!room) {
-          socket.emit('room-error', { error: 'Room not found' });
+        if (!result.success) {
+          socket.emit('room-error', { error: result.error });
           return;
         }
 
-        const { data: participants } = await supabase
-          .from('room_participants')
-          .select('display_name, joined_at, user_id')
-          .eq('room_id', room.id)
-          .order('joined_at', { ascending: true });
-
         socket.emit('room-participants', {
           shareCode,
-          participants: participants || []
+          participants: result.participants || []
         });
       } catch (error) {
         console.error('Error getting room participants:', error);

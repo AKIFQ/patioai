@@ -86,9 +86,20 @@ export class ConnectionHealthMonitor {
       this.pingInterval = null;
     }
 
-    // Clear pending pings
+    // CRITICAL: Clear pending pings and their timeouts to prevent memory leaks
     this.pendingPings.forEach(({ timeout }) => clearTimeout(timeout));
     this.pendingPings.clear();
+    
+    // Also clear metrics to prevent memory accumulation
+    this.metrics = {
+      isConnected: false,
+      lastPingTime: 0,
+      roundTripTime: 0,
+      consecutiveFailures: 0,
+      connectionUptime: 0,
+      reconnectionCount: 0,
+      status: 'unhealthy'
+    };
   }
 
   /**
@@ -188,7 +199,11 @@ export class ConnectionHealthMonitor {
    */
   private handlePingTimeout(pingId: string): void {
     console.warn('🏥 Health check timeout:', pingId);
-    this.pendingPings.delete(pingId);
+    const pingInfo = this.pendingPings.get(pingId);
+    if (pingInfo) {
+      clearTimeout(pingInfo.timeout);
+      this.pendingPings.delete(pingId);
+    }
     this.handlePingFailure('Ping timeout');
   }
 

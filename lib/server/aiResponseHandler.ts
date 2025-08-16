@@ -354,6 +354,11 @@ export class AIResponseHandler {
       let hasReasoningStarted = false;
       let usageTotals: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
       let inThinkBlock = false;
+      
+      // CRITICAL: Memory protection - prevent OOM from huge AI responses
+      const MAX_RESPONSE_SIZE = 500000; // 500KB limit for main response
+      const MAX_REASONING_SIZE = 200000; // 200KB limit for reasoning
+      let isTruncated = false;
       // DeepSeek R1 uses <think> tags, other models may use different formats
       const startMarkers = ['<think>', '<thinking>', '<reasoning>', '<thought>', '<chain_of_thought>'];
       const endMarkers = ['</think>', '</thinking>', '</reasoning>', '</thought>', '</chain_of_thought>'];
@@ -506,6 +511,27 @@ export class AIResponseHandler {
 
         if (delta.type === 'text-delta') {
           const chunk = delta.textDelta;
+          
+          // CRITICAL: Check size limits to prevent memory explosions
+          if (fullText.length + chunk.length > MAX_RESPONSE_SIZE) {
+            if (!isTruncated) {
+              console.warn(`⚠️ AI response truncated at ${MAX_RESPONSE_SIZE} bytes for memory protection`);
+              isTruncated = true;
+              fullText += '\n\n[Response truncated due to size limits]';
+              
+              // Emit truncation warning to client
+              this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
+                threadId,
+                chunk: '\n\n[Response truncated due to size limits]',
+                timestamp: Date.now(),
+                modelUsed: routedModelId,
+                truncated: true
+              });
+            }
+            // Stop processing more chunks to prevent memory growth
+            break;
+          }
+          
           fullText += chunk;
 
           // OpenRouter-specific: Extract reasoning from streaming text chunks
@@ -518,7 +544,13 @@ export class AIResponseHandler {
             if (thinkMatch) {
               const reasoningContent = thinkMatch[1];
               if (reasoningContent.trim()) {
-                fullReasoning += reasoningContent;
+                // CRITICAL: Check reasoning size limits
+                if (fullReasoning.length + reasoningContent.length > MAX_REASONING_SIZE) {
+                  console.warn(`⚠️ AI reasoning truncated at ${MAX_REASONING_SIZE} bytes for memory protection`);
+                  fullReasoning += '\n\n[Reasoning truncated due to size limits]';
+                } else {
+                  fullReasoning += reasoningContent;
+                }
 
                 if (!hasReasoningStarted) {
                   hasReasoningStarted = true;
@@ -560,7 +592,15 @@ export class AIResponseHandler {
             '';
 
           if (typeof chunk === 'string' && chunk.length > 0) {
-            fullReasoning += chunk;
+            // CRITICAL: Check reasoning size limits
+            if (fullReasoning.length + chunk.length > MAX_REASONING_SIZE) {
+              console.warn(`⚠️ AI reasoning truncated at ${MAX_REASONING_SIZE} bytes for memory protection`);
+              if (!fullReasoning.includes('[Reasoning truncated due to size limits]')) {
+                fullReasoning += '\n\n[Reasoning truncated due to size limits]';
+              }
+            } else {
+              fullReasoning += chunk;
+            }
 
             // Start reasoning if not already started
             if (!hasReasoningStarted) {
