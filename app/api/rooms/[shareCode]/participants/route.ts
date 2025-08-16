@@ -65,6 +65,23 @@ export async function DELETE(
       return NextResponse.json({ error: 'Room creator cannot leave the room. Delete the room instead.' }, { status: 400 });
     }
 
+    // Add user to removed participants list BEFORE deleting from participants
+    const { error: removeError } = await (supabase as any)
+      .from('removed_room_participants')
+      .insert({
+        room_id: room.id,
+        removed_user_id: participant.user_id,
+        removed_session_id: participant.session_id,
+        removed_display_name: participant.display_name,
+        removed_by: userInfo.id,
+        reason: 'removed_by_creator'
+      });
+
+    if (removeError) {
+      console.error('Error tracking participant removal:', removeError);
+      return NextResponse.json({ error: 'Failed to track participant removal' }, { status: 500 });
+    }
+
     // Remove participant from room
     const { error: deleteError } = await (supabase as any)
       .from('room_participants')

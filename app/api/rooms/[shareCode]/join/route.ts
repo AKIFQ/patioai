@@ -68,7 +68,7 @@ export async function POST(
       }
     }
 
-    // ATOMIC OPERATION: Use upsert with capacity check
+    // ATOMIC OPERATION: Use upsert with capacity check and removal validation
     // This prevents race conditions by handling both insert and update atomically
     const { data: result, error: upsertError } = await (supabase as any)
       .rpc('join_room_safely', {
@@ -98,6 +98,18 @@ export async function POST(
     // Handle function JSON response (it returns { success, error? })
     if (result && result.success === false) {
       const err = (result as any).error || 'Failed to join room';
+      
+      // Handle removed user case specifically
+      if (err === 'REMOVED_FROM_ROOM') {
+        return NextResponse.json(
+          { 
+            error: 'REMOVED_FROM_ROOM',
+            roomName: room.name
+          },
+          { status: 403 }
+        );
+      }
+      
       const status = err === 'Room is full' ? 409 : 400;
       return NextResponse.json({ error: err }, { status });
     }

@@ -235,6 +235,24 @@ export async function POST(
 
     // Simplified: Skip daily usage limits for now (can be re-added later if needed)
 
+    // Check if user was removed from the room
+    const { data: removedParticipant } = await supabase
+      .from('removed_room_participants')
+      .select('*')
+      .eq('room_id', room.id)
+      .eq('removed_display_name', displayName)
+      .single();
+
+    if (removedParticipant) {
+      return new NextResponse(JSON.stringify({ 
+        error: 'REMOVED_FROM_ROOM',
+        roomName: room.name 
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // Simplified: Just check if display name is in the room
     const { data: participant } = await supabase
       .from('room_participants')

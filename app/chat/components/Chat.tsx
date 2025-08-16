@@ -112,6 +112,11 @@ const ChatComponent: React.FC<ChatProps> = ({
     activeUsers: string[];
     typingUsers: string[];
   }>>([]);
+  
+  // State for showing removal from room UI
+  const [showRemovalUI, setShowRemovalUI] = useState(false);
+  const [removalRoomName, setRemovalRoomName] = useState('');
+  
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
   const [isRoomLoading, setIsRoomLoading] = useState(false);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
@@ -366,6 +371,21 @@ const ChatComponent: React.FC<ChatProps> = ({
           });
 
           if (!response.ok) {
+            // Check if this is a "removed from room" error
+            if (response.status === 403) {
+              try {
+                const errorData = await response.json();
+                if (errorData.error === 'REMOVED_FROM_ROOM') {
+                  // Show removal UI modal instead of redirecting
+                  console.log('User was removed from room, showing removal UI');
+                  setRemovalRoomName(errorData.roomName || roomContext.roomName);
+                  setShowRemovalUI(true);
+                  return;
+                }
+              } catch (parseError) {
+                console.warn('Could not parse error response:', parseError);
+              }
+            }
             throw new Error(`API call failed: ${response.status}`);
           }
 
@@ -437,6 +457,21 @@ const ChatComponent: React.FC<ChatProps> = ({
           });
 
           if (!response.ok) {
+            // Check if this is a "removed from room" error
+            if (response.status === 403) {
+              try {
+                const errorData = await response.json();
+                if (errorData.error === 'REMOVED_FROM_ROOM') {
+                  // Show removal UI modal instead of redirecting
+                  console.log('User was removed from room, showing removal UI');
+                  setRemovalRoomName(errorData.roomName || roomContext.roomName);
+                  setShowRemovalUI(true);
+                  return;
+                }
+              } catch (parseError) {
+                console.warn('Could not parse error response:', parseError);
+              }
+            }
             throw new Error(`API call failed: ${response.status}`);
           }
 
@@ -1057,7 +1092,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             {roomContext && (
               <RoomSettingsModal
                 roomContext={roomContext}
-                isCreator={roomContext.createdBy !== undefined}
+                isCreator={userData?.id === roomContext.createdBy}
                 expiresAt={roomContext.expiresAt}
                 onRoomUpdate={() => router.refresh()}
               />
@@ -1132,7 +1167,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             {roomContext && (
               <RoomSettingsModal
                 roomContext={roomContext}
-                isCreator={roomContext.createdBy !== undefined}
+                isCreator={userData?.id === roomContext.createdBy}
                 expiresAt={roomContext.expiresAt}
                 onRoomUpdate={() => router.refresh()}
               />

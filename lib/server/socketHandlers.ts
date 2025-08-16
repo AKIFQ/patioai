@@ -178,6 +178,34 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
 
         const room = validation.room!;
 
+        // Check if user was removed from the room
+        try {
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
+
+          const { data: removedUser } = await supabase
+            .from('removed_room_participants')
+            .select('*')
+            .eq('room_id', room.id)
+            .eq('removed_user_id', socket.userId)
+            .single();
+
+          if (removedUser) {
+            console.log(`❌ SOCKET: User ${socket.userId} was removed from room ${shareCode}`);
+            socket.emit('room-error', { 
+              error: 'REMOVED_FROM_ROOM',
+              roomName: room.name 
+            });
+            return;
+          }
+        } catch (error) {
+          console.warn('Error checking user removal status:', error);
+          // Continue with join if check fails (to avoid blocking legitimate users)
+        }
+
         // Join room by share code
         socket.join(`room:${shareCode}`);
         console.log(`✅ SOCKET: User ${socket.userId} joined room ${shareCode} (${room.name})`);
