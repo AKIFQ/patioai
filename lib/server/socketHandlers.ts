@@ -176,10 +176,13 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   const handleRoomEvents = (socket: AuthenticatedSocket) => {
     socket.on('join-room', async (shareCode: string) => {
       await measurePerformance('room.join', async () => {
+        console.log(`🔗 SOCKET: User ${socket.userId} attempting to join room ${shareCode}`);
+        
         // Use optimized room validation
         const validation = await SocketDatabaseService.validateRoomAccess(shareCode);
 
         if (!validation.valid) {
+          console.log(`❌ SOCKET: Room join failed for ${shareCode}: ${validation.error}`);
           socket.emit('room-error', { error: validation.error });
           return;
         }
@@ -188,7 +191,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
 
         // Join room by share code
         socket.join(`room:${shareCode}`);
-        console.log(`User ${socket.userId} joined room ${shareCode} (${room.name})`);
+        console.log(`✅ SOCKET: User ${socket.userId} joined room ${shareCode} (${room.name})`);
 
         // Add participant to database
         await SocketDatabaseService.addRoomParticipant({
@@ -213,6 +216,8 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           roomName: room.name,
           timestamp: new Date().toISOString()
         });
+
+        console.log(`📢 SOCKET: Notified other users about ${socket.userId} joining room ${shareCode}`);
       }).catch(error => {
         console.error('Error joining room:', error);
         socket.emit('room-error', { error: 'Failed to join room' });

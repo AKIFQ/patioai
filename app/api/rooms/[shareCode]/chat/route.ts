@@ -82,6 +82,9 @@ async function saveRoomMessage(
     // CRITICAL: Emit specific new thread event for sidebar refresh
     if (isFirstMessage && !isAiResponse) {
       console.log(`🆕 NEW THREAD CREATED - emitting thread-created event for ${shareCode}`);
+      
+      // Emit to room channel for users currently in the room
+      // This will reach all users who have joined the room via socket
       emitRoomEvent(shareCode, 'thread-created', {
         threadId,
         roomId,
@@ -90,6 +93,8 @@ async function saveRoomMessage(
         firstMessage: content,
         createdAt: new Date().toISOString()
       });
+
+      console.log(`📢 Emitted thread-created event to room:${shareCode} for new thread ${threadId}`);
     }
 
     // Trigger AI response for user messages
