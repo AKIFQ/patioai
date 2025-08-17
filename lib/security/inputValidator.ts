@@ -401,7 +401,7 @@ export class InputValidator {
       timestamp: new Date().toISOString()
     });
 
-    console.log(`🛡️ Input Security Event [${event}]:`, context);
+console.log(` Input Security Event [${event}]:`, context);
   }
 
   // Batch validation for arrays

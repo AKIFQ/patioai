@@ -1,4 +1,4 @@
-import { Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 
 export interface QueuedMessage {
   id: string;
@@ -44,7 +44,7 @@ export class MessageQueue {
 
     // Prevent queue overflow
     if (this.queue.length >= this.options.queueSize) {
-      console.warn('⚠️ Message queue full, removing oldest message');
+console.warn(' Message queue full, removing oldest message');
       this.queue.shift();
     }
 
@@ -54,7 +54,7 @@ export class MessageQueue {
       this.queue.push(queuedMessage);
     }
 
-    console.log(`📨 Queued message: ${event} (ID: ${messageId})`);
+    // Debug logging removed
 
     // Start processing if not already running
     if (!this.processing) {
@@ -71,7 +71,7 @@ export class MessageQueue {
     if (this.processing) return;
     
     this.processing = true;
-    console.log('🔄 Processing message queue...');
+    // Debug logging removed
 
     while (this.queue.length > 0) {
       const message = this.queue[0]; // Peek at first message
@@ -82,7 +82,7 @@ export class MessageQueue {
         if (success) {
           // Message sent successfully, remove from queue
           this.queue.shift();
-          console.log(`✅ Message sent: ${message.event} (ID: ${message.id})`);
+          // Debug logging removed
         } else {
           // Failed to send, increment retry count
           message.retries++;
@@ -90,22 +90,22 @@ export class MessageQueue {
           if (message.retries >= message.maxRetries) {
             // Max retries reached, remove from queue
             this.queue.shift();
-            console.error(`❌ Message failed after ${message.maxRetries} retries: ${message.event} (ID: ${message.id})`);
+console.error(` Message failed after ${message.maxRetries} retries: ${message.event} (ID: ${message.id})`);
           } else {
             // Wait before retrying
-            console.warn(`⚠️ Message failed, retrying (${message.retries}/${message.maxRetries}): ${message.event} (ID: ${message.id})`);
+console.warn(` Message failed, retrying (${message.retries}/${message.maxRetries}): ${message.event} (ID: ${message.id})`);
             await this.delay(this.options.retryDelay * message.retries); // Exponential backoff
           }
         }
       } catch (error) {
-        console.error('💥 Error processing message:', error);
+console.error(' Error processing message:', error);
         // Move to next message on unexpected errors
         this.queue.shift();
       }
     }
 
     this.processing = false;
-    console.log('✅ Message queue processing complete');
+    // Debug logging removed
   }
 
   /**
@@ -113,7 +113,7 @@ export class MessageQueue {
    */
   private async sendMessage(message: QueuedMessage): Promise<boolean> {
     if (!this.socket.connected) {
-      console.log('🔌 Socket not connected, cannot send message');
+      // Debug logging removed
       return false;
     }
 
@@ -126,17 +126,17 @@ export class MessageQueue {
         // Use emit with acknowledgment
         return new Promise<boolean>((resolve) => {
           const timeout = setTimeout(() => {
-            console.warn('⏰ Message timeout:', message.event);
+console.warn(' Message timeout:', message.event);
             resolve(false);
           }, 10000); // Increased timeout for AI operations
 
           this.socket.emit(message.event, message.data, (ack: any) => {
             clearTimeout(timeout);
-            if (ack && ack.error) {
-              console.error('❌ Message acknowledged with error:', ack.error);
+            if (ack?.error) {
+console.error(' Message acknowledged with error:', ack.error);
               resolve(false);
             } else {
-              console.log('✅ Message acknowledged:', message.event);
+              // Debug logging removed
               resolve(true);
             }
           });
@@ -147,7 +147,7 @@ export class MessageQueue {
         return true;
       }
     } catch (error) {
-      console.error('💥 Error sending message:', error);
+console.error(' Error sending message:', error);
       return false;
     }
   }
@@ -176,6 +176,6 @@ export class MessageQueue {
   clear(): void {
     this.queue = [];
     this.processing = false;
-    console.log('🧹 Message queue cleared');
+    // Debug logging removed
   }
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest, NextResponse } from 'next/server';
 import { ErrorTracker } from '../monitoring/errorTracker';
 import crypto from 'crypto';
 
@@ -144,7 +144,7 @@ export class CSRFProtection {
       timestamp: new Date().toISOString()
     });
 
-    console.log(`🛡️ CSRF Security Event [${event}]:`, context);
+console.log(` CSRF Security Event [${event}]:`, context);
   }
 
   // Get token statistics

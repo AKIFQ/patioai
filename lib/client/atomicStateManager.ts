@@ -49,7 +49,7 @@ export function useAtomicState<T extends Record<string, any>>(
   ): Promise<R | undefined> => {
     // Check if operation is already in progress
     if (lockRef.current.has(key)) {
-      console.warn(`⚠️ Atomic operation '${key}' already in progress, skipping`);
+console.warn(` Atomic operation '${key}' already in progress, skipping`);
       return undefined;
     }
 
@@ -66,7 +66,7 @@ export function useAtomicState<T extends Record<string, any>>(
       
       return result.result;
     } catch (error) {
-      console.error(`💥 Error in atomic operation '${key}':`, error);
+console.error(` Error in atomic operation '${key}':`, error);
       throw error;
     } finally {
       // Release lock

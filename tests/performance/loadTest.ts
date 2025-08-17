@@ -8,7 +8,7 @@ export class PerformanceTestSuite {
     results: any[];
     recommendations: string[];
   }> {
-    console.log('⚡ Starting performance test suite...');
+console.log(' Starting performance test suite...');
 
     const tests = [
       { name: 'API Response Time', test: () => this.testAPIResponseTimes() },
@@ -33,7 +33,7 @@ export class PerformanceTestSuite {
     const startTime = Date.now();
     
     try {
-      console.log(`\n⚡ Running: ${name}`);
+console.log(`\n Running: ${name}`);
       const result = await testFn();
       const duration = Date.now() - startTime;
       
@@ -44,7 +44,7 @@ export class PerformanceTestSuite {
         ...result
       });
       
-      console.log(`✅ ${name} - COMPLETED (${duration}ms)`);
+console.log(` ${name} - COMPLETED (${duration}ms)`);
       
     } catch (error: any) {
       const duration = Date.now() - startTime;
@@ -56,7 +56,7 @@ export class PerformanceTestSuite {
         error: error.message
       });
       
-      console.log(`❌ ${name} - FAILED (${duration}ms): ${error.message}`);
+console.log(` ${name} - FAILED (${duration}ms): ${error.message}`);
     }
   }
 

@@ -31,7 +31,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
   const { signInToRoom } = useRoomAuth();
 
   // Show user info for both authenticated and anonymous users
-  if (!userInfo || !userInfo.id) {
+  if (!userInfo?.id) {
     // For anonymous users, show their display name without sign-in button
     const displayName = userInfo?.full_name || 'Anonymous User';
     return (

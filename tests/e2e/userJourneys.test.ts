@@ -53,7 +53,7 @@ export class E2ETestSuite {
     const passed = this.results.filter(r => r.passed).length;
     const failed = this.results.filter(r => !r.passed).length;
 
-    console.log(`\n📊 Test Results: ${passed} passed, ${failed} failed`);
+console.log(`\n Test Results: ${passed} passed, ${failed} failed`);
     
     return { passed, failed, results: this.results };
   }
@@ -62,7 +62,7 @@ export class E2ETestSuite {
     const startTime = Date.now();
     
     try {
-      console.log(`\n🔍 Running: ${name}`);
+console.log(`\n Running: ${name}`);
       const details = await testFn();
       const duration = Date.now() - startTime;
       
@@ -73,7 +73,7 @@ export class E2ETestSuite {
         details
       });
       
-      console.log(`✅ ${name} - PASSED (${duration}ms)`);
+console.log(` ${name} - PASSED (${duration}ms)`);
       
     } catch (error: any) {
       const duration = Date.now() - startTime;
@@ -85,7 +85,7 @@ export class E2ETestSuite {
         error: error.message
       });
       
-      console.log(`❌ ${name} - FAILED (${duration}ms): ${error.message}`);
+console.log(` ${name} - FAILED (${duration}ms): ${error.message}`);
     }
   }
 
@@ -388,7 +388,7 @@ export class E2ETestSuite {
     report += `## Test Results\n\n`;
     
     for (const result of this.results) {
-      const status = result.passed ? '✅ PASS' : '❌ FAIL';
+const status = result.passed ? ' PASS' : ' FAIL';
       report += `### ${result.name} - ${status}\n`;
       report += `**Duration:** ${result.duration}ms\n`;
       

@@ -11,7 +11,7 @@ export function testMonitoringSystem() {
     // Test SocketMonitor
     const socketMonitor = SocketMonitor.getInstance();
     const socketMetrics = socketMonitor.getMetrics();
-    console.log('✅ SocketMonitor working:', {
+console.log(' SocketMonitor working:', {
       activeConnections: socketMetrics.activeConnections,
       totalConnections: socketMetrics.totalConnections
     });
@@ -19,7 +19,7 @@ export function testMonitoringSystem() {
     // Test ErrorTracker
     const errorTracker = ErrorTracker.getInstance();
     const errorMetrics = errorTracker.getMetrics();
-    console.log('✅ ErrorTracker working:', {
+console.log(' ErrorTracker working:', {
       totalErrors: errorMetrics.totalErrors,
       errorRate: errorMetrics.errorRate
     });
@@ -27,31 +27,31 @@ export function testMonitoringSystem() {
     // Test PerformanceMonitor
     const performanceMonitor = PerformanceMonitor.getInstance();
     const performanceMetrics = performanceMonitor.getPerformanceSummary();
-    console.log('✅ PerformanceMonitor working:', {
+console.log(' PerformanceMonitor working:', {
       totalOperations: performanceMetrics.overall.totalOperations,
       successRate: performanceMetrics.overall.successRate
     });
 
     // Test AlertSystem
     const alertStats = alertSystem.getAlertStats();
-    console.log('✅ AlertSystem working:', {
+console.log(' AlertSystem working:', {
       totalAlerts: alertStats.total,
       activeAlerts: alertStats.active
     });
 
     // Test error tracking
     errorTracker.trackError('info', 'system', 'Test error for monitoring verification');
-    console.log('✅ Error tracking test completed');
+console.log(' Error tracking test completed');
 
     // Test performance recording
     performanceMonitor.recordMetric('test-operation', Date.now() - 100, true);
-    console.log('✅ Performance recording test completed');
+console.log(' Performance recording test completed');
 
-    console.log('🎉 All monitoring systems are working correctly!');
+console.log(' All monitoring systems are working correctly!');
     return true;
 
   } catch (error) {
-    console.error('❌ Monitoring system test failed:', error);
+console.error(' Monitoring system test failed:', error);
     return false;
   }
 }

@@ -5,7 +5,7 @@ import { csrfProtection } from './csrfProtection';
 import { auditLogger } from './auditLogger';
 
 export function testSecuritySystem() {
-  console.log('🔒 Testing security system...');
+console.log(' Testing security system...');
 
   try {
     // Test Input Validator
@@ -19,7 +19,7 @@ export function testSecuritySystem() {
     };
     
     const validationResult = inputValidator.validate(testData, messageSchema);
-    console.log('✅ Input validation working:', {
+console.log(' Input validation working:', {
       valid: validationResult.valid,
       errors: validationResult.errors.length,
       warnings: validationResult.warnings.length
@@ -34,7 +34,7 @@ export function testSecuritySystem() {
     };
     
     const maliciousResult = inputValidator.validate(maliciousData, messageSchema);
-    console.log('✅ XSS protection working:', {
+console.log(' XSS protection working:', {
       valid: maliciousResult.valid,
       sanitized: maliciousResult.sanitized?.content?.includes('&lt;script&gt;'),
       warnings: maliciousResult.warnings.length
@@ -47,7 +47,7 @@ export function testSecuritySystem() {
     const isValidToken = csrfProtection.validateToken(csrfToken, sessionId);
     const isInvalidToken = csrfProtection.validateToken('invalid-token', sessionId);
     
-    console.log('✅ CSRF protection working:', {
+console.log(' CSRF protection working:', {
       tokenGenerated: !!csrfToken,
       validTokenAccepted: isValidToken,
       invalidTokenRejected: !isInvalidToken
@@ -61,7 +61,7 @@ export function testSecuritySystem() {
     const auditStats = auditLogger.getStats();
     const securityAlerts = auditLogger.getSecurityAlerts();
     
-    console.log('✅ Audit logging working:', {
+console.log(' Audit logging working:', {
       totalEvents: auditStats.totalEvents,
       alerts: securityAlerts.length
     });
@@ -71,16 +71,16 @@ export function testSecuritySystem() {
     const sessionStats = authValidator.getSessionStats();
     const suspiciousSessions = authValidator.getSuspiciousSessions();
     
-    console.log('✅ Auth validator working:', {
+console.log(' Auth validator working:', {
       activeSessions: sessionStats.activeSessions,
       suspiciousSessions: suspiciousSessions.length
     });
 
-    console.log('🎉 All security systems are working correctly!');
+console.log(' All security systems are working correctly!');
     return true;
 
   } catch (error) {
-    console.error('❌ Security system test failed:', error);
+console.error(' Security system test failed:', error);
     return false;
   }
 }

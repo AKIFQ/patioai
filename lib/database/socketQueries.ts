@@ -206,12 +206,12 @@ export class SocketDatabaseService {
   }
 
   // Batch insert chat messages for better performance
-  static async insertChatMessages(messages: Array<{
+  static async insertChatMessages(messages: {
     chatSessionId: string;
     content: string;
     isUserMessage: boolean;
     attachments?: any[];
-  }>): Promise<{ success: boolean; messageIds?: string[]; error?: string }> {
+  }[]): Promise<{ success: boolean; messageIds?: string[]; error?: string }> {
     try {
       const insertData = messages.map(msg => ({
         chat_session_id: msg.chatSessionId,
@@ -337,7 +337,7 @@ export class SocketDatabaseService {
   static async getRoomParticipants(shareCode: string): Promise<{
     success: boolean;
     room?: { id: string; name: string };
-    participants?: Array<{ display_name: string; joined_at: string; user_id: string }>;
+    participants?: { display_name: string; joined_at: string; user_id: string }[];
     error?: string;
   }> {
     try {
@@ -373,6 +373,32 @@ export class SocketDatabaseService {
     } catch (error) {
       console.error('Error getting room participants:', error);
       return { success: false, error: 'Database error' };
+    }
+  }
+
+  // CRITICAL FIX: Check if user was removed from room without creating new clients
+  static async isUserRemovedFromRoom(roomId: string, userId: string): Promise<{ isRemoved: boolean; error?: string }> {
+    try {
+      const supabaseClient = getSupabaseClient();
+      if (!supabaseClient) {
+        return { isRemoved: false, error: 'Supabase client not available' };
+      }
+
+      const { data, error } = await supabaseClient
+        .from('removed_room_participants')
+        .select('id')
+        .eq('room_id', roomId)
+        .eq('removed_user_id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        return { isRemoved: false, error: error.message };
+      }
+
+      return { isRemoved: !!data };
+    } catch (error) {
+      console.error('Error checking user removal status:', error);
+      return { isRemoved: false, error: String(error) };
     }
   }
 }

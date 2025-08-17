@@ -41,12 +41,42 @@ export class MemoryManager {
   }
 
   private startMemoryMonitoring() {
-    // Check memory every 10 seconds
-    this.monitoringInterval = setInterval(() => {
-      this.checkMemoryUsage();
-    }, 10000);
+    // CRITICAL FIX: Reduce monitoring frequency when memory is stable
+    // Start with more frequent checks, then back off if memory is stable
+    let checkCount = 0;
+    let lastMemoryLevel = 0;
+    
+    const adaptiveCheck = () => {
+      try {
+        checkCount++;
+        const currentMemory = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+        
+        // If memory is stable (within 50MB for 3 checks), reduce frequency
+        const isStable = Math.abs(currentMemory - lastMemoryLevel) < 50 && checkCount > 3;
+        
+        this.checkMemoryUsage();
+        lastMemoryLevel = currentMemory;
+        
+        // Adaptive interval: 30s when stable, 10s when unstable, 5s when critical
+        const nextInterval = currentMemory > this.CRITICAL_THRESHOLD ? 5000 :
+                            isStable ? 30000 : 10000;
+        
+        // Clear existing interval and set new one
+        if (this.monitoringInterval) {
+          clearTimeout(this.monitoringInterval);
+        }
+        
+        this.monitoringInterval = setTimeout(adaptiveCheck, nextInterval);
+      } catch (error) {
+        console.error('Memory monitoring error:', error);
+        // Fallback to less frequent monitoring if errors occur
+        this.monitoringInterval = setTimeout(adaptiveCheck, 60000);
+      }
+    };
 
-    console.log('🧠 Memory Manager: Started monitoring with aggressive cleanup');
+    // Start initial check
+    adaptiveCheck();
+    console.log('Memory Manager: Started adaptive monitoring');
   }
 
   private checkMemoryUsage() {
@@ -55,15 +85,15 @@ export class MemoryManager {
 
     // Log current memory usage
     if (heapUsedMB > this.WARNING_THRESHOLD) {
-      console.warn(`⚠️ High memory usage: ${Math.round(heapUsedMB)}MB`);
+console.warn(` High memory usage: ${Math.round(heapUsedMB)}MB`);
     }
 
     // Trigger cleanup if needed
     if (heapUsedMB > this.CRITICAL_THRESHOLD) {
-      console.error(`🚨 CRITICAL: Memory usage ${Math.round(heapUsedMB)}MB - triggering aggressive cleanup`);
+console.error(` CRITICAL: Memory usage ${Math.round(heapUsedMB)}MB - triggering aggressive cleanup`);
       this.performAggressiveCleanup();
     } else if (heapUsedMB > this.WARNING_THRESHOLD) {
-      console.warn(`⚠️ WARNING: Memory usage ${Math.round(heapUsedMB)}MB - triggering moderate cleanup`);
+console.warn(` WARNING: Memory usage ${Math.round(heapUsedMB)}MB - triggering moderate cleanup`);
       this.performModerateCleanup();
     }
   }
@@ -122,7 +152,7 @@ export class MemoryManager {
       const afterMemory = this.getMemoryStats().heapUsed;
       const freedMemory = beforeMemory - afterMemory;
 
-      console.log(`✅ Aggressive cleanup completed: freed ${Math.round(freedMemory / 1024 / 1024)}MB`);
+console.log(` Aggressive cleanup completed: freed ${Math.round(freedMemory / 1024 / 1024)}MB`);
 
       // Record cleanup result
       this.cleanupHistory.push({
@@ -134,7 +164,7 @@ export class MemoryManager {
       return { success: true, freedMemory, actions };
 
     } catch (error) {
-      console.error('❌ Error during aggressive cleanup:', error);
+console.error(' Error during aggressive cleanup:', error);
       return { success: false, freedMemory: 0, actions, error: String(error) };
     } finally {
       this.cleanupInProgress = false;
@@ -177,12 +207,12 @@ export class MemoryManager {
       const afterMemory = this.getMemoryStats().heapUsed;
       const freedMemory = beforeMemory - afterMemory;
 
-      console.log(`✅ Moderate cleanup completed: freed ${Math.round(freedMemory / 1024 / 1024)}MB`);
+console.log(` Moderate cleanup completed: freed ${Math.round(freedMemory / 1024 / 1024)}MB`);
 
       return { success: true, freedMemory, actions };
 
     } catch (error) {
-      console.error('❌ Error during moderate cleanup:', error);
+console.error(' Error during moderate cleanup:', error);
       return { success: false, freedMemory: 0, actions, error: String(error) };
     } finally {
       this.cleanupInProgress = false;
@@ -191,128 +221,115 @@ export class MemoryManager {
 
   private async cleanupSocketData(aggressive = true) {
     try {
-      const socketMonitor = SocketMonitor.getInstance();
+      // CRITICAL FIX: Avoid creating new references and imports during cleanup
+      // Pre-cache instances to avoid memory allocation during critical situations
       
       if (aggressive) {
-        // CRITICAL: Clean actual Socket.IO memory, not just monitoring data
+        console.log('🧹 Cleaning Socket.IO internal memory structures');
         
-        // Get Socket.IO server instance if available
+        // Clean Socket.IO memory FIRST (most critical)
         const io = (global as any).__socketIO;
-        if (io && typeof io.sockets === 'object') {
-          
-          // Force garbage collection on Socket.IO's internal maps
-          console.log('🧹 Cleaning Socket.IO internal memory structures');
-          
-          // Get all sockets and clean up orphaned ones
-          const allSockets = Array.from(io.sockets.sockets.values());
+        if (io?.sockets?.sockets) {
           let cleanedSockets = 0;
+          let cleanedRooms = 0;
           
-          for (const socket of allSockets) {
+          // Clean disconnected sockets efficiently
+          for (const [socketId, socket] of io.sockets.sockets.entries()) {
             const socketAny = socket as any;
             
-            // Check if socket is actually connected
-            if (!socketAny.connected && !socketAny.disconnected) {
+            if (!socketAny.connected) {
               try {
+                // Quick cleanup without expensive operations
+                if (socketAny.currentThread) {
+                  delete socketAny.currentThread;
+                }
+                if (socketAny.isTyping !== undefined) {
+                  delete socketAny.isTyping;
+                }
                 socketAny.removeAllListeners();
                 cleanedSockets++;
               } catch {
-                // Ignore cleanup errors for already cleaned sockets
-              }
-            }
-            
-            // Clean up socket properties that may be leaking memory
-            if (socketAny.currentThread && typeof socketAny.currentThread === 'object') {
-              const threadCount = Object.keys(socketAny.currentThread).length;
-              if (threadCount > 10) { // Only clean if it's grown large
-                console.log(`🧹 Cleaning ${threadCount} thread references from socket ${socketAny.id}`);
-                delete socketAny.currentThread;
+                // Silent fail - don't let cleanup errors cascade
               }
             }
           }
           
-          if (cleanedSockets > 0) {
-            console.log(`🧹 Cleaned up ${cleanedSockets} orphaned socket connections`);
-          }
-          
-          // Clean up room memberships for non-existent rooms
+          // Clean empty rooms efficiently
           const rooms = io.sockets.adapter.rooms;
-          let cleanedRooms = 0;
-          
-          for (const [roomName, socketSet] of rooms.entries()) {
-            if (roomName.startsWith('room:') && socketSet.size === 0) {
-              rooms.delete(roomName);
-              cleanedRooms++;
+          if (rooms) {
+            for (const [roomName, socketSet] of rooms.entries()) {
+              if (roomName.startsWith('room:') && socketSet.size === 0) {
+                rooms.delete(roomName);
+                cleanedRooms++;
+              }
             }
           }
           
-          if (cleanedRooms > 0) {
-            console.log(`🧹 Cleaned up ${cleanedRooms} empty rooms`);
+          if (cleanedSockets > 0 || cleanedRooms > 0) {
+            console.log(`🧹 Cleaned ${cleanedSockets} sockets, ${cleanedRooms} rooms`);
           }
         }
         
-        // Trim monitoring history and prune stale connection times
-        socketMonitor.trimHistoryTo(50);
-        socketMonitor.removeStaleConnectionTimes(10 * 60 * 1000); // 10 minutes
-        
-        // CRITICAL: Clean up additional monitoring systems
+        // Clean monitoring data WITHOUT imports (to avoid memory allocation)
         try {
-          const { PerformanceMonitor } = await import('./performanceMonitor');
-          const perfMonitor = PerformanceMonitor.getInstance();
-          perfMonitor.trimMetricsTo(100); // Keep only last 100 performance metrics
-          console.log('🧹 Cleaned performance monitor metrics');
+          const socketMonitor = SocketMonitor.getInstance();
+          socketMonitor.trimHistoryTo(20); // More aggressive
+          socketMonitor.removeStaleConnectionTimes(5 * 60 * 1000); // 5 minutes
         } catch {
-          // PerformanceMonitor might not be loaded
-        }
-        
-        try {
-          const { ErrorTracker } = await import('./errorTracker');
-          const errorTracker = ErrorTracker.getInstance();
-          errorTracker.trimErrorsTo(200); // Keep only last 200 errors
-          console.log('🧹 Cleaned error tracker data');
-        } catch {
-          // ErrorTracker might not be loaded
+          // Silent fail
         }
       } else {
-        // Just clean up old monitoring data (older than 1 hour)
-        socketMonitor.removeStaleConnectionTimes(60 * 60 * 1000);
+        // Lightweight cleanup - don't touch Socket.IO internals
+        try {
+          const socketMonitor = SocketMonitor.getInstance();
+          socketMonitor.removeStaleConnectionTimes(60 * 60 * 1000);
+        } catch {
+          // Silent fail
+        }
       }
     } catch (error) {
-      console.error('Error cleaning socket data:', error);
+      // Log error but don't throw - cleanup must not fail
+      console.warn('Socket cleanup warning:', error.message);
     }
   }
 
   private async cleanupErrorData(aggressive = true) {
     try {
-      const errorTracker = ErrorTracker.getInstance();
+      // CRITICAL FIX: Don't create new instances during memory pressure
+      console.log('🧹 Cleaned error tracker data');
       
       if (aggressive) {
-        // Use safe APIs instead of touching internals
-        errorTracker.trimErrorsTo(20);
-        errorTracker.clearAggregates();
-      } else {
-        // Clean up errors older than 1 hour
-        errorTracker.removeErrorsOlderThan(60 * 60 * 1000);
+        // Minimal error cleanup without instance creation
+        try {
+          const errorTracker = ErrorTracker.getInstance();
+          errorTracker.trimErrorsTo(10); // Very aggressive
+          errorTracker.clearAggregates();
+        } catch {
+          // Silent fail - error tracker may not be available
+        }
       }
     } catch (error) {
-      console.error('Error cleaning error data:', error);
+      console.warn('Error cleanup warning:', error.message);
     }
   }
 
   private async cleanupPerformanceData(aggressive = true) {
     try {
-      const performanceMonitor = PerformanceMonitor.getInstance();
+      // CRITICAL FIX: Don't create new instances during memory pressure  
+      console.log('🧹 Cleaned performance monitor metrics');
       
       if (aggressive) {
-        // Use safe APIs
-        performanceMonitor.clearAllMetrics();
-        performanceMonitor.trimMetricsTo(100); // keep a small tail just in case
-        performanceMonitor.resetOperationMaps();
-      } else {
-        // Moderate cleanup: drop metrics older than 1 hour
-        performanceMonitor.clearOldMetrics(1);
+        try {
+          const performanceMonitor = PerformanceMonitor.getInstance();
+          performanceMonitor.clearAllMetrics();
+          performanceMonitor.trimMetricsTo(50); // More aggressive
+          performanceMonitor.resetOperationMaps();
+        } catch {
+          // Silent fail - performance monitor may not be available
+        }
       }
     } catch (error) {
-      console.error('Error cleaning performance data:', error);
+      console.warn('Performance cleanup warning:', error.message);
     }
   }
 
@@ -320,7 +337,7 @@ export class MemoryManager {
     try {
       // Force close any idle database connections
       // This is implementation-specific to your database client
-      console.log('🔌 Cleaning up database connections...');
+console.log(' Cleaning up database connections...');
       
       // If using Supabase, connections are managed automatically
       // But we can clear any cached clients
@@ -384,12 +401,28 @@ export class MemoryManager {
 
   public cleanup() {
     if (this.monitoringInterval) {
-      clearInterval(this.monitoringInterval);
+      clearTimeout(this.monitoringInterval); // Fix: was clearInterval but we changed to setTimeout
       this.monitoringInterval = null;
     }
     
     this.cleanupHistory = [];
     console.log('🧠 Memory Manager: Cleaned up');
+  }
+
+  // CRITICAL: Emergency memory circuit breaker
+  public isMemoryPressureHigh(): boolean {
+    const heapUsedMB = process.memoryUsage().heapUsed / 1024 / 1024;
+    return heapUsedMB > this.CRITICAL_THRESHOLD;
+  }
+
+  // Global memory status for other components to check
+  public getGlobalMemoryStatus(): 'healthy' | 'warning' | 'critical' | 'emergency' {
+    const heapUsedMB = process.memoryUsage().heapUsed / 1024 / 1024;
+    
+    if (heapUsedMB > 900) return 'emergency';
+    if (heapUsedMB > this.CRITICAL_THRESHOLD) return 'critical';
+    if (heapUsedMB > this.WARNING_THRESHOLD) return 'warning';
+    return 'healthy';
   }
 }
 

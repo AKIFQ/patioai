@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { cleanupEmptyThreads } from '@/lib/cleanup/emptyThreads';
 
 export async function POST(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
       const isEmpty = await isThreadEmpty(threadId);
       
       if (isEmpty) {
-        console.log('✅ Thread is empty, would clean up:', threadId);
+console.log(' Thread is empty, would clean up:', threadId);
         // Note: Since we're not storing thread metadata separately,
         // empty threads will naturally not appear in queries
         return NextResponse.json({
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (error) {
-    console.error('❌ Error in cleanup API:', error);
+console.error(' Error in cleanup API:', error);
     return NextResponse.json(
       { error: 'Cleanup failed', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

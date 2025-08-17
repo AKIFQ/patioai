@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { ErrorTracker } from '../monitoring/errorTracker';
 
 // Session validation interface
@@ -232,7 +232,7 @@ export class AuthValidator {
             timestamp: new Date().toISOString()
         });
 
-        console.log(`🔒 Security Event [${event}]:`, context);
+console.log(` Security Event [${event}]:`, context);
     }
 
     // Cleanup expired sessions

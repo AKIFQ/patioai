@@ -4,7 +4,7 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-export function estimateMessagesTokens(messages: Array<{ content: any }>): number {
+export function estimateMessagesTokens(messages: { content: any }[]): number {
   let total = 0;
   for (const m of messages) {
     const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '');

@@ -46,7 +46,7 @@ export async function fetchMoreChatPreviews(offset: number) {
     if (chatError) throw chatError;
 
     // Get ALL room messages and threads (simplified approach)
-    let roomChatPreviews: any[] = [];
+    const roomChatPreviews: any[] = [];
     
     try {
       // Get all room messages with room info

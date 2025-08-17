@@ -108,7 +108,7 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
 
   const activityText = getActivityText();
   
-  console.log('🔄 CrossThreadActivity render:', {
+console.log(' CrossThreadActivity render:', {
     currentThreadId,
     activities: otherThreadActivities,
     activityText
@@ -120,7 +120,7 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
 
   return (
     <div className="flex items-center gap-1.5 px-2 py-1 bg-orange-50/80 dark:bg-orange-950/30 rounded-full border border-orange-200/50 dark:border-orange-800/30">
-      <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></div>
+      <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse" />
       <span className="text-xs font-medium text-orange-700 dark:text-orange-300 whitespace-nowrap">
         {activityText}
       </span>

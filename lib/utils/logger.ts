@@ -1,182 +1,123 @@
-export enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-  CRITICAL = 4
-}
+/**
+ * Centralized logging utility with environment-based levels
+ * Replaces scattered console.log statements throughout the app
+ */
 
-export interface LogContext {
-  userId?: string;
-  sessionId?: string;
-  requestId?: string;
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
+
+interface LogContext {
   component?: string;
-  function?: string;
+  userId?: string;
+  roomId?: string;
+  messageId?: string;
   [key: string]: any;
 }
 
-export interface LogEntry {
-  level: LogLevel;
-  message: string;
-  timestamp: string;
-  context: LogContext;
-  error?: Error;
-}
-
 class Logger {
-  private minLevel: LogLevel;
-  private isProduction: boolean;
+  private isDevelopment = process.env.NODE_ENV === 'development';
+  private isServer = typeof window === 'undefined';
+  
+  // Only show essential logs in production
+  private productionLevels: LogLevel[] = ['error', 'warn'];
+  private developmentLevels: LogLevel[] = ['error', 'warn', 'info', 'debug'];
 
-  constructor() {
-    this.isProduction = process.env.NODE_ENV === 'production';
-    this.minLevel = this.isProduction ? LogLevel.INFO : LogLevel.DEBUG;
+  private shouldLog(level: LogLevel): boolean {
+    const allowedLevels = this.isDevelopment ? this.developmentLevels : this.productionLevels;
+    return allowedLevels.includes(level);
   }
 
-  private formatMessage(level: LogLevel, message: string, context: LogContext): string {
-    const levelName = LogLevel[level];
+  private formatMessage(level: LogLevel, message: string, context?: LogContext): string {
     const timestamp = new Date().toISOString();
+    const prefix = this.isServer ? '[SERVER]' : '[CLIENT]';
+    const contextStr = context ? ` ${JSON.stringify(context)}` : '';
+    return `${timestamp} ${prefix} [${level.toUpperCase()}] ${message}${contextStr}`;
+  }
+
+  error(message: string, context?: LogContext, error?: Error): void {
+    if (!this.shouldLog('error')) return;
     
-    if (this.isProduction) {
-      // Structured logging for production
-      return JSON.stringify({
-        level: levelName,
-        message,
-        timestamp,
-        context,
-        environment: 'production'
-      });
-    } else {
-      // Human-readable logging for development
-      const emoji = this.getLogEmoji(level);
-      const contextStr = Object.keys(context).length > 0 
-        ? ` [${Object.entries(context).map(([k, v]) => `${k}:${v}`).join(', ')}]`
-        : '';
-      return `${emoji} ${levelName} ${timestamp} ${message}${contextStr}`;
-    }
+    const formatted = this.formatMessage('error', message, context);
+    console.error(formatted, error?.stack || '');
   }
 
-  private getLogEmoji(level: LogLevel): string {
-    switch (level) {
-      case LogLevel.DEBUG: return '🔍';
-      case LogLevel.INFO: return 'ℹ️';
-      case LogLevel.WARN: return '⚠️';
-      case LogLevel.ERROR: return '❌';
-      case LogLevel.CRITICAL: return '🚨';
-      default: return '📝';
-    }
+  warn(message: string, context?: LogContext): void {
+    if (!this.shouldLog('warn')) return;
+    
+    const formatted = this.formatMessage('warn', message, context);
+    console.warn(formatted);
   }
 
-  private log(level: LogLevel, message: string, context: LogContext = {}, error?: Error): void {
-    if (level < this.minLevel) return;
-
-    const formattedMessage = this.formatMessage(level, message, context);
-    const logEntry: LogEntry = {
-      level,
-      message,
-      timestamp: new Date().toISOString(),
-      context,
-      error
-    };
-
-    // Console output
-    switch (level) {
-      case LogLevel.DEBUG:
-        console.debug(formattedMessage);
-        break;
-      case LogLevel.INFO:
-        console.info(formattedMessage);
-        break;
-      case LogLevel.WARN:
-        console.warn(formattedMessage);
-        break;
-      case LogLevel.ERROR:
-      case LogLevel.CRITICAL:
-        console.error(formattedMessage);
-        if (error) {
-          console.error('Stack trace:', error.stack);
-        }
-        break;
-    }
-
-    // In production, you might want to send logs to a service
-    if (this.isProduction && level >= LogLevel.ERROR) {
-      this.sendToLogService(logEntry);
-    }
+  info(message: string, context?: LogContext): void {
+    if (!this.shouldLog('info')) return;
+    
+    const formatted = this.formatMessage('info', message, context);
+    console.info(formatted);
   }
 
-  private async sendToLogService(logEntry: LogEntry): Promise<void> {
-    try {
-      // This could be enhanced to send to a service like DataDog, Sentry, etc.
-      // For now, we'll just store it in localStorage for debugging
-      const logs = JSON.parse(localStorage.getItem('error_logs') || '[]');
-      logs.push(logEntry);
-      
-      // Keep only last 100 logs
-      if (logs.length > 100) {
-        logs.splice(0, logs.length - 100);
-      }
-      
-      localStorage.setItem('error_logs', JSON.stringify(logs));
-    } catch (error) {
-      console.error('Failed to store log entry:', error);
-    }
+  debug(message: string, context?: LogContext): void {
+    if (!this.shouldLog('debug')) return;
+    
+    const formatted = this.formatMessage('debug', message, context);
+    console.log(formatted);
   }
 
-  debug(message: string, context: LogContext = {}): void {
-    this.log(LogLevel.DEBUG, message, context);
+  // Essential system events that should always be logged
+  system(message: string, context?: LogContext): void {
+const formatted = this.formatMessage('info', ` ${message}`, context);
+    console.log(formatted);
   }
 
-  info(message: string, context: LogContext = {}): void {
-    this.log(LogLevel.INFO, message, context);
+  // Socket events
+  socket(message: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+const formatted = this.formatMessage('debug', ` ${message}`, context);
+    console.log(formatted);
   }
 
-  warn(message: string, context: LogContext = {}): void {
-    this.log(LogLevel.WARN, message, context);
+  // AI/Model events
+  ai(message: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+    const formatted = this.formatMessage('debug', `🤖 ${message}`, context);
+    console.log(formatted);
   }
 
-  error(message: string, context: LogContext = {}, error?: Error): void {
-    this.log(LogLevel.ERROR, message, context, error);
+  // Database events
+  db(message: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+const formatted = this.formatMessage('debug', ` ${message}`, context);
+    console.log(formatted);
   }
 
-  critical(message: string, context: LogContext = {}, error?: Error): void {
-    this.log(LogLevel.CRITICAL, message, context, error);
+  // Performance events
+  perf(message: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+const formatted = this.formatMessage('debug', ` ${message}`, context);
+    console.log(formatted);
   }
 
-  // Socket-specific logging helpers
-  socketDebug(event: string, data: any, context: LogContext = {}): void {
-    this.debug(`Socket Event: ${event}`, { 
-      ...context, 
-      event, 
-      dataPreview: typeof data === 'string' ? data.substring(0, 100) : JSON.stringify(data).substring(0, 100)
-    });
-  }
-
-  socketError(event: string, error: Error, context: LogContext = {}): void {
-    this.error(`Socket Error: ${event}`, { ...context, event }, error);
-  }
-
-  // Chat-specific logging helpers
-  chatSubmission(messageId: string, context: LogContext = {}): void {
-    this.info('Chat message submitted', { ...context, messageId });
-  }
-
-  chatError(messageId: string, error: Error, context: LogContext = {}): void {
-    this.error('Chat submission failed', { ...context, messageId }, error);
-  }
-
-  // Performance logging
-  performanceLog(operation: string, duration: number, context: LogContext = {}): void {
-    const level = duration > 1000 ? LogLevel.WARN : LogLevel.DEBUG;
-    this.log(level, `Performance: ${operation} took ${duration}ms`, { ...context, operation, duration });
-  }
-
-  // Connection health logging
-  connectionHealth(status: string, metrics: any, context: LogContext = {}): void {
-    const level = status === 'healthy' ? LogLevel.DEBUG : 
-                  status === 'degraded' ? LogLevel.WARN : LogLevel.ERROR;
-    this.log(level, `Connection health: ${status}`, { ...context, status, ...metrics });
+  // Chat submission events
+  chatSubmission(messageId: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+    const formatted = this.formatMessage('debug', `💬 Chat submission: ${messageId}`, context);
+    console.log(formatted);
   }
 }
 
-// Singleton instance
 export const logger = new Logger();
+
+// Legacy console replacement for gradual migration
+export const devLog = (message: string, ...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(message, ...args);
+  }
+};
+
+export const devWarn = (message: string, ...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(message, ...args);
+  }
+};
+
+export const devError = (message: string, ...args: any[]) => {
+  console.error(message, ...args);
+};

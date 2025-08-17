@@ -296,7 +296,7 @@ export class APICache {
     ];
   }
 
-  private async getRecentDocuments(): Promise<Array<{ id: string }>> {
+  private async getRecentDocuments(): Promise<{ id: string }[]> {
     // This would typically query your database for recent documents
     return [
       { id: 'doc-1' },

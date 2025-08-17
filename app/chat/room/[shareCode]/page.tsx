@@ -208,7 +208,7 @@ export default async function RoomChatPage(props: {
     }
 
     // If user just signed in (has auth but was previously anonymous), update their participant record
-    if (userInfo && searchParams.sessionId && searchParams.sessionId.startsWith('session_')) {
+    if (userInfo && searchParams.sessionId?.startsWith('session_')) {
         try {
             // Update the anonymous participant to authenticated
             await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {

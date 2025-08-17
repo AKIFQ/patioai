@@ -311,7 +311,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       threadFirstMessages.forEach((firstMsg, threadId) => {
         const roomData = roomsLookup.get(firstMsg.room_id);
 
-        if (roomData && roomData.shareCode) {
+        if (roomData?.shareCode) {
           // Use the first few words of the first user message as the title
           let title = 'New Chat';
           if (firstMsg.content) {
@@ -859,7 +859,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
       threadFirstMessages.forEach((firstMsg, threadId) => {
         const roomData = roomsLookup.get(firstMsg.room_id);
 
-        if (roomData && roomData.shareCode) {
+        if (roomData?.shareCode) {
           // Use the first few words of the first user message as the title
           let title = 'New Chat';
           if (firstMsg.content) {

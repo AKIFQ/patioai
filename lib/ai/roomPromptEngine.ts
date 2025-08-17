@@ -21,12 +21,12 @@ interface UserProfile {
 interface ConversationContext {
   roomName: string;
   participants: string[];
-  conversationFlow: Array<{
+  conversationFlow: {
     speaker: string;
     respondingTo?: string;
     messageType: 'question' | 'answer' | 'statement' | 'joke' | 'request' | 'greeting';
     emotionalContext: string;
-  }>;
+  }[];
   currentTopic: string;
   conversationPhase: 'greeting' | 'exploration' | 'deep-discussion' | 'problem-solving' | 'casual-chat';
   groupDynamics: {
@@ -38,8 +38,8 @@ interface ConversationContext {
 }
 
 export class RoomPromptEngine {
-  private userProfiles: Map<string, UserProfile> = new Map();
-  private conversationMemory: Map<string, string[]> = new Map(); // threadId -> key topics/decisions
+  private userProfiles = new Map<string, UserProfile>();
+  private conversationMemory = new Map<string, string[]>(); // threadId -> key topics/decisions
 
   /**
    * Generate a sophisticated AI prompt with full conversational context
@@ -51,7 +51,7 @@ export class RoomPromptEngine {
     currentUser: string,
     currentMessage: string,
     historySummary?: string
-  ): { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
+  ): { system: string; messages: { role: 'user' | 'assistant'; content: string }[] } {
 
     // Analyze conversation context
     const conversationContext = this.analyzeConversationContext(messages, roomName, participants);
@@ -82,11 +82,11 @@ export class RoomPromptEngine {
     return `You are an intelligent AI assistant in a group chat room called "${context.roomName}".
 
 ## CRITICAL INSTRUCTIONS - READ CAREFULLY:
-🎯 **PROVIDE DETAILED, COMPREHENSIVE RESPONSES** - Users want thorough, helpful answers, not brief summaries
-🎯 **AIM FOR 200-500 WORDS** when explaining concepts, answering questions, or providing help
-🎯 **INCLUDE EXAMPLES** and practical details whenever possible
-🎯 **EXPLAIN YOUR REASONING** - show your thought process
-🎯 **BE CONVERSATIONAL** but informative - like talking to a knowledgeable friend
+**PROVIDE DETAILED, COMPREHENSIVE RESPONSES** - Users want thorough, helpful answers, not brief summaries
+**AIM FOR 200-500 WORDS** when explaining concepts, answering questions, or providing help
+**INCLUDE EXAMPLES** and practical details whenever possible
+**EXPLAIN YOUR REASONING** - show your thought process
+**BE CONVERSATIONAL** but informative - like talking to a knowledgeable friend
 
 ## CONVERSATION CONTEXT & DYNAMICS
 
@@ -115,25 +115,25 @@ You are an emotionally intelligent AI assistant who:
 - **Connect**: Link current messages to previous discussions and user patterns  
 - **Anticipate**: Understand what users might need based on conversation flow
 
-### 👥 **Multi-User Dynamics**
+### **Multi-User Dynamics**
 - **Address Specifically**: Use names when responding to specific people
 - **Bridge Conversations**: Help connect ideas between different participants
 - **Facilitate**: Encourage quiet members, moderate dominant speakers naturally
 - **Adapt Tone**: Match the group's energy while being authentically helpful
 
-### 🎭 **Personality & Tone Adaptation**
+### **Personality & Tone Adaptation**
 - **Mirror Communication Styles**: Adapt to each user's preferred communication style
 - **Read the Room**: Understand if the conversation is serious, casual, technical, or playful
 - **Cultural Sensitivity**: Recognize different cultural communication patterns
 - **Emotional Intelligence**: Respond appropriately to frustration, excitement, confusion, etc.
 
-### 💬 **Conversation Flow Management**
+### **Conversation Flow Management**
 - **Build on Ideas**: Reference and expand on previous points made by users
 - **Ask Follow-ups**: When appropriate, ask clarifying questions that move the conversation forward
 - **Summarize**: Help synthesize complex discussions when needed
 - **Transition**: Naturally guide conversation between topics when appropriate
 
-### 🎯 **Response Guidelines**
+### **Response Guidelines**
 
 **Default to Comprehensive**: Provide detailed, thorough responses that fully explore the topic
 **When to be Brief**: Only for simple acknowledgments like "got it" or "thanks"
@@ -155,7 +155,7 @@ ${historySummary ? `## CONVERSATION HISTORY SUMMARY\n\n${historySummary}\n\n` : 
 
 ---
 
-## 🚨 FINAL REMINDER:
+## FINAL REMINDER:
 - **NEVER give one-sentence answers** unless it's a simple greeting
 - **ALWAYS elaborate and explain** - users want to learn and understand
 - **PROVIDE CONTEXT** - explain the "why" behind your answers
@@ -245,7 +245,7 @@ You are having a conversation with real people who want detailed, thoughtful res
     if (lowerContent.includes('can you') || lowerContent.includes('could you') || lowerContent.includes('please')) {
       return 'request';
     }
-    if (lowerContent.includes('haha') || lowerContent.includes('lol') || lowerContent.includes('😂')) {
+if (lowerContent.includes('haha') || lowerContent.includes('lol') || lowerContent.includes('')) {
       return 'joke';
     }
     if (lowerContent.includes('because') || lowerContent.includes('the answer') || lowerContent.includes('that\'s')) {
@@ -379,7 +379,7 @@ You are having a conversation with real people who want detailed, thoughtful res
     return otherUsers.find(user => msg.content.toLowerCase().includes(user.toLowerCase()));
   }
 
-  private formatMessagesWithContext(messages: RoomMessage[], context: ConversationContext): Array<{ role: 'user' | 'assistant'; content: string }> {
+  private formatMessagesWithContext(messages: RoomMessage[], context: ConversationContext): { role: 'user' | 'assistant'; content: string }[] {
     return messages.map(msg => ({
       role: msg.is_ai_response ? 'assistant' as const : 'user' as const,
       content: msg.is_ai_response
@@ -399,7 +399,7 @@ You are having a conversation with real people who want detailed, thoughtful res
       enrichedContent += ` [${profile.communicationStyle} style, ${profile.emotionalTone} tone]`;
     }
 
-    if (flowEntry && flowEntry.respondingTo) {
+    if (flowEntry?.respondingTo) {
       enrichedContent += ` [responding to ${flowEntry.respondingTo}]`;
     }
 

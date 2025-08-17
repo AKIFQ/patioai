@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { getTierLimits, type UserTier, type ResourceKey, getPeriodStart } from './tierLimits';
-type Limits = { hourly?: number; daily?: number; monthly?: number };
+interface Limits { hourly?: number; daily?: number; monthly?: number }
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,7 +27,7 @@ export class TierRateLimiter {
     if (!limits) return { allowed: true };
 
     // If no limits are defined for a period, we treat it as unlimited
-    const periods: Array<{ key: keyof typeof limits; period: 'hour' | 'day' | 'month' }> = [];
+    const periods: { key: keyof typeof limits; period: 'hour' | 'day' | 'month' }[] = [];
     if (typeof limits.hourly === 'number') periods.push({ key: 'hourly', period: 'hour' });
     if (typeof limits.daily === 'number') periods.push({ key: 'daily', period: 'day' });
     if (typeof limits.monthly === 'number') periods.push({ key: 'monthly', period: 'month' });
@@ -48,7 +48,7 @@ export class TierRateLimiter {
         .maybeSingle();
 
       const current = error || !data ? 0 : (data.count as number) || 0;
-      const limit = limits[p.key as keyof Limits] as number;
+      const limit = limits[p.key as keyof Limits]!;
       remaining[p.key as keyof Limits] = Math.max(0, limit - current);
       if (current >= limit) {
         return { allowed: false, reason: `Limit reached for ${resource} (${p.key})`, remaining };
@@ -67,7 +67,7 @@ export class TierRateLimiter {
     const limits = getTierLimits(tier).resources[resource as ResourceKey];
     if (!limits) return;
 
-    const periods: Array<'hour' | 'day' | 'month'> = [];
+    const periods: ('hour' | 'day' | 'month')[] = [];
     if (typeof limits.hourly === 'number') periods.push('hour');
     if (typeof limits.daily === 'number') periods.push('day');
     if (typeof limits.monthly === 'number') periods.push('month');

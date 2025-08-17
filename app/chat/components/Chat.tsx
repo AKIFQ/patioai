@@ -48,7 +48,7 @@ interface RoomContext {
   roomName: string;
   displayName: string;
   sessionId: string;
-  participants: Array<{ displayName: string; joinedAt: string; sessionId: string; userId?: string }>;
+  participants: { displayName: string; joinedAt: string; sessionId: string; userId?: string }[];
   maxParticipants: number;
   tier: 'free' | 'pro';
   createdBy?: string;
@@ -106,17 +106,17 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [crossThreadActivities, setCrossThreadActivities] = useState<Array<{
+  const [crossThreadActivities, setCrossThreadActivities] = useState<{
     threadId: string;
     threadName: string;
     activeUsers: string[];
     typingUsers: string[];
-  }>>([]);
-  
+  }[]>([]);
+
   // State for showing removal from room UI
   const [showRemovalUI, setShowRemovalUI] = useState(false);
   const [removalRoomName, setRemovalRoomName] = useState('');
-  
+
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
   const [isRoomLoading, setIsRoomLoading] = useState(false);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
@@ -174,7 +174,7 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Update URL with chatSessionId for room chats (client-side only)
   useEffect(() => {
-    if (isClient && roomContext && roomContext.chatSessionId) {
+    if (isClient && roomContext?.chatSessionId) {
       const currentParams = new URLSearchParams(window.location.search);
       const urlChatSession = currentParams.get('chatSession');
 
@@ -183,7 +183,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         const newParams = new URLSearchParams(currentParams);
         newParams.set('chatSession', roomContext.chatSessionId);
 
-        const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+const newUrl = `${window.location.pathname}?${newParams.toString()}`;
         window.history.replaceState({}, '', newUrl);
       }
     }
@@ -206,7 +206,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Determine API endpoint based on model type and room context
   const getApiEndpoint = () => {
     if (roomContext) {
-      return `/api/rooms/${roomContext.shareCode}/chat`;
+return `/api/rooms/${roomContext.shareCode}/chat`;
     }
     return '/api/chat';
   };
@@ -214,34 +214,17 @@ const ChatComponent: React.FC<ChatProps> = ({
   const apiEndpoint = getApiEndpoint();
 
   // Get messages from chat
-  const chatId_debug = roomContext ? `room_${roomContext.shareCode}` : chatId;
+const chatId_debug = roomContext ? `room_${roomContext.shareCode}` : chatId;
 
   // Track component lifecycle (only in development)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🎬 CHAT COMPONENT: Component mounted for ${chatId_debug}`, {
-        roomContext: roomContext ? {
-          shareCode: roomContext.shareCode,
-          chatSessionId: roomContext.chatSessionId,
-          displayName: roomContext.displayName
-        } : null,
-        currentChatLength: currentChat?.length || 0
-      });
-      return () => {
-        console.log(`🎬 CHAT COMPONENT: Component unmounting for ${chatId_debug}`);
-      };
-    }
-  }, [chatId_debug, roomContext, currentChat]);
+  // Component lifecycle logging removed for production
 
   // Create a stable chat ID to prevent re-initialization
   const stableChatId = useMemo(() => {
-    return roomContext ? `room_${roomContext.shareCode}_${roomContext.chatSessionId}` : chatId;
+return roomContext ? `room_${roomContext.shareCode}_${roomContext.chatSessionId}` : chatId;
   }, [roomContext?.shareCode, roomContext?.chatSessionId, chatId]);
 
-  // Debug: Log chat ID changes
-  useEffect(() => {
-    console.log('🆔 CHAT ID CHANGED:', { chatId, stableChatId, currentChatId });
-  }, [chatId, stableChatId, currentChatId]);
+  // Chat ID change logging removed for production
 
   const { messages, status, append, setMessages, input, handleInputChange } = useChat({
     id: stableChatId,
@@ -261,31 +244,29 @@ const ChatComponent: React.FC<ChatProps> = ({
 
     onFinish: async () => {
       if (!roomContext) {
-        console.log(`✅ CHAT: onFinish called for ${stableChatId}`);
-        console.log(`🔍 CHAT: Current URL: ${window.location.href}`);
-        console.log(`🔍 CHAT: Current pathname: ${window.location.pathname}`);
+        // Chat finished, updating URL if needed
 
         // If we're on the generic /chat page, update URL to the specific chat ID
         // This prevents the page reload that causes the empty state
         if (window.location.pathname === '/chat' && stableChatId) {
-          const newUrl = `/chat/${stableChatId}${window.location.search}`;
+const newUrl = `/chat/${stableChatId}${window.location.search}`;
           window.history.replaceState({}, '', newUrl);
-          console.log(`🔄 Updated URL to: ${newUrl}`);
+          // URL updated
         }
 
         // Only refresh chat previews to update sidebar, don't cause page re-render
         try {
           await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-          console.log('🔄 Sidebar data refreshed successfully');
+          // Sidebar refreshed
         } catch (error) {
-          console.warn('Failed to refresh sidebar data:', error);
+          // Silent fail for sidebar refresh
         }
       }
     },
 
     onError: (error) => {
       if (!roomContext) {
-        console.log(`❌ CHAT: onError called for ${stableChatId}:`, error.message);
+        // Error logged for debugging
         toast.error(error.message || 'An error occurred'); // This could lead to sensitive information exposure. A general error message is safer.
       }
     }
@@ -294,17 +275,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Use reasoning stream hook for individual chats (after useChat hook)
   const reasoningStream = useReasoningStream(messages, status);
 
-  // Debug: Log streaming behavior
-  useEffect(() => {
-    if (!roomContext) {
-      console.log('🔄 STREAMING DEBUG:', {
-        status,
-        messageCount: messages.length,
-        lastMessage: messages[messages.length - 1]?.content?.substring(0, 50) + '...',
-        isStreaming: status === 'streaming'
-      });
-    }
-  }, [messages, status, roomContext]);
+  // Streaming debug logging removed for production
 
   // Optimized loading timeout for room chats
   useEffect(() => {
@@ -324,7 +295,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput with atomic state management
-  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI: boolean = true, reasoningModeEnabled: boolean = false) => {
+  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI = true, reasoningModeEnabled = false) => {
     const messageId = crypto.randomUUID();
     logger.chatSubmission(messageId, {
       roomContext: roomContext?.shareCode,
@@ -345,7 +316,7 @@ const ChatComponent: React.FC<ChatProps> = ({
       if (roomContext) {
         if (triggerAI) {
           // For room chats with AI response: Direct API call with loading state
-          console.log('🏠 Room chat: Persisting user message, streaming via Socket.IO');
+          // Room chat: persisting message and streaming via Socket.IO
           setIsRoomLoading(true);
 
           const response = await fetch(apiEndpoint, {
@@ -377,31 +348,31 @@ const ChatComponent: React.FC<ChatProps> = ({
                 const errorData = await response.json();
                 if (errorData.error === 'REMOVED_FROM_ROOM') {
                   // Show removal UI modal instead of redirecting
-                  console.log('User was removed from room, showing removal UI');
+                  // Debug logging removed
                   setRemovalRoomName(errorData.roomName || roomContext.roomName);
                   setShowRemovalUI(true);
                   return;
                 }
               } catch (parseError) {
-                console.warn('Could not parse error response:', parseError);
+console.warn('Could not parse error response:', parseError);
               }
             }
-            throw new Error(`API call failed: ${response.status}`);
+throw new Error(`API call failed: ${response.status}`);
           }
 
           // CRITICAL: Trigger sidebar refresh for new thread visibility
           // This ensures all users see the new thread immediately
           if (realtimeMessages.length === 0) {
-            console.log('🔄 First message in thread - triggering sidebar refresh');
+            // Debug logging removed
             // Dispatch custom event to trigger sidebar refresh
-            window.dispatchEvent(new CustomEvent('forceThreadRefresh', { 
-              detail: { 
+            window.dispatchEvent(new CustomEvent('forceThreadRefresh', {
+              detail: {
                 threadId: roomContext.chatSessionId,
                 shareCode: roomContext.shareCode,
                 roomName: roomContext.roomName,
                 senderName: roomContext.displayName,
                 firstMessage: message
-              } 
+              }
             }));
           }
 
@@ -417,7 +388,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                   : msg.content
               }));
 
-            console.log(`🔍 Chat invokeAI called with messageId:${messageId}, reasoningMode:`, reasoningModeEnabled);
+            // Debug logging removed
             invokeAIRef.current({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
@@ -429,10 +400,10 @@ const ChatComponent: React.FC<ChatProps> = ({
               reasoningMode: reasoningModeEnabled
             });
           }
-          console.log('✅ Room chat: User message persisted, AI stream invoked');
+          // Debug logging removed
         } else {
           // For room chats without AI response: Use same endpoint but with triggerAI: false
-          console.log('📤 Room chat: Sending user message only (no AI)');
+          // Debug logging removed
 
           const response = await fetch(apiEndpoint, {
             method: 'POST',
@@ -463,33 +434,33 @@ const ChatComponent: React.FC<ChatProps> = ({
                 const errorData = await response.json();
                 if (errorData.error === 'REMOVED_FROM_ROOM') {
                   // Show removal UI modal instead of redirecting
-                  console.log('User was removed from room, showing removal UI');
+                  // Debug logging removed
                   setRemovalRoomName(errorData.roomName || roomContext.roomName);
                   setShowRemovalUI(true);
                   return;
                 }
               } catch (parseError) {
-                console.warn('Could not parse error response:', parseError);
+console.warn('Could not parse error response:', parseError);
               }
             }
-            throw new Error(`API call failed: ${response.status}`);
+throw new Error(`API call failed: ${response.status}`);
           }
 
           // CRITICAL: Trigger sidebar refresh for new thread visibility
           if (realtimeMessages.length === 0) {
-            console.log('🔄 First message in thread (no AI) - triggering sidebar refresh');
-            window.dispatchEvent(new CustomEvent('forceThreadRefresh', { 
-              detail: { 
+            // Debug logging removed
+            window.dispatchEvent(new CustomEvent('forceThreadRefresh', {
+              detail: {
                 threadId: roomContext.chatSessionId,
                 shareCode: roomContext.shareCode,
                 roomName: roomContext.roomName,
                 senderName: roomContext.displayName,
                 firstMessage: message
-              } 
+              }
             }));
           }
 
-          console.log('✅ Room chat: User message sent (no AI)');
+          // Debug logging removed
         }
 
         // Clear the input field immediately for better UX
@@ -499,9 +470,9 @@ const ChatComponent: React.FC<ChatProps> = ({
       } else {
         // For individual chats: Update URL immediately to prevent re-renders
         if (window.location.pathname === '/chat' && stableChatId) {
-          const newUrl = `/chat/${stableChatId}${window.location.search}`;
+const newUrl = `/chat/${stableChatId}${window.location.search}`;
           window.history.replaceState({}, '', newUrl);
-          console.log(`🔄 Pre-emptively updated URL to: ${newUrl}`);
+          // Debug logging removed
         }
 
         if (triggerAI) {
@@ -535,7 +506,7 @@ const ChatComponent: React.FC<ChatProps> = ({
           } as any;
 
           setMessages(prevMessages => [...prevMessages, userMessage]);
-          console.log('📤 Added user message without AI response');
+          // Debug logging removed
         }
       }
     } catch (error) {
@@ -569,13 +540,13 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Real-time functionality for room chats - memoized to prevent re-renders
   const handleNewMessage = useCallback((newMessage: EnhancedMessage) => {
-    console.log('🏠 Chat received RT message:', newMessage.role, 'from', newMessage.content?.substring(0, 30));
+    // Debug logging removed
 
     // Use functional updates to avoid dependency on processedMessageIds
     setProcessedMessageIds(prevProcessed => {
       // Check if we've already processed this message
       if (prevProcessed.has(newMessage.id)) {
-        console.log('⚠️ Message already processed, skipping:', newMessage.id);
+        // Debug logging removed
         return prevProcessed; // Return same reference to avoid re-render
       }
 
@@ -583,10 +554,10 @@ const ChatComponent: React.FC<ChatProps> = ({
       setRealtimeMessages(prevMessages => {
         const exists = prevMessages.find(msg => msg.id === newMessage.id);
         if (exists) {
-          console.log('⚠️ Message already exists in UI, skipping:', newMessage.id);
+          // Debug logging removed
           return prevMessages;
         }
-        console.log('✅ Adding new RT message to chat UI:', newMessage.id);
+        // Debug logging removed
 
         // Initialize reasoning state for AI messages
         if (newMessage.role === 'assistant' && newMessage.reasoning) {
@@ -605,18 +576,16 @@ const ChatComponent: React.FC<ChatProps> = ({
   }, []); // Empty dependency array - stable function
 
   const handleTypingUpdate = useCallback((users: string[]) => {
-    if (process.env.NODE_ENV === 'development') console.debug('👥 Typing users:', users);
+    // Debug logging removed
     setTypingUsers(users);
   }, []);
 
-  const handleCrossThreadActivity = useCallback((activities: Array<{
+  const handleCrossThreadActivity = useCallback((activities: {
     threadId: string;
     threadName: string;
     activeUsers: string[];
     typingUsers: string[];
-  }>) => {
-    console.log('🔄 Cross-thread activity received:', activities);
-    console.log('🔄 Current thread:', roomContext?.chatSessionId);
+  }[]) => {
     setCrossThreadActivities(activities);
   }, [roomContext?.chatSessionId]);
 
@@ -627,7 +596,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (roomContext.chatSessionId && threadId !== roomContext.chatSessionId && streamingAssistantIdRef.current) {
       return;
     }
-    const tempId = `ai-temp-${Date.now()}`;
+const tempId = `ai-temp-${Date.now()}`;
     streamingAssistantIdRef.current = tempId;
     setStreamingAssistantId(tempId);
     setRealtimeMessages(prev => ([
@@ -652,7 +621,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         const isFirstChunk = m.content === '🤔 AI is thinking...';
         return {
           ...m,
-          content: isFirstChunk ? chunk : `${m.content}${chunk}`
+content: isFirstChunk ? chunk : `${m.content}${chunk}`
         };
       }
       return m;
@@ -687,7 +656,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
 
-    console.log('🧠 Reasoning started for room chat:', threadId);
+    // Debug logging removed
     setRoomReasoningState({
       messageId: currentId,
       reasoning: '',
@@ -701,7 +670,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
 
-    if (process.env.NODE_ENV === 'development') console.debug('🧠 Reasoning chunk received:', { threadId, preview: reasoning.substring(0, 60) });
+    // Debug logging removed
     setRoomReasoningState(prev => ({
       ...prev,
       reasoning
@@ -711,7 +680,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const handleReasoningEnd = useCallback((threadId: string, reasoning: string) => {
     if (!roomContext || threadId !== roomContext.chatSessionId) return;
 
-    console.log('🧠 Reasoning ended for room chat:', threadId);
+    // Debug logging removed
     setRoomReasoningState(prev => ({
       ...prev,
       reasoning,
@@ -723,9 +692,17 @@ const ChatComponent: React.FC<ChatProps> = ({
   const handleContentStart = useCallback((threadId: string) => {
     if (!roomContext || threadId !== roomContext.chatSessionId) return;
 
-    if (process.env.NODE_ENV === 'development') console.debug('📝 Content started for room chat:', threadId);
+    // Debug logging removed
     // Reasoning UI should auto-minimize when content starts
   }, [roomContext]);
+
+  // Handle participant updates from Socket.IO
+  const handleParticipantChange = useCallback((updatedParticipants: any[]) => {
+    // Debug logging removed
+    // CRITICAL FIX: Don't reload page for normal participant changes
+    // Only update local state - the room context will handle the rest
+    // Page reload should only happen for the specific user being removed
+  }, []);
 
   // Memoize realtime hook props to prevent unnecessary re-initializations
   const realtimeProps = useMemo(() => {
@@ -736,6 +713,7 @@ const ChatComponent: React.FC<ChatProps> = ({
       chatSessionId: roomContext.chatSessionId,
       onNewMessage: handleNewMessage,
       onTypingUpdate: handleTypingUpdate,
+      onParticipantChange: handleParticipantChange,
       onStreamStart: handleStreamStart,
       onStreamChunk: handleStreamChunk,
       onStreamEnd: handleStreamEnd,
@@ -751,6 +729,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     roomContext?.chatSessionId,
     handleNewMessage,
     handleTypingUpdate,
+    handleParticipantChange,
     handleStreamStart,
     handleStreamChunk,
     handleStreamEnd,
@@ -780,16 +759,16 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Listen for dev-only modelUsed announcements via socket
   useEffect(() => {
     const w = (window as any);
-    const socket = (w && w.__patio_socket) || null;
+    const socket = (w?.__patio_socket) || null;
     if (!socket) return;
     const onStart = (payload: any) => {
-      if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-start', payload);
+      // Debug logging removed
     };
     const onContentStart = (payload: any) => {
-      if (process.env.NODE_ENV === 'development') console.info('🔎 model used:', payload?.modelUsed);
+      // Debug logging removed
     };
     const onEnd = (payload: any) => {
-      if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
+      // Debug logging removed
     };
     socket.on?.('ai-stream-start', onStart);
     socket.on?.('ai-content-start', onContentStart);
@@ -806,7 +785,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (roomContext) {
       if (currentChat && currentChat.length > 0) {
         // Initialize with current chat messages
-        if (process.env.NODE_ENV === 'development') console.debug('Init realtime messages:', currentChat.length);
+        // Debug logging removed
         setRealtimeMessages(currentChat);
       } else {
         // Start with empty array for fresh sessions
@@ -821,7 +800,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     if (roomContext) {
       // For room chats, ignore useChat messages completely
       // Only use real-time messages to ensure consistency across all users
-      if (process.env.NODE_ENV === 'development') console.debug('🏠 Room chat using only realtime messages');
+      // Debug logging removed
 
       // Don't merge - real-time messages are the single source of truth
       // This ensures User A and User B see exactly the same messages
@@ -832,7 +811,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   useEffect(() => {
     // Clear messages when switching to a different chat (only for regular chats)
     if (!roomContext && currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
-      if (process.env.NODE_ENV === 'development') console.debug('🧹 Clear messages on chat change');
+      // Debug logging removed
       setMessages([]);
     }
   }, [chatId, currentChatId, roomContext, setMessages]);
@@ -840,7 +819,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   // Force clear messages when component mounts with a new chat ID
   useEffect(() => {
     if (!roomContext && !currentChat) {
-      if (process.env.NODE_ENV === 'development') console.debug('�� New chat detected, clear state');
+      // Debug logging removed
       setMessages([]);
     }
   }, [chatId, roomContext, currentChat, setMessages]);
@@ -853,7 +832,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         // For room chats, create a new chat session within the room
         const newChatSessionId = uuidv4();
 
-        console.log('🆕 Creating new room chat session:', newChatSessionId);
+        // Debug logging removed
 
         // Clear current messages immediately for better UX
         setMessages([]);
@@ -864,7 +843,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         currentParams.set('threadId', newChatSessionId);
         currentParams.delete('chatSession'); // Remove legacy parameter
 
-        const newUrl = `/chat/room/${roomContext.shareCode}?${currentParams.toString()}`;
+const newUrl = `/chat/room/${roomContext.shareCode}?${currentParams.toString()}`;
 
         // Use replace instead of push to avoid back button issues
         router.replace(newUrl);
@@ -872,7 +851,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         // For regular chats, navigate to the main chat page which auto-generates a new ID
         // Add timestamp to force a fresh navigation
         const timestamp = Date.now();
-        router.push(`/chat?t=${timestamp}`);
+router.push(`/chat?t=${timestamp}`);
 
         // Force a hard refresh to ensure clean state
         router.refresh();
@@ -881,7 +860,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
       }
     } catch (error) {
-      console.error('Error creating new chat:', error);
+console.error('Error creating new chat:', error);
       toast.error('Failed to create new chat');
     } finally {
       setIsCreatingNewChat(false);
@@ -1022,7 +1001,7 @@ const ChatComponent: React.FC<ChatProps> = ({
         <div
           className="fixed inset-0 z-[100] pointer-events-none"
           style={{
-            background: `linear-gradient(to right, rgba(0,0,0,${swipeProgress * 0.3}) 0%, transparent 50%)`
+background: `linear-gradient(to right, rgba(0,0,0,${swipeProgress * 0.3}) 0%, transparent 50%)`
           }}
         />
       )}
@@ -1032,8 +1011,8 @@ const ChatComponent: React.FC<ChatProps> = ({
         <div
           className="fixed left-0 top-0 bottom-0 z-[99] bg-background/10 backdrop-blur-sm pointer-events-none transition-all duration-100"
           style={{
-            width: `${swipeProgress * 280}px`,
-            transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`,
+width: `${swipeProgress * 280}px`,
+transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`,
             opacity: swipeProgress
           }}
         />
@@ -1054,7 +1033,7 @@ const ChatComponent: React.FC<ChatProps> = ({
             >
               <Menu className="h-5 w-5" />
             </Button>
-            
+
             {/* PatioAI Logo */}
             <div className="flex-shrink-0">
               <Image
@@ -1065,7 +1044,7 @@ const ChatComponent: React.FC<ChatProps> = ({
                 className="rounded-sm"
               />
             </div>
-            
+
             {/* Room Name */}
             <h1 className="text-base font-medium tracking-tight truncate">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
@@ -1075,16 +1054,16 @@ const ChatComponent: React.FC<ChatProps> = ({
           {/* Right side - Activity Indicators */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Mobile cross-thread activity indicators */}
-            {roomContext && crossThreadActivities.some(activity => 
-              activity.threadId !== (roomContext.chatSessionId || '') && 
+            {roomContext && crossThreadActivities.some(activity =>
+              activity.threadId !== (roomContext.chatSessionId || '') &&
               (activity.activeUsers.length > 0 || activity.typingUsers.length > 0)
             ) && (
-              <CrossThreadActivity
-                currentThreadId={roomContext.chatSessionId || ''}
-                activities={crossThreadActivities}
-                currentUser={roomContext.displayName}
-              />
-            )}
+                <CrossThreadActivity
+                  currentThreadId={roomContext.chatSessionId || ''}
+                  activities={crossThreadActivities}
+                  currentUser={roomContext.displayName}
+                />
+              )}
           </div>
 
           {/* Right side - New Chat Button + compact settings (mobile only) */}
@@ -1125,29 +1104,29 @@ const ChatComponent: React.FC<ChatProps> = ({
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
                   <h1 className="text-base sm:text-lg md:text-xl font-medium tracking-tight truncate overflow-hidden">{roomContext.roomName}</h1>
                 </div>
-                
+
                 {/* Indicators on the right */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Participant count - styled indicator */}
                   <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full border border-green-200/50 dark:border-green-800/30">
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                     <span className="text-xs font-medium text-green-700 dark:text-green-300">
                       {roomContext.participants.length} online
                     </span>
                   </div>
-                  
+
                   {/* Cross-thread activity indicator */}
                   {crossThreadActivities.some(activity =>
                     activity.threadId !== (roomContext.chatSessionId || '') &&
                     (activity.activeUsers.length > 0 || activity.typingUsers.length > 0)
                   ) && (
-                    <CrossThreadActivity
-                      currentThreadId={roomContext.chatSessionId || ''}
-                      activities={crossThreadActivities}
-                      currentUser={roomContext.displayName}
-                    />
-                  )}
-                  
+                      <CrossThreadActivity
+                        currentThreadId={roomContext.chatSessionId || ''}
+                        activities={crossThreadActivities}
+                        currentUser={roomContext.displayName}
+                      />
+                    )}
+
                   {/* Mobile cross-thread activity */}
                   <div className="sm:hidden">
                     <CrossThreadActivity
@@ -1253,7 +1232,7 @@ const ChatComponent: React.FC<ChatProps> = ({
           userTier={(userData as any)?.subscription_tier || 'free'}
           onUpgrade={() => {
             // Placeholder: surface your checkout/upgrade flow here
-            console.log('Upgrade clicked');
+            // Debug logging removed
           }}
         />
       </div>

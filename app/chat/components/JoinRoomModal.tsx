@@ -42,7 +42,7 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
       }
       
       // Extract from URL - 12-character hex format
-      const urlMatch = trimmedLink.match(/\/room\/([A-F0-9]{12})/i);
+      const urlMatch = /\/room\/([A-F0-9]{12})/i.exec(trimmedLink);
       if (urlMatch) {
         return urlMatch[1].toUpperCase();
       }
@@ -168,11 +168,11 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
               <div className="text-xs text-muted-foreground/80">
                 {extractShareCodeFromLink(roomLink) ? (
                   <span className="text-green-600 font-medium">
-                    ✓ Share code: {extractShareCodeFromLink(roomLink)}
+Share code: {extractShareCodeFromLink(roomLink)}
                   </span>
                 ) : (
                   <span className="text-red-600 font-medium">
-                    ✗ Invalid format - please check the link
+Invalid format - please check the link
                   </span>
                 )}
               </div>

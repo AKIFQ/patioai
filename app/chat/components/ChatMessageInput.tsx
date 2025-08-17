@@ -114,7 +114,7 @@ interface RoomContext {
   roomName: string;
   displayName: string;
   sessionId: string;
-  participants: Array<{ displayName: string; joinedAt: string }>;
+  participants: { displayName: string; joinedAt: string }[];
   maxParticipants: number;
   tier: 'free' | 'pro';
   chatSessionId?: string;
@@ -317,7 +317,7 @@ const MessageInput = ({
     
     // Submit through parent component WITHOUT triggering AI
     const submissionId = Math.random().toString(36).substring(7);
-    console.log(`📤 [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
+console.log(` [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
     
     onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false, reasoningMode);
     
@@ -328,7 +328,7 @@ const MessageInput = ({
       fileInputRef.current.value = '';
     }
     
-    console.log(`✅ [${submissionId}] SEND ONLY: Completed`);
+console.log(` [${submissionId}] SEND ONLY: Completed`);
   };
 
   // Handle prompt submission (with AI response)
@@ -351,7 +351,7 @@ const MessageInput = ({
     
     // Submit through parent component WITH AI response triggered
     const submissionId = Math.random().toString(36).substring(7);
-    console.log(`⚡ [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
+console.log(` [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
     
     onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true, reasoningMode);
     
@@ -362,7 +362,7 @@ const MessageInput = ({
       fileInputRef.current.value = '';
     }
     
-    console.log(`✅ [${submissionId}] PROMPT SUBMIT: Completed`);
+console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
   };
 
   // Focus textarea on mount for mobile to open the keyboard when user taps the input

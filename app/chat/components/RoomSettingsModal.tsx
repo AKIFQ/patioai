@@ -32,7 +32,7 @@ interface RoomContext {
   roomName: string;
   displayName: string;
   sessionId: string;
-  participants: Array<{ displayName: string; joinedAt: string; sessionId: string; userId?: string }>;
+  participants: { displayName: string; joinedAt: string; sessionId: string; userId?: string }[];
   maxParticipants: number;
   tier: 'free' | 'pro';
   createdBy?: string;
@@ -138,8 +138,15 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
         if (!response.ok) throw new Error('Failed to remove user');
 
         toast.success(`${displayName} removed from room`);
+        
+        // Close the modal immediately to show the loading state
+        setIsOpen(false);
+        
+        // Trigger room update and refresh
         onRoomUpdate?.();
-        router.refresh();
+        
+        // Force a hard refresh to update the entire room context and participant list
+        window.location.reload();
       } catch {
         toast.error('Failed to remove user');
       } finally {

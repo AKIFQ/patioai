@@ -25,12 +25,12 @@ function log(message, color = 'reset') {
 }
 
 function analyzeBundle() {
-  log('🔍 Analyzing Next.js Bundle...', 'cyan');
+log(' Analyzing Next.js Bundle...', 'cyan');
   
   const buildDir = path.join(process.cwd(), '.next');
   
   if (!fs.existsSync(buildDir)) {
-    log('❌ No build directory found. Run `npm run build` first.', 'red');
+log(' No build directory found. Run `npm run build` first.', 'red');
     return;
   }
 
@@ -51,7 +51,7 @@ function analyzeBundle() {
 }
 
 function analyzeChunks(chunksDir) {
-  log('\n📦 Analyzing Chunks:', 'yellow');
+log('\n Analyzing Chunks:', 'yellow');
   
   const chunks = fs.readdirSync(chunksDir)
     .filter(file => file.endsWith('.js'))
@@ -72,11 +72,11 @@ function analyzeChunks(chunksDir) {
   });
 
   const totalSize = chunks.reduce((sum, chunk) => sum + chunk.size, 0);
-  log(`\n📊 Total chunks size: ${Math.round(totalSize / 1024)}KB`, 'bright');
+log(`\n Total chunks size: ${Math.round(totalSize / 1024)}KB`, 'bright');
 }
 
 function analyzePages(pagesDir) {
-  log('\n📄 Analyzing Pages:', 'yellow');
+log('\n Analyzing Pages:', 'yellow');
   
   const pages = fs.readdirSync(pagesDir)
     .filter(file => file.endsWith('.js'))
@@ -98,7 +98,7 @@ function analyzePages(pagesDir) {
 }
 
 function provideRecommendations() {
-  log('\n💡 Optimization Recommendations:', 'magenta');
+log('\n Optimization Recommendations:', 'magenta');
   
   const recommendations = [
     '1. Use dynamic imports for heavy components',
@@ -113,13 +113,13 @@ function provideRecommendations() {
 
   recommendations.forEach(rec => log(`  ${rec}`, 'cyan'));
   
-  log('\n🚀 Performance Optimizations Applied:', 'green');
+log('\n Performance Optimizations Applied:', 'green');
   const applied = [
-    '✅ React.memo for ChatMessage component',
-    '✅ Virtual scrolling for message lists',
-    '✅ Dynamic imports for heavy components',
-    '✅ Performance monitoring hooks',
-    '✅ Memoized callbacks and effects'
+' React.memo for ChatMessage component',
+' Virtual scrolling for message lists',
+' Dynamic imports for heavy components',
+' Performance monitoring hooks',
+' Memoized callbacks and effects'
   ];
   
   applied.forEach(item => log(`  ${item}`, 'green'));

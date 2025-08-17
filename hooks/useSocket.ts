@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import SocketManager from '../lib/client/socketManager';
-import { ConnectionHealthMonitor, HealthMetrics } from '../lib/client/connectionHealthMonitor';
+import type { HealthMetrics } from '../lib/client/connectionHealthMonitor';
+import { ConnectionHealthMonitor } from '../lib/client/connectionHealthMonitor';
 import { logger } from '../lib/utils/logger';
 
 interface UseSocketReturn {
@@ -50,17 +51,21 @@ export function useSocket(token?: string): UseSocketReturn {
       }
       
       healthMonitorRef.current = new ConnectionHealthMonitor(connectedSocket, {
-        pingInterval: 30000, // 30 seconds
-        pingTimeout: 5000, // 5 seconds
-        maxFailures: 3,
+        pingInterval: 60000, // 60 seconds - less aggressive
+        pingTimeout: 10000, // 10 seconds - more time for response
+        maxFailures: 5, // More failures before triggering reconnection
         onStatusChange: (status, metrics) => {
-          console.log(`🏥 Connection health: ${status}`, metrics);
+console.log(` Connection health: ${status}`, metrics);
           setHealthMetrics(metrics);
         },
         onReconnectNeeded: () => {
-          console.log('🏥 Health monitor requesting reconnection');
-          if (shouldStayConnectedRef.current) {
+console.log(' Health monitor requesting reconnection');
+          // Only reconnect if socket is actually disconnected, not just slow
+          if (shouldStayConnectedRef.current && !connectedSocket.connected) {
+console.log(' Socket is actually disconnected, reconnecting...');
             connect();
+          } else {
+console.log(' Socket still connected, ignoring reconnection request');
           }
         }
       });
@@ -95,7 +100,7 @@ export function useSocket(token?: string): UseSocketReturn {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        console.log('🌙 Browser backgrounded - maintaining socket connection with reduced activity');
+console.log(' Browser backgrounded - maintaining socket connection with reduced activity');
         isBackgroundedRef.current = true;
         // Keep connection alive, just reduce health monitoring frequency
         if (socket?.connected) {
@@ -106,7 +111,7 @@ export function useSocket(token?: string): UseSocketReturn {
           healthMonitorRef.current.setBackgroundMode(true);
         }
       } else {
-        console.log('🌅 Browser foregrounded - resuming full activity');
+console.log(' Browser foregrounded - resuming full activity');
         isBackgroundedRef.current = false;
         
         // Restore normal health monitoring
@@ -116,11 +121,11 @@ export function useSocket(token?: string): UseSocketReturn {
         
         // User returned, verify connection and recover any pending messages
         if (socket && !socket.connected && shouldStayConnectedRef.current) {
-          console.log('🔄 Reconnecting socket after foreground');
+console.log(' Reconnecting socket after foreground');
           connect();
         } else if (socket?.connected) {
           // Verify connection is still healthy after being backgrounded
-          console.log('🔍 Verifying connection health after foreground');
+console.log(' Verifying connection health after foreground');
           socket.emit('user-foreground', { timestamp: Date.now() });
           
           // Trigger health check to ensure connection is still good
@@ -182,16 +187,9 @@ export function useSocket(token?: string): UseSocketReturn {
         setIsConnected(false);
         setConnectionStatus('disconnected');
         
-        // Auto-reconnect if the disconnection wasn't intentional and we should stay connected
-        if (shouldStayConnectedRef.current && reason !== 'io client disconnect') {
-          console.log('🔄 Scheduling automatic reconnection...');
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (shouldStayConnectedRef.current && !socket?.connected) {
-              console.log('🔄 Attempting automatic reconnection');
-              connect();
-            }
-          }, 2000); // Wait 2 seconds before reconnecting
-        }
+        // DISABLED: Auto-reconnect was causing constant refresh loops
+        // Let Socket.IO handle its own reconnection instead of forcing it
+console.log(' Socket disconnected, letting Socket.IO handle reconnection naturally');
       };
 
       const handleError = (err: Error) => {
@@ -200,15 +198,9 @@ export function useSocket(token?: string): UseSocketReturn {
         setConnectionStatus('error');
         setIsConnected(false);
         
-        // Retry connection after error if we should stay connected
-        if (shouldStayConnectedRef.current) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (shouldStayConnectedRef.current) {
-              console.log('🔄 Retrying connection after error');
-              connect();
-            }
-          }, 3000); // Wait 3 seconds before retrying after error
-        }
+        // DISABLED: Manual retry was causing refresh loops
+        // Let Socket.IO handle its own error recovery
+console.log(' Socket error, letting Socket.IO handle recovery naturally');
       };
 
       socket.on('connect', handleConnect);

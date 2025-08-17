@@ -6,15 +6,16 @@ import { Server as SocketIOServer } from 'socket.io';
 import { config } from './lib/config/endpoints';
 import { createSocketHandlers } from './lib/server/socketHandlers';
 import { setSocketIOInstance } from './lib/server/socketEmitter';
-import { AuthenticatedSocket } from './types/socket';
+import type { AuthenticatedSocket } from './types/socket';
 import { MemoryManager } from './lib/monitoring/memoryManager';
 import { AlertSystem } from './lib/monitoring/alertSystem';
+import { MemoryProtection } from './lib/monitoring/memoryProtection';
 
 // Print masked key so we can confirm availability at process start
 try {
   const k = process.env.OPENROUTER_API_KEY || '';
   const masked = k ? `${k.slice(0, 6)}…${k.slice(-4)}` : 'MISSING';
-  console.log(`🔐 OPENROUTER_API_KEY (server.ts): ${masked}`);
+console.log(` OPENROUTER_API_KEY (server.ts): ${masked}`);
 } catch {}
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -74,12 +75,14 @@ app.prepare().then(() => {
   // Set the global Socket.IO instance for API routes to use
   setSocketIOInstance(io);
 
-  // Initialize monitoring systems
+  // Initialize monitoring and protection systems
   const memoryManager = MemoryManager.getInstance();
   const alertSystem = AlertSystem.getInstance();
+  const memoryProtection = MemoryProtection.getInstance();
   
-  console.log('🧠 Memory Manager initialized with aggressive cleanup');
-  console.log('🚨 Alert System initialized with updated thresholds');
+  console.log('Memory Manager initialized with adaptive monitoring');
+console.log('Memory Protection initialized with emergency mode');
+console.log('Alert System initialized with updated thresholds');
 
   // Initialize socket handlers
   const socketHandlers = createSocketHandlers(io);
@@ -104,19 +107,19 @@ app.prepare().then(() => {
 
   // Graceful shutdown handling
   const gracefulShutdown = async (signal: string) => {
-    console.log(`\n🛑 Received ${signal}, starting graceful shutdown...`);
+console.log(`\n Received ${signal}, starting graceful shutdown...`);
     
     try {
       // 1. Stop accepting new connections
       server.close(() => {
-        console.log('✅ HTTP server closed');
+console.log(' HTTP server closed');
       });
       
       // 2. Close Socket.IO connections
       if (io) {
-        console.log('🔌 Closing Socket.IO connections...');
+console.log(' Closing Socket.IO connections...');
         io.close(() => {
-          console.log('✅ Socket.IO server closed');
+console.log(' Socket.IO server closed');
         });
       }
       
@@ -124,11 +127,12 @@ app.prepare().then(() => {
       console.log('🧹 Cleaning up monitoring systems...');
       memoryManager.cleanup();
       alertSystem.cleanup();
+      memoryProtection.cleanup();
       
-      console.log('✅ Graceful shutdown completed');
+console.log(' Graceful shutdown completed');
       process.exit(0);
     } catch (error) {
-      console.error('❌ Error during graceful shutdown:', error);
+console.error(' Error during graceful shutdown:', error);
       process.exit(1);
     }
   };

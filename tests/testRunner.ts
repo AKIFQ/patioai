@@ -23,7 +23,7 @@ export class ComprehensiveTestRunner {
     results: TestSuiteResult[];
     finalReport: string;
   }> {
-    console.log('🚀 Starting comprehensive test suite...');
+console.log(' Starting comprehensive test suite...');
     console.log('This will test all aspects of the realtime-refactor system\n');
 
     const startTime = Date.now();
@@ -40,8 +40,8 @@ export class ComprehensiveTestRunner {
     // Generate comprehensive report
     const finalReport = this.generateFinalReport();
 
-    console.log(`\n🏁 Comprehensive testing completed in ${Math.round(totalDuration / 1000)}s`);
-    console.log(`Overall Result: ${overallSuccess ? '✅ PASSED' : '❌ FAILED'}`);
+console.log(`\n Comprehensive testing completed in ${Math.round(totalDuration / 1000)}s`);
+console.log(`Overall Result: ${overallSuccess ? ' PASSED' : ' FAILED'}`);
 
     return {
       overallSuccess,
@@ -55,7 +55,7 @@ export class ComprehensiveTestRunner {
     const startTime = Date.now();
     
     try {
-      console.log(`\n📋 Running Test Suite: ${name}`);
+console.log(`\n Running Test Suite: ${name}`);
       console.log('='.repeat(50));
       
       const result = await testFn();
@@ -69,7 +69,7 @@ export class ComprehensiveTestRunner {
         details: result
       });
       
-      console.log(`\n✅ ${name} - COMPLETED (${Math.round(duration / 1000)}s)`);
+console.log(`\n ${name} - COMPLETED (${Math.round(duration / 1000)}s)`);
       
     } catch (error: any) {
       const duration = Date.now() - startTime;
@@ -83,7 +83,7 @@ export class ComprehensiveTestRunner {
         error: error.message
       });
       
-      console.log(`\n❌ ${name} - FAILED (${Math.round(duration / 1000)}s): ${error.message}`);
+console.log(`\n ${name} - FAILED (${Math.round(duration / 1000)}s): ${error.message}`);
     }
   }
 
@@ -98,15 +98,15 @@ export class ComprehensiveTestRunner {
 
     try {
       // Test security system
-      console.log('  🔒 Testing security components...');
+console.log(' Testing security components...');
       results.security = testSecuritySystem();
       
       // Test monitoring system
-      console.log('  📊 Testing monitoring components...');
+console.log(' Testing monitoring components...');
       results.monitoring = testMonitoringSystem();
       
       // Test API endpoints
-      console.log('  🌐 Testing API endpoints...');
+console.log(' Testing API endpoints...');
       results.apis = await this.testAPIEndpoints();
       
     } catch (error) {
@@ -139,12 +139,12 @@ export class ComprehensiveTestRunner {
       try {
         const response = await fetch(`${baseUrl}${endpoint}`);
         if (!response.ok) {
-          console.log(`    ❌ ${endpoint} - Status: ${response.status}`);
+console.log(` ${endpoint} - Status: ${response.status}`);
           return false;
         }
-        console.log(`    ✅ ${endpoint} - OK`);
+console.log(` ${endpoint} - OK`);
       } catch (error) {
-        console.log(`    ❌ ${endpoint} - Error: ${(error as Error).message}`);
+console.log(` ${endpoint} - Error: ${(error as Error).message}`);
         return false;
       }
     }
@@ -160,29 +160,29 @@ export class ComprehensiveTestRunner {
 
     let report = `# Comprehensive Test Report - Realtime Refactor\n\n`;
     report += `**Generated:** ${new Date().toISOString()}\n`;
-    report += `**Overall Result:** ${overallSuccess ? '✅ PASSED' : '❌ FAILED'}\n`;
+report += `**Overall Result:** ${overallSuccess ? ' PASSED' : ' FAILED'}\n`;
     report += `**Total Duration:** ${Math.round(totalDuration / 1000)} seconds\n`;
     report += `**Test Suites:** ${this.results.length} total, ${successfulSuites} passed, ${failedSuites} failed\n\n`;
 
     // Executive Summary
     report += `## Executive Summary\n\n`;
     if (overallSuccess) {
-      report += `🎉 **All test suites passed successfully!** The realtime-refactor system is ready for production deployment.\n\n`;
+report += ` **All test suites passed successfully!** The realtime-refactor system is ready for production deployment.\n\n`;
       report += `The system demonstrates:\n`;
-      report += `- ✅ Robust security implementation with comprehensive protection\n`;
-      report += `- ✅ Excellent performance under load\n`;
-      report += `- ✅ Complete monitoring and observability\n`;
-      report += `- ✅ All user journeys working correctly\n`;
-      report += `- ✅ System components functioning as expected\n\n`;
+report += `- Robust security implementation with comprehensive protection\n`;
+report += `- Excellent performance under load\n`;
+report += `- Complete monitoring and observability\n`;
+report += `- All user journeys working correctly\n`;
+report += `- System components functioning as expected\n\n`;
     } else {
-      report += `⚠️ **Some test suites failed.** Review the issues below before production deployment.\n\n`;
+report += ` **Some test suites failed.** Review the issues below before production deployment.\n\n`;
     }
 
     // Test Suite Results
     report += `## Test Suite Results\n\n`;
     
     for (const result of this.results) {
-      const status = result.success ? '✅ PASSED' : '❌ FAILED';
+const status = result.success ? ' PASSED' : ' FAILED';
       const duration = Math.round(result.duration / 1000);
       
       report += `### ${result.name} - ${status}\n`;
@@ -227,7 +227,7 @@ export class ComprehensiveTestRunner {
 
     // E2E Test Analysis
     const e2eTest = this.results.find(r => r.name === 'End-to-End User Journeys');
-    if (e2eTest && e2eTest.success) {
+    if (e2eTest?.success) {
       report += `### End-to-End Testing\n`;
       report += `User journey testing completed successfully:\n`;
       report += `- Tests passed: ${e2eTest.details.passed || 0}\n`;
@@ -237,7 +237,7 @@ export class ComprehensiveTestRunner {
 
     // Performance Analysis
     const perfTest = this.results.find(r => r.name === 'Performance & Load Testing');
-    if (perfTest && perfTest.success) {
+    if (perfTest?.success) {
       report += `### Performance Testing\n`;
       report += `Performance testing shows acceptable results:\n`;
       if (perfTest.summary.performance) {
@@ -250,7 +250,7 @@ export class ComprehensiveTestRunner {
 
     // Security Analysis
     const secTest = this.results.find(r => r.name === 'Security & Vulnerability Testing');
-    if (secTest && secTest.success) {
+    if (secTest?.success) {
       report += `### Security Testing\n`;
       report += `Security testing completed with good results:\n`;
       if (secTest.summary.security) {
@@ -267,7 +267,7 @@ export class ComprehensiveTestRunner {
     report += `## Recommendations\n\n`;
     
     if (overallSuccess) {
-      report += `### Production Readiness ✅\n`;
+report += `### Production Readiness \n`;
       report += `The system is ready for production deployment with the following recommendations:\n`;
       report += `- Continue regular monitoring and health checks\n`;
       report += `- Implement automated testing in CI/CD pipeline\n`;
@@ -275,7 +275,7 @@ export class ComprehensiveTestRunner {
       report += `- Plan for regular security audits\n`;
       report += `- Monitor performance metrics in production\n\n`;
     } else {
-      report += `### Issues to Address ⚠️\n`;
+report += `### Issues to Address \n`;
       report += `Before production deployment, address the following:\n`;
       
       for (const result of this.results.filter(r => !r.success)) {
@@ -309,16 +309,16 @@ export class ComprehensiveTestRunner {
   }
 
   // Save report to file
-  async saveReport(filename: string = 'comprehensive-test-report.md'): Promise<void> {
+  async saveReport(filename = 'comprehensive-test-report.md'): Promise<void> {
     const report = this.generateFinalReport();
     
     try {
       // In a real environment, you would write to file system
-      console.log(`\n📄 Test report generated (${report.length} characters)`);
+console.log(`\n Test report generated (${report.length} characters)`);
       console.log(`Report would be saved as: ${filename}`);
       
       // For now, just log a summary
-      console.log('\n📊 FINAL TEST SUMMARY:');
+console.log('\n FINAL TEST SUMMARY:');
       console.log(`- Test Suites Run: ${this.results.length}`);
       console.log(`- Successful: ${this.results.filter(r => r.success).length}`);
       console.log(`- Failed: ${this.results.filter(r => !r.success).length}`);

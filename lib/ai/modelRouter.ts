@@ -28,13 +28,6 @@ export class ModelRouter {
    */
   routeModel(userTier: UserTier, context: MessageContext, selectedModel?: string, costControl?: CostControl, reasoningMode?: boolean): string {
     // PROMINENT Debug logging
-    console.log(`🚨 MODEL ROUTER CALLED:`, {
-      tier: userTier.tier,
-      selectedModel,
-      reasoningMode,
-      complexity: context.complexity
-    });
-    
     // Reasoning mode routing across tiers
     if (reasoningMode === true) {
       if (userTier.tier === 'premium') {
@@ -46,7 +39,6 @@ export class ModelRouter {
 
     // Handle auto mode for free users (only if not in reasoning mode)
     if ((selectedModel === 'auto' || userTier.tier === 'free') && !reasoningMode) {
-      console.log(`🔄 Regular free routing (no reasoning)`);
       return this.getOptimalFreeModel(context);
     }
 
@@ -87,13 +79,13 @@ export class ModelRouter {
 
     // If approaching warning threshold, suggest efficient alternatives
     if (costControl.monthlySpend > costControl.warningThreshold) {
-      console.log(`⚠️ User approaching cost limit, suggesting efficient model`);
+console.log(` User approaching cost limit, suggesting efficient model`);
       return 'deepseek/deepseek-r1'; // Most efficient reasoning model
     }
 
     // If hard limit reached, force fallback
     if (costControl.monthlySpend > costControl.hardLimit) {
-      console.log(`🚫 User hit cost limit, forcing fallback`);
+console.log(` User hit cost limit, forcing fallback`);
       return FREE_MODEL_ROUTING.fallback;
     }
 

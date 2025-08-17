@@ -30,7 +30,7 @@ export interface ErrorHandlingResult<T> {
 export class AsyncErrorHandler {
   private static instance: AsyncErrorHandler;
   private performanceMonitor = PerformanceMonitor.getInstance();
-  private errorListeners: Array<(feedback: UserFeedback) => void> = [];
+  private errorListeners: ((feedback: UserFeedback) => void)[] = [];
 
   static getInstance(): AsyncErrorHandler {
     if (!AsyncErrorHandler.instance) {

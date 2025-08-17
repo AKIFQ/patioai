@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { CircuitBreakerManager } from '@/lib/resilience/circuitBreaker';
 import { RetryManager } from '@/lib/resilience/retryMechanism';
 import { AsyncErrorHandler } from '@/lib/error/asyncErrorHandler';

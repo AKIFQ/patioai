@@ -13,6 +13,11 @@
     "analyze-bundle": "node scripts/analyze-bundle.js",
     "generate-types": "npx supabase gen types typescript --project-id YOUR_PROJECT_ID --schema public > types_db.ts",
     "memory:report": "node scripts/memory-monitor.js --report",
+    "cleanup:logs": "node scripts/cleanup-logs.js",
+    "cleanup:server-logs": "node scripts/cleanup-server-logs.js",
+    "cleanup:all-logs": "npm run cleanup:logs && npm run cleanup:server-logs",
+    "remove:emojis": "node scripts/remove-emojis.js",
+    "remove:all-emojis": "node scripts/remove-all-emojis.js",
     "memory:cleanup": "node scripts/memory-monitor.js --cleanup",
     "memory:monitor": "node scripts/memory-monitor.js --monitor",
     "memory:thresholds": "node scripts/memory-monitor.js --thresholds"

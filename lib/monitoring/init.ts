@@ -5,7 +5,7 @@ import { PerformanceMonitor } from './performanceMonitor';
 import { alertSystem } from './alertSystem';
 
 export function initializeMonitoring() {
-  console.log('🔍 Initializing monitoring systems...');
+console.log(' Initializing monitoring systems...');
 
   try {
     // Initialize monitoring instances
@@ -42,11 +42,11 @@ export function initializeMonitoring() {
     const startTime = Date.now();
     process.on('exit', () => {
       const uptime = Date.now() - startTime;
-      console.log(`📊 Process uptime: ${Math.round(uptime / 1000)}s`);
+console.log(` Process uptime: ${Math.round(uptime / 1000)}s`);
     });
 
     // Log system information
-    console.log('📊 System Information:', {
+console.log(' System Information:', {
       nodeVersion: process.version,
       platform: process.platform,
       arch: process.arch,
@@ -54,7 +54,7 @@ export function initializeMonitoring() {
       uptime: Math.floor(process.uptime())
     });
 
-    console.log('✅ Monitoring systems initialized successfully');
+console.log(' Monitoring systems initialized successfully');
 
     return {
       socketMonitor,
@@ -64,7 +64,7 @@ export function initializeMonitoring() {
     };
 
   } catch (error) {
-    console.error('❌ Failed to initialize monitoring systems:', error);
+console.error(' Failed to initialize monitoring systems:', error);
     throw error;
   }
 }

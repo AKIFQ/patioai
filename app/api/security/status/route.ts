@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { authValidator } from '@/lib/security/authValidator';
 import { csrfProtection } from '@/lib/security/csrfProtection';
 import { auditLogger } from '@/lib/security/auditLogger';
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
 function calculateSecurityScore(status: any): {
   score: number;
   level: 'excellent' | 'good' | 'fair' | 'poor';
-  factors: Array<{ factor: string; score: number; weight: number }>;
+  factors: { factor: string; score: number; weight: number }[];
 } {
   const factors = [
     {
