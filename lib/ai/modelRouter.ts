@@ -42,13 +42,29 @@ export class ModelRouter {
       return this.getOptimalFreeModel(context);
     }
 
-    // Paid users - check if model is available for their tier
-    if (selectedModel && isModelAvailableForTier(selectedModel, userTier.tier)) {
-      // Check cost controls for premium tier
-      if (userTier.tier === 'premium' && costControl) {
-        return this.applyCostControl(selectedModel, costControl);
+    // CRITICAL FIX: Handle invalid model names from frontend cookies
+    if (selectedModel) {
+      // Map common invalid model names to valid ones
+      const modelMapping: Record<string, string> = {
+        'gemini-2.5-flash': 'google/gemini-2.0-flash-exp:free',
+        'gemini-flash': 'google/gemini-2.0-flash-exp:free',
+        'gemini-2.0-flash': 'google/gemini-2.0-flash-exp:free',
+        'deepseek-r1': 'deepseek/deepseek-r1:free',
+        'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet',
+        'gpt-4o': 'openai/gpt-4o'
+      };
+
+      // Map invalid model names to valid ones
+      const mappedModel = modelMapping[selectedModel] || selectedModel;
+
+      // Check if the mapped model is available for their tier
+      if (isModelAvailableForTier(mappedModel, userTier.tier)) {
+        // Check cost controls for premium tier
+        if (userTier.tier === 'premium' && costControl) {
+          return this.applyCostControl(mappedModel, costControl);
+        }
+        return mappedModel;
       }
-      return selectedModel;
     }
 
     // Fallback to tier default

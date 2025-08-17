@@ -881,6 +881,7 @@ this.io.to(`room:${shareCode}`).emit('room-message-created', {
       }
     } catch (error) {
       console.error('Error streaming AI response:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
     }
   }
