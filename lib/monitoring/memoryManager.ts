@@ -83,17 +83,17 @@ export class MemoryManager {
     const memStats = this.getMemoryStats();
     const heapUsedMB = memStats.heapUsed / 1024 / 1024;
 
-    // Log current memory usage
+    // Check memory usage thresholds
     if (heapUsedMB > this.WARNING_THRESHOLD) {
-console.warn(` High memory usage: ${Math.round(heapUsedMB)}MB`);
+      console.warn('High memory usage:', Math.round(heapUsedMB), 'MB');
     }
 
     // Trigger cleanup if needed
     if (heapUsedMB > this.CRITICAL_THRESHOLD) {
-console.error(` CRITICAL: Memory usage ${Math.round(heapUsedMB)}MB - triggering aggressive cleanup`);
+      console.error('CRITICAL: Memory usage', Math.round(heapUsedMB), 'MB - triggering cleanup');
       this.performAggressiveCleanup();
     } else if (heapUsedMB > this.WARNING_THRESHOLD) {
-console.warn(` WARNING: Memory usage ${Math.round(heapUsedMB)}MB - triggering moderate cleanup`);
+      console.warn('WARNING: Memory usage', Math.round(heapUsedMB), 'MB - triggering cleanup');
       this.performModerateCleanup();
     }
   }
@@ -115,7 +115,7 @@ console.warn(` WARNING: Memory usage ${Math.round(heapUsedMB)}MB - triggering mo
     const actions: string[] = [];
 
     try {
-      console.log('🧹 Starting aggressive memory cleanup...');
+      // Starting aggressive memory cleanup
 
       // 1. Force garbage collection if available
       if (global.gc) {
@@ -152,7 +152,7 @@ console.warn(` WARNING: Memory usage ${Math.round(heapUsedMB)}MB - triggering mo
       const afterMemory = this.getMemoryStats().heapUsed;
       const freedMemory = beforeMemory - afterMemory;
 
-console.log(` Aggressive cleanup completed: freed ${Math.round(freedMemory / 1024 / 1024)}MB`);
+      // Aggressive cleanup completed
 
       // Record cleanup result
       this.cleanupHistory.push({
@@ -164,7 +164,7 @@ console.log(` Aggressive cleanup completed: freed ${Math.round(freedMemory / 102
       return { success: true, freedMemory, actions };
 
     } catch (error) {
-console.error(' Error during aggressive cleanup:', error);
+      console.error('Error during aggressive cleanup:', error);
       return { success: false, freedMemory: 0, actions, error: String(error) };
     } finally {
       this.cleanupInProgress = false;
@@ -188,7 +188,7 @@ console.error(' Error during aggressive cleanup:', error);
     const actions: string[] = [];
 
     try {
-      console.log('🧹 Starting moderate memory cleanup...');
+      // Starting moderate memory cleanup
 
       // 1. Clean up old socket data
       await this.cleanupSocketData(false);
@@ -207,12 +207,12 @@ console.error(' Error during aggressive cleanup:', error);
       const afterMemory = this.getMemoryStats().heapUsed;
       const freedMemory = beforeMemory - afterMemory;
 
-console.log(` Moderate cleanup completed: freed ${Math.round(freedMemory / 1024 / 1024)}MB`);
+      // Moderate cleanup completed
 
       return { success: true, freedMemory, actions };
 
     } catch (error) {
-console.error(' Error during moderate cleanup:', error);
+      console.error('Error during moderate cleanup:', error);
       return { success: false, freedMemory: 0, actions, error: String(error) };
     } finally {
       this.cleanupInProgress = false;
@@ -225,7 +225,7 @@ console.error(' Error during moderate cleanup:', error);
       // Pre-cache instances to avoid memory allocation during critical situations
       
       if (aggressive) {
-        console.log('🧹 Cleaning Socket.IO internal memory structures');
+        // Cleaning Socket.IO internal memory structures
         
         // Clean Socket.IO memory FIRST (most critical)
         const io = (global as any).__socketIO;
@@ -266,7 +266,7 @@ console.error(' Error during moderate cleanup:', error);
           }
           
           if (cleanedSockets > 0 || cleanedRooms > 0) {
-            console.log(`🧹 Cleaned ${cleanedSockets} sockets, ${cleanedRooms} rooms`);
+            // Cleaned sockets and rooms
           }
         }
         
@@ -296,7 +296,7 @@ console.error(' Error during moderate cleanup:', error);
   private async cleanupErrorData(aggressive = true) {
     try {
       // CRITICAL FIX: Don't create new instances during memory pressure
-      console.log('🧹 Cleaned error tracker data');
+      // Cleaning error tracker data
       
       if (aggressive) {
         // Minimal error cleanup without instance creation
@@ -316,7 +316,7 @@ console.error(' Error during moderate cleanup:', error);
   private async cleanupPerformanceData(aggressive = true) {
     try {
       // CRITICAL FIX: Don't create new instances during memory pressure  
-      console.log('🧹 Cleaned performance monitor metrics');
+      // Cleaning performance monitor metrics
       
       if (aggressive) {
         try {
@@ -337,7 +337,7 @@ console.error(' Error during moderate cleanup:', error);
     try {
       // Force close any idle database connections
       // This is implementation-specific to your database client
-console.log(' Cleaning up database connections...');
+      // Cleaning up database connections
       
       // If using Supabase, connections are managed automatically
       // But we can clear any cached clients
@@ -387,7 +387,7 @@ console.log(' Cleaning up database connections...');
   }
 
   public async forceCleanup(): Promise<CleanupResult> {
-    console.log('🧹 Manual cleanup triggered');
+    // Manual cleanup triggered
     return this.performAggressiveCleanup();
   }
 
@@ -395,7 +395,7 @@ console.log(' Cleaning up database connections...');
     if (warning > 0 && critical > warning) {
       (this as any).WARNING_THRESHOLD = warning;
       (this as any).CRITICAL_THRESHOLD = critical;
-      console.log(`🧠 Memory thresholds updated: Warning=${warning}MB, Critical=${critical}MB`);
+      // Memory thresholds updated
     }
   }
 
@@ -406,7 +406,7 @@ console.log(' Cleaning up database connections...');
     }
     
     this.cleanupHistory = [];
-    console.log('🧠 Memory Manager: Cleaned up');
+    // Memory Manager cleaned up
   }
 
   // CRITICAL: Emergency memory circuit breaker

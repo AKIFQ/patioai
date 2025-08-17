@@ -64,7 +64,7 @@ export class SocketMonitor {
 
   initialize(io: SocketIOServer) {
     this.setSocketIOInstance(io);
-    console.log('Socket Monitor initialized with Socket.IO server');
+    // Socket Monitor initialized
   }
 
   // Track connection events
@@ -96,7 +96,7 @@ export class SocketMonitor {
 
     this.metrics.lastUpdated = now;
 
-console.log(` Socket Monitor: User ${userId} connected (${this.metrics.activeConnections} active)`);
+    // User connected
   }
 
   onDisconnect(userId: string, socketId: string, reason?: string) {
@@ -132,14 +132,14 @@ console.log(` Socket Monitor: User ${userId} connected (${this.metrics.activeCon
 
     this.metrics.lastUpdated = now;
 
-console.log(` Socket Monitor: User ${userId} disconnected after ${Math.round(duration / 1000)}s (${this.metrics.activeConnections} active)`);
+    // User disconnected
   }
 
   onRoomJoin(userId: string, roomId: string) {
     const roomConnections = this.metrics.connectionsByRoom.get(roomId) || 0;
     this.metrics.connectionsByRoom.set(roomId, roomConnections + 1);
     
-console.log(` Socket Monitor: User ${userId} joined room ${roomId} (${roomConnections + 1} in room)`);
+    // User joined room
   }
 
   onRoomLeave(userId: string, roomId: string) {
@@ -150,7 +150,7 @@ console.log(` Socket Monitor: User ${userId} joined room ${roomId} (${roomConnec
       this.metrics.connectionsByRoom.set(roomId, roomConnections - 1);
     }
 
-console.log(` Socket Monitor: User ${userId} left room ${roomId} (${Math.max(0, roomConnections - 1)} in room)`);
+    // User left room
   }
 
   // Get current metrics
@@ -260,7 +260,7 @@ console.log(` Socket Monitor: User ${userId} left room ${roomId} (${Math.max(0, 
       event => event.timestamp >= oneDayAgo
     );
 
-console.log(` Socket Monitor: Cleaned up old connection history, ${this.connectionHistory.length} events remaining`);
+    // Cleaned up old connection history
   }
 
   private getOverallStatus(): 'healthy' | 'warning' | 'critical' {

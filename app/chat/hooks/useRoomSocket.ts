@@ -123,7 +123,7 @@ export function useRoomSocket({
 
   // Handle participant changes from Socket.IO
   const handleParticipantChange = useCallback((data: any) => {
-    console.log('Participant change:', data);
+    // Participant change
     if (onParticipantChange) {
       onParticipantChange([]);
     }
@@ -131,7 +131,7 @@ export function useRoomSocket({
 
   // Handle room deletion from Socket.IO
   const handleRoomDeleted = useCallback((data: any) => {
-    console.log('Room deleted:', data);
+    // Room deleted
     // Redirect user away from deleted room
     if (typeof window !== 'undefined') {
       window.location.href = '/chat';
@@ -146,7 +146,7 @@ export function useRoomSocket({
         retryDelay: 1000,
         queueSize: 50
       });
-console.log(' Message queue initialized for room socket');
+// Message queue initialized
     }
   }, [socket]);
 
@@ -500,7 +500,7 @@ console.log(' Cleanup already executed, skipping');
       }
       cleanupExecuted = true;
 
-      console.log('🧹 Starting room socket cleanup for:', shareCode);
+      // Starting room socket cleanup
 
       // Clean up empty thread if no messages were sent (disable during active sessions to reduce churn)
       // if (!hasMessagesRef.current && chatSessionId) {
@@ -509,13 +509,13 @@ console.log(' Cleanup already executed, skipping');
 
       // Clean up socket listeners using tracked listeners
       if (socket) {
-        console.log(`🧹 Removing ${eventListeners.size} tracked socket listeners`);
+        // Removing tracked socket listeners
         
         // Remove all tracked listeners with their specific handlers
         for (const [event, handler] of eventListeners.entries()) {
           try {
             socket.off(event, handler);
-console.log(` Removed listener: ${event}`);
+// Removed listener
           } catch (error) {
 console.warn(` Failed to remove listener ${event}:`, error);
           }
@@ -557,7 +557,7 @@ console.warn(` Failed to remove listener ${event}:`, error);
         document.removeEventListener('visibilitychange', handleVisibility);
       }
       
-console.log(' Room socket cleanup completed for:', shareCode);
+// Room socket cleanup completed
     };
   }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange, onStreamStart, onStreamChunk, onStreamEnd]);
 
@@ -574,11 +574,11 @@ console.log(' Room socket cleanup completed for:', shareCode);
     if (socket && isConnected) {
       // Use message queue for critical AI invocation
       if (messageQueueRef.current) {
-        console.log('🧠 Queueing AI invocation for reliability');
+        // Queueing AI invocation
         messageQueueRef.current.enqueue('invoke-ai', payload, 'high');
       } else {
         // Fallback to direct emit
-        console.log('🧠 Direct AI invocation (no queue available)');
+        // Direct AI invocation
         socket.emit('invoke-ai', payload);
       }
     } else {

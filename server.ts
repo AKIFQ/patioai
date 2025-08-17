@@ -107,29 +107,29 @@ console.log('Alert System initialized with updated thresholds');
 
   // Graceful shutdown handling
   const gracefulShutdown = async (signal: string) => {
-console.log(`\n Received ${signal}, starting graceful shutdown...`);
+// Starting graceful shutdown
     
     try {
       // 1. Stop accepting new connections
       server.close(() => {
-console.log(' HTTP server closed');
+// HTTP server closed
       });
       
       // 2. Close Socket.IO connections
       if (io) {
-console.log(' Closing Socket.IO connections...');
+// Closing Socket.IO connections
         io.close(() => {
-console.log(' Socket.IO server closed');
+// Socket.IO server closed
         });
       }
       
       // 3. Cleanup monitoring systems
-      console.log('🧹 Cleaning up monitoring systems...');
+      // Cleaning up monitoring systems
       memoryManager.cleanup();
       alertSystem.cleanup();
       memoryProtection.cleanup();
       
-console.log(' Graceful shutdown completed');
+// Graceful shutdown completed
       process.exit(0);
     } catch (error) {
 console.error(' Error during graceful shutdown:', error);
@@ -158,9 +158,9 @@ console.error(' Error during graceful shutdown:', error);
       process.exit(1);
     })
     .listen(port, () => {
-      console.log(`> Ready on http://${hostname}:${port}`);
-      console.log(`> Socket.IO server initialized`);
+      // Server ready
+      // Socket.IO server initialized
       
-      console.log(`> Socket.IO server initialized with monitoring`);
+      // Socket.IO server initialized with monitoring
     });
 });

@@ -18,23 +18,14 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
   const router = useRouter();
 
   const handleNewRoomMessage = useCallback(async (data: any) => {
-console.log(' SIDEBAR: Raw room message received:', {
-      eventType: data.eventType,
-      table: data.table,
-      messageId: data.new?.id,
-      threadId: data.new?.thread_id,
-      sender: data.new?.sender_name,
-      isAI: data.new?.is_ai_response,
-      content: data.new?.content?.substring(0, 30),
-      roomId: data.new?.room_id
-    });
+// Debug logging removed for production
 
     // Data structure from Socket.IO should match the Supabase realtime payload structure
     const newMessage = data.new || data;
 
     // Only handle user messages (not AI responses) to detect new threads
     if (newMessage.is_ai_response) {
-console.log(' SIDEBAR: Skipping AI message');
+// Skipping AI message
       return;
     }
 
@@ -76,14 +67,7 @@ console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code
 
     // Check if this is a new thread we haven't seen before
     if (!seenThreadsRef.current.has(threadId)) {
-      console.log('🆕 SIDEBAR: New room thread detected in authorized room:', {
-        threadId,
-        sender: newMessage.sender_name,
-        content: newMessage.content?.substring(0, 30),
-        roomId: newMessage.room_id,
-        roomName: roomData.name,
-        shareCode: roomData.share_code
-      });
+      // New room thread detected
 
       // Mark this thread as seen
       seenThreadsRef.current.add(threadId);
@@ -98,16 +82,16 @@ console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code
         createdAt: newMessage.created_at
       };
 
-console.log(` SIDEBAR: New thread "${newMessage.content?.substring(0, 30)}..." created in authorized room ${roomData.name}`);
+// New thread created in room
 
       // CRITICAL: Refresh sidebar data for new thread
-console.log(' SIDEBAR: REFRESHING SIDEBAR for new thread:', threadData);
+// Refreshing sidebar for new thread
       try {
         // Use multiple strategies to ensure sidebar refresh
         await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
         await mutate('chatPreviews'); // Also try direct key
         await mutate('roomChats'); // CRITICAL: Refresh room chat data
-console.log(' SIDEBAR: Triggered SWR mutate for chatPreviews and roomChats');
+// Triggered SWR mutate
       } catch (error) {
         console.warn('SIDEBAR: Could not mutate SWR cache for room thread:', error);
       }
@@ -115,7 +99,7 @@ console.log(' SIDEBAR: Triggered SWR mutate for chatPreviews and roomChats');
       // Also trigger a broader refresh to ensure all sidebar data is updated
       try {
         await mutate((key) => typeof key === 'string' && key.includes('chat'));
-console.log(' SIDEBAR: Triggered broad chat data refresh');
+// Triggered broad refresh
       } catch (error) {
         console.warn('SIDEBAR: Could not trigger broad refresh:', error);
       }
@@ -130,44 +114,32 @@ console.log(' SIDEBAR: Triggered broad chat data refresh');
         onThreadCreated(threadData);
       }
     } else {
-console.log(' SIDEBAR: Thread already seen, skipping:', threadId);
+// Thread already seen, skipping
     }
   }, [onThreadCreated, userRooms]);
 
   const handleNewChatMessage = useCallback(async (data: any) => {
-    console.log('RAW CHAT MESSAGE PAYLOAD:', data);
+    // Processing chat message
     // Data structure from Socket.IO should match the Supabase realtime payload structure
     const newMessage = data.new || data;
 
-    console.log('CHAT MESSAGE DETAILS:', {
-      id: newMessage?.id,
-      chatSessionId: newMessage?.chat_session_id,
-      isUserMessage: newMessage?.is_user_message,
-      content: newMessage?.content?.substring(0, 50),
-      createdAt: newMessage?.created_at,
-      eventType: data.eventType,
-      table: data.table,
-      schema: data.schema
-    });
+    // Processing chat message details
 
     // Only handle user messages (not AI responses) to detect new chats
     if (!newMessage.is_user_message) {
-      console.log('SKIPPING: Not a user message');
+      // Skipping: Not a user message
       return;
     }
 
-    console.log('New regular chat message detected in sidebar socket:', {
-      chatSessionId: newMessage.chat_session_id,
-      content: newMessage.content?.substring(0, 30)
-    });
+    // New regular chat message detected
 
     // Only refresh the sidebar data, not the entire page
-    console.log('Updating sidebar data without page refresh');
+    // Updating sidebar data
 
     // Use SWR mutate to update only the sidebar data
     try {
       await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-      console.log('Triggered SWR mutate for chatPreviews');
+      // Triggered SWR mutate
     } catch (error) {
       console.warn('Could not mutate SWR cache:', error);
     }
@@ -184,7 +156,7 @@ console.log(' SIDEBAR: Thread already seen, skipping:', threadId);
   }, [onThreadCreated]);
 
   const handleSidebarRefreshRequested = useCallback(() => {
-    console.log('Sidebar refresh requested via Socket.IO');
+    // Sidebar refresh requested
     // Trigger SWR mutate to refresh sidebar data
     mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
   }, []);
@@ -202,15 +174,15 @@ console.log(' SIDEBAR: Thread already seen, skipping:', threadId);
 
   useEffect(() => {
     if (!userId || !socket || !isConnected) {
-console.log(' SIDEBAR: Not setting up sidebar socket:', { userId: !!userId, socket: !!socket, isConnected });
+// Not setting up sidebar socket
       return;
     }
 
-console.log(' SIDEBAR: Setting up sidebar socket for user:', userId);
+// Setting up sidebar socket
     if (userRooms && userRooms.length > 0) {
-console.log(' SIDEBAR: User rooms:', userRooms.map(r => r.shareCode));
+// User rooms loaded
     } else {
-console.log(' SIDEBAR: No user rooms found');
+// No user rooms found
     }
 
     // Reset seen threads when rooms change
@@ -220,39 +192,27 @@ console.log(' SIDEBAR: No user rooms found');
     socket.emit('join-user-channel');
 
     // Set up event listeners (matching server-side event names)
-console.log(' SIDEBAR: Setting up sidebar socket event listeners');
+// Setting up event listeners
     
     // Add connection verification
     socket.on('connect', () => {
-console.log(' SIDEBAR: Socket connected successfully');
+// Socket connected
       socket.emit('join-user-channel'); // Re-join on reconnect
     });
     socket.on('room-message-created', (data) => {
-console.log(' SIDEBAR: Received room-message-created event:', {
-        threadId: data?.new?.thread_id,
-        sender: data?.new?.sender_name,
-        isAI: data?.new?.is_ai_response,
-        content: data?.new?.content?.substring(0, 30),
-        roomId: data?.new?.room_id
-      });
+// Received room-message-created event
       handleNewRoomMessage(data);
     });
     socket.on('chat-message-created', (data) => {
-console.log(' SIDEBAR: Received chat-message-created event:', data);
+// Received chat-message-created event
       handleNewChatMessage(data);
     });
     socket.on('sidebar-refresh-requested', (data) => {
-console.log(' SIDEBAR: Received sidebar-refresh-requested event:', data);
+// Received sidebar-refresh-requested event
       handleSidebarRefreshRequested();
     });
     socket.on('thread-created', (data) => {
-console.log(' SIDEBAR: Received thread-created event:', {
-        threadId: data.threadId,
-        shareCode: data.shareCode,
-        roomName: data.roomName,
-        sender: data.senderName,
-        content: data.firstMessage?.substring(0, 30)
-      });
+// Received thread-created event
       
       // CRITICAL: Verify room isolation - only process events from rooms the user has access to
       if (!data.shareCode) {
@@ -266,10 +226,10 @@ console.warn(' SIDEBAR: User does not have access to room:', data.shareCode, 'Ig
         return;
       }
       
-console.log(' SIDEBAR: thread-created event verified for authorized room:', data.shareCode);
+// Thread-created event verified
       
       // Force immediate sidebar refresh for new threads
-console.log(' SIDEBAR: Refreshing sidebar data for new thread');
+// Refreshing sidebar data
       mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
       mutate('chatPreviews');
       mutate('roomChats'); // Also refresh room chat data
@@ -289,18 +249,18 @@ console.log(' SIDEBAR: Refreshing sidebar data for new thread');
     // FIXED: Do NOT auto-join all user rooms - this was causing massive performance issues
     // Users should only join rooms when they explicitly navigate to them
     // The sidebar only needs the personal notification channel for updates
-console.log(' SIDEBAR: Setting up notification channels (NOT auto-joining rooms)');
+// Setting up notification channels
 
     // CRITICAL: Also join user's personal channel for direct notifications
     socket.emit('join-user-channel');
     
     // Test socket connection with a simple ping
-console.log(' SIDEBAR: Testing socket connection...');
+// Testing socket connection
     socket.emit('ping', { message: 'sidebar-socket-test', timestamp: Date.now() });
     
     // Listen for pong response
     const handlePong = (data: any) => {
-console.log(' SIDEBAR: Received pong response:', data);
+// Received pong response
     };
     socket.on('pong', handlePong);
 
@@ -309,7 +269,7 @@ console.log(' SIDEBAR: Received pong response:', data);
     const populateSeenThreads = async () => {
       try {
         if (supabase && userRooms && userRooms.length > 0) {
-console.log(' SIDEBAR: Pre-populating seen threads for authorized rooms:', userRooms.map(r => r.shareCode));
+// Pre-populating seen threads
           
           const { data: rooms } = await supabase
             .from('rooms')
@@ -318,7 +278,7 @@ console.log(' SIDEBAR: Pre-populating seen threads for authorized rooms:', userR
 
           if (rooms && rooms.length > 0) {
             const roomIds = rooms.map(r => r.id);
-console.log(' SIDEBAR: Found room IDs for authorized rooms:', roomIds);
+// Found room IDs for authorized rooms
             
             const { data: existingMessages } = await supabase
               .from('room_messages')
@@ -338,7 +298,7 @@ console.log(' SIDEBAR: Found room IDs for authorized rooms:', roomIds);
 console.warn(' SIDEBAR: Skipping thread from unauthorized room:', msg.room_id);
                 }
               });
-console.log(` SIDEBAR: Pre-populated ${seenThreadsRef.current.size} existing threads from authorized rooms`);
+// Pre-populated existing threads
             }
           }
         }
@@ -352,7 +312,7 @@ console.log(` SIDEBAR: Pre-populated ${seenThreadsRef.current.size} existing thr
     // Listen for manual thread refresh events
     const handleForceThreadRefresh = (event: CustomEvent) => {
       const threadData = event.detail;
-console.log(' FORCE THREAD REFRESH triggered:', threadData);
+// Force thread refresh triggered
       
       // Mark thread as seen and trigger refresh
       if (threadData.threadId) {

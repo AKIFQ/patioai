@@ -37,19 +37,19 @@ export class AIResponseHandler {
 
   // Get model through OpenRouter service
   private getModel(modelId: string, messageContent?: string) {
-console.log(` getModel called with modelId: "${modelId}"`);
+// Get model called
 
     // Handle auto routing for free users
     if (modelId === 'auto') {
-console.log(` Auto routing triggered in getModel`);
+      // Auto routing triggered
       const context = this.modelRouter.analyzeMessageContext(messageContent || '', 1);
       const routedModel = this.modelRouter.routeModel({ tier: 'free' }, context, 'auto');
-console.log(` Auto routing result: ${routedModel}`);
+      // Auto routing completed
       return openRouterService.getModel(routedModel);
     }
 
     // All models go through OpenRouter
-console.log(` Using model directly: ${modelId}`);
+    // Using model directly
     return openRouterService.getModel(modelId);
   }
 
@@ -77,7 +77,7 @@ console.log(` Using model directly: ${modelId}`);
 
     // Try primary model first
     try {
-console.log(` Attempting primary model: ${primaryModelId}`);
+      // Attempting primary model
 
       return streamText({
         model: this.getModel(primaryModelId, currentMessage),
@@ -91,7 +91,7 @@ console.log(` Attempting primary model: ${primaryModelId}`);
       });
 
     } catch (error: any) {
-console.log(` Primary model ${primaryModelId} failed:`, error.message);
+      // Primary model failed
 
       // Determine if this is a rate limit or other recoverable error
       const isRecoverableError =
@@ -104,7 +104,7 @@ console.log(` Primary model ${primaryModelId} failed:`, error.message);
 
       if (isRecoverableError) {
         const fallbackModelId = getFallbackModel(primaryModelId);
-console.log(` Auto-fallback triggered: ${primaryModelId} → ${fallbackModelId}`);
+        // Auto-fallback triggered
 
         // Emit fallback notification to client
 this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
@@ -116,7 +116,7 @@ this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
         });
 
         // Try fallback model
-console.log(` Attempting fallback model: ${fallbackModelId}`);
+        // Attempting fallback model
         return streamText({
           model: this.getModel(fallbackModelId, currentMessage),
           system: promptResult.system,
@@ -173,7 +173,7 @@ console.log(` Attempting fallback model: ${fallbackModelId}`);
         return;
       }
 
-console.log(`AI response triggered for room ${shareCode} by ${senderName}`);
+      // AI response triggered
 
       // Emit typing indicator for AI
 this.io.to(`room:${shareCode}`).emit('user-typing', {
@@ -216,9 +216,9 @@ id: `ai-${Date.now()}`,
         schema: 'public'
       });
 
-console.log(`AI response sent to room ${shareCode}`);
+      // AI response sent
     } catch (error) {
-console.error('Error handling AI response:', error);
+      console.error('Error handling AI response:', error);
 
       // Stop typing indicator on error
 this.io.to(`room:${shareCode}`).emit('user-typing', {
@@ -241,8 +241,8 @@ this.io.to(`room:${shareCode}`).emit('user-typing', {
     reasoningMode: boolean = false
   ): Promise<void> {
     try {
-console.log(` Starting AI stream for room ${shareCode}, model: ${modelId}, REASONING MODE: ${reasoningMode}`);
-this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
+      // Starting AI stream
+      this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
 
       // Extract current user from prompt (format: "User: message")
       const promptMatch = prompt.match(/^(.+?):\s*(.+)$/);
@@ -261,7 +261,7 @@ id: `msg-${Date.now()}-${Math.random()}`,
 
       // Compress context to reduce token usage
       const compressedContext = this.contextManager.compressContext(messages);
-console.log(`️ Context compressed: ${messages.length} messages → ${compressedContext.totalTokens} tokens`);
+      // Context compressed
 
       // Use sophisticated prompt engine for context-aware AI with compressed context
       const promptResult = this.promptEngine.generatePrompt(
@@ -273,7 +273,7 @@ console.log(`️ Context compressed: ${messages.length} messages → ${compresse
         compressedContext.summarizedHistory
       );
 
-console.log(` AI context: ${chatHistory.length} previous messages + sophisticated analysis`);
+      // AI context prepared
 
       // Route model based on user tier and context
       // Build richer analysis text from the latest few messages so short follow-ups like
@@ -288,20 +288,20 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       // Simple model routing for now (remove complex fallback logic)
       let routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId, undefined, reasoningMode);
 
-console.log(` Model routing: ${modelId} → ${routedModelId} (${messageContext.complexity} complexity, reasoning: ${reasoningMode})`);
+      // Model routing completed
 
-      // Debug: Log reasoning mode details
+      // Check reasoning mode
       if (reasoningMode) {
-console.log(` REASONING MODE ENABLED - Should use deepseek/deepseek-r1`);
+        // Reasoning mode enabled
       } else {
-console.log(` REASONING MODE DISABLED - Using regular routing`);
+        // Regular routing
       }
 
       // Get provider options for reasoning models
       const providerOptions = openRouterService.getProviderOptions(routedModelId);
 
-console.log(` FINAL MODEL BEING USED: ${routedModelId}`);
-console.log(` getModel will be called with: ${routedModelId}`);
+      // Final model selected
+      // Model ready for use
 
       // Set appropriate token limits based on model and context
       const getMaxTokens = (modelId: string, messageContext: string): number => {
@@ -330,11 +330,10 @@ console.log(` getModel will be called with: ${routedModelId}`);
       };
 
       const maxTokens = getMaxTokens(routedModelId, currentMessage);
-console.log(` Setting maxTokens to ${maxTokens} for model ${routedModelId} (message length: ${currentMessage.length})`);
+      // Max tokens set
 
-      // Debug: Log the actual prompt being sent
-console.log(` SYSTEM PROMPT (first 500 chars):`, promptResult.system.substring(0, 500));
-console.log(` LAST MESSAGE:`, promptResult.messages[promptResult.messages.length - 1]?.content?.substring(0, 200));
+      // Prompt prepared
+      // Messages ready
 
       // Auto-fallback system: Try free models first, fallback to paid on failure
       const result = await this.streamWithAutoFallback({
@@ -363,18 +362,18 @@ console.log(` LAST MESSAGE:`, promptResult.messages[promptResult.messages.length
       const startMarkers = ['<think>', '<thinking>', '<reasoning>', '<thought>', '<chain_of_thought>'];
       const endMarkers = ['</think>', '</thinking>', '</reasoning>', '</thought>', '</chain_of_thought>'];
 
-if (process.env.NODE_ENV === 'development') console.log(` Starting AI stream for model: ${routedModelId}`);
+      if (process.env.NODE_ENV === 'development') console.debug('Starting AI stream for model:', routedModelId);
 
       // Use AI SDK's proper streaming interface with error handling
-console.log(` Starting streaming loop for model: ${routedModelId}`);
+      // Starting streaming loop
 
       for await (const delta of result.fullStream) {
-console.log(` Received delta:`, delta.type);
+        if (process.env.NODE_ENV === 'development') console.debug('Received delta:', delta.type);
 
         // Handle error deltas - trigger fallback if possible
         if (delta.type === 'error') {
           const deltaAny = delta as any;
-console.error(` Model error delta:`, deltaAny);
+          console.error('Model error delta:', deltaAny);
 
           // Check if this is a rate limit error that we can fallback from
           const errorMessage = deltaAny.error?.message || JSON.stringify(deltaAny.error);
@@ -383,7 +382,7 @@ console.error(` Model error delta:`, deltaAny);
             errorMessage.includes('429');
 
           if (isRateLimitError && routedModelId.includes(':free')) {
-console.log(` Rate limit detected, attempting fallback from ${routedModelId}`);
+            // Rate limit detected, attempting fallback
 
             // Try fallback model
             const fallbackModelId = 'google/gemini-2.0-flash-001';
@@ -448,7 +447,7 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
                   });
 
                   if (result.success) {
-console.log(` Fallback AI message saved to DB: ${result.messageId}`);
+                    // Fallback AI message saved
 
                     // Broadcast fallback AI message to ALL users in the room
 this.io.to(`room:${shareCode}`).emit('room-message-created', {
@@ -466,17 +465,17 @@ this.io.to(`room:${shareCode}`).emit('room-message-created', {
                       schema: 'public'
                     });
 
-console.log(` Fallback AI message broadcasted to all users in room ${shareCode}`);
+                    // Fallback AI message broadcasted
                   }
                 }
               } catch (saveError) {
-console.error(' Failed to save/broadcast fallback AI message:', saveError);
+                console.error('Failed to save/broadcast fallback AI message:', saveError);
               }
 
               return; // Exit after successful fallback
 
             } catch (fallbackError) {
-console.error(` Fallback model also failed:`, fallbackError);
+              console.error('Fallback model also failed:', fallbackError);
               // Fall through to error handling below
             }
           }
@@ -501,12 +500,12 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
           return; // Exit early on error
         }
 
-        // Debug: Log all delta types for DeepSeek R1 to understand the format
+        // Handle DeepSeek delta format
         if (routedModelId.includes('deepseek')) {
           const deltaAny = delta as any;
-console.log(` DeepSeek delta:`, delta.type, deltaAny.textDelta ? `"${deltaAny.textDelta.substring(0, 50)}..."` : 'no text');
-
-          // Only log DeepSeek deltas for debugging - don't interfere with normal processing
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('DeepSeek delta:', delta.type, deltaAny.textDelta ? `"${deltaAny.textDelta.substring(0, 50)}..."` : 'no text');
+          }
         }
 
         if (delta.type === 'text-delta') {
@@ -515,7 +514,7 @@ console.log(` DeepSeek delta:`, delta.type, deltaAny.textDelta ? `"${deltaAny.te
           // CRITICAL: Check size limits to prevent memory explosions
           if (fullText.length + chunk.length > MAX_RESPONSE_SIZE) {
             if (!isTruncated) {
-console.warn(` AI response truncated at ${MAX_RESPONSE_SIZE} bytes for memory protection`);
+              console.warn('AI response truncated for memory protection');
               isTruncated = true;
               fullText += '\n\n[Response truncated due to size limits]';
 
@@ -537,7 +536,9 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
           // OpenRouter-specific: Extract reasoning from streaming text chunks
           // DeepSeek R1 includes <think> tags in the normal text stream
           if (routedModelId.includes('deepseek') && chunk.includes('<think>')) {
-console.log(` Found <think> tag in chunk:`, chunk.substring(0, 100));
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('Found <think> tag in chunk:', chunk.substring(0, 100));
+            }
 
             // Extract reasoning content between <think> tags
             const thinkMatch = chunk.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
@@ -546,7 +547,7 @@ console.log(` Found <think> tag in chunk:`, chunk.substring(0, 100));
               if (reasoningContent.trim()) {
                 // CRITICAL: Check reasoning size limits
                 if (fullReasoning.length + reasoningContent.length > MAX_REASONING_SIZE) {
-console.warn(` AI reasoning truncated at ${MAX_REASONING_SIZE} bytes for memory protection`);
+                  console.warn('AI reasoning truncated for memory protection');
                   fullReasoning += '\n\n[Reasoning truncated due to size limits]';
                 } else {
                   fullReasoning += reasoningContent;
@@ -554,8 +555,8 @@ console.warn(` AI reasoning truncated at ${MAX_REASONING_SIZE} bytes for memory 
 
                 if (!hasReasoningStarted) {
                   hasReasoningStarted = true;
-console.log(` Starting reasoning UI for DeepSeek`);
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+                  // Starting reasoning UI
+                  this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
                     threadId,
                     timestamp: Date.now(),
                     modelUsed: routedModelId
@@ -594,7 +595,7 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
           if (typeof chunk === 'string' && chunk.length > 0) {
             // CRITICAL: Check reasoning size limits
             if (fullReasoning.length + chunk.length > MAX_REASONING_SIZE) {
-console.warn(` AI reasoning truncated at ${MAX_REASONING_SIZE} bytes for memory protection`);
+              console.warn('AI reasoning truncated for memory protection');
               if (!fullReasoning.includes('[Reasoning truncated due to size limits]')) {
                 fullReasoning += '\n\n[Reasoning truncated due to size limits]';
               }
@@ -632,16 +633,18 @@ this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
             };
           }
 
-          // Debug: Log finish delta for DeepSeek to see if reasoning is included
+          // Check DeepSeek finish delta for reasoning
           if (routedModelId.includes('deepseek')) {
-console.log(` DeepSeek finish delta:`, JSON.stringify(anyDelta, null, 2));
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('DeepSeek finish delta:', JSON.stringify(anyDelta, null, 2));
+            }
 
             // Check for reasoning tokens in OpenRouter response
             const reasoningTokens = anyDelta.providerMetadata?.openai?.reasoningTokens ||
               anyDelta.experimental_providerMetadata?.openai?.reasoningTokens;
 
             if (reasoningTokens && reasoningTokens > 0) {
-console.log(` Found ${reasoningTokens} reasoning tokens - creating synthetic reasoning UI`);
+              // Found reasoning tokens - creating synthetic reasoning UI
 
               // Create informative reasoning indicator since OpenRouter doesn't expose the actual reasoning
 const syntheticReasoning = ` **DeepSeek R1 Reasoning Process**
@@ -689,7 +692,9 @@ this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
             finalReasoning = r;
           }
           if (finalReasoning && finalReasoning.trim().length > 0) {
-console.log(` Found reasoning in finish delta:`, finalReasoning.substring(0, 100));
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('Found reasoning in finish delta:', finalReasoning.substring(0, 100));
+            }
             fullReasoning = finalReasoning;
             if (!hasReasoningStarted) {
               hasReasoningStarted = true;
@@ -727,7 +732,7 @@ this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
             '';
 
           if (thoughtContent) {
-if (process.env.NODE_ENV === 'development') console.debug(` thought from ${delta.type}`);
+            if (process.env.NODE_ENV === 'development') console.debug('thought from', delta.type);
 
             // For delta types, append; for complete types, replace
             if (delta.type.includes('delta') || delta.type.includes('chunk')) {
@@ -739,8 +744,8 @@ if (process.env.NODE_ENV === 'development') console.debug(` thought from ${delta
             // Start reasoning if not already started
             if (!hasReasoningStarted) {
               hasReasoningStarted = true;
-if (process.env.NODE_ENV === 'development') console.debug(` thoughts started for ${routedModelId} (${delta.type})`);
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+              if (process.env.NODE_ENV === 'development') console.debug('thoughts started for', routedModelId, delta.type);
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
                 threadId,
                 timestamp: Date.now(),
                 modelUsed: routedModelId
@@ -760,8 +765,8 @@ this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
 
       // End reasoning if it was started
       if (hasReasoningStarted && fullReasoning) {
-console.log(` Completing reasoning UI (${fullReasoning.length} chars total)`);
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-end', {
+        // Completing reasoning UI
+        this.io.to(`room:${shareCode}`).emit('ai-reasoning-end', {
           threadId,
           reasoning: fullReasoning,
           timestamp: Date.now(),
@@ -779,7 +784,7 @@ this.io.to(`room:${shareCode}`).emit('ai-content-start', {
       // Final check: Extract reasoning from fullText if not found during streaming
       // This handles cases where reasoning comes in large chunks or at the end
       if (routedModelId.includes('deepseek') && fullText.includes('<think>')) {
-console.log(` Final extraction: Found <think> tags in complete response`);
+        // Final extraction: Found think tags
 
         // Extract all reasoning content
         const thinkMatches = fullText.match(/<think>([\s\S]*?)<\/think>/g);
@@ -791,7 +796,9 @@ console.log(` Final extraction: Found <think> tags in complete response`);
 
           if (allReasoning && allReasoning !== fullReasoning) {
             fullReasoning = allReasoning;
-console.log(` Final reasoning extracted (${allReasoning.length} chars):`, allReasoning.substring(0, 100));
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('Final reasoning extracted:', allReasoning.substring(0, 100));
+            }
 
             // Clean the display text
             fullText = fullText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -831,7 +838,7 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
         // Get the actual room_id from shareCode
         const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
         if (!roomValidation.valid || !roomValidation.room) {
-console.warn(`Failed to get room_id for shareCode ${shareCode}:`, roomValidation.error);
+          console.warn('Failed to get room_id for shareCode:', shareCode, roomValidation.error);
           return;
         }
 
@@ -846,9 +853,9 @@ console.warn(`Failed to get room_id for shareCode ${shareCode}:`, roomValidation
         });
 
         if (!result.success) {
-console.error(' Failed to save AI message to DB:', result.error);
+          console.error('Failed to save AI message to DB:', result.error);
         } else {
-console.log(` AI message saved to DB: ${result.messageId}`);
+          // AI message saved to DB
 
           // CRITICAL FIX: Broadcast AI message to ALL users in the room
 this.io.to(`room:${shareCode}`).emit('room-message-created', {
@@ -867,14 +874,14 @@ this.io.to(`room:${shareCode}`).emit('room-message-created', {
             schema: 'public'
           });
 
-console.log(` AI message broadcasted to all users in room ${shareCode}`);
+          // AI message broadcasted
         }
       } catch (e) {
-console.error(' Critical error saving/broadcasting AI message:', e);
+        console.error('Critical error saving/broadcasting AI message:', e);
       }
     } catch (error) {
-console.error(' Error streaming AI response:', error);
-this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
+      console.error('Error streaming AI response:', error);
+      this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
     }
   }
 
@@ -919,13 +926,13 @@ return `That's a thoughtful question, ${senderName}. Let me provide some insight
   // Update configuration
   updateConfig(newConfig: Partial<AIResponseConfig>): void {
     this.config = { ...this.config, ...newConfig };
-console.log('AI response configuration updated:', this.config);
+    // AI response configuration updated
   }
 
   // Enable/disable AI responses
   setEnabled(enabled: boolean): void {
     this.config.enabled = enabled;
-console.log(`AI responses ${enabled ? 'enabled' : 'disabled'}`);
+    // AI responses toggled
   }
 }
 
