@@ -24,19 +24,7 @@ export class OpenRouterService {
    * Get model instance for AI SDK
    */
   getModel(modelId: string) {
-    // Validate model exists in our config
-    const modelInfo = getModelInfo(modelId);
-    if (!modelInfo) {
-      console.warn(`Invalid model ID: ${modelId}, falling back to google/gemini-2.0-flash-exp:free`);
-      return this.client('google/gemini-2.0-flash-exp:free');
-    }
-
-    // Handle special routing for free models
-    if (modelId.includes(':free')) {
-      return this.client(modelId);
-    }
-
-    // Regular OpenRouter models
+    // Direct model instantiation - router handles validation
     return this.client(modelId);
   }
 

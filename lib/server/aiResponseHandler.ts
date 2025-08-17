@@ -1,5 +1,4 @@
-import { Server as SocketIOServer } from 'socket.io';
-import { AuthenticatedSocket } from '../../types/socket';
+import type { Server as SocketIOServer } from 'socket.io';
 import { streamText } from 'ai';
 import { RoomPromptEngine } from '../ai/roomPromptEngine';
 import { ContextManager } from '../ai/contextManager';
@@ -53,8 +52,30 @@ export class AIResponseHandler {
     return openRouterService.getModel(modelId);
   }
 
-  // Auto-fallback system: Try free models first, fallback to paid on any failure
-  private async streamWithAutoFallback(params: {
+  // Direct model streaming - no complex fallbacks for free/basic tiers
+  private async streamDirectly(params: {
+    modelId: string;
+    currentMessage: string;
+    promptResult: any;
+    providerOptions: any;
+    maxTokens: number;
+  }) {
+    const { modelId, currentMessage, promptResult, providerOptions, maxTokens } = params;
+
+    return streamText({
+      model: this.getModel(modelId, currentMessage),
+      system: promptResult.system,
+      messages: promptResult.messages,
+      providerOptions,
+      maxTokens,
+      temperature: 0.7,
+      abortSignal: modelId.includes('deepseek') ?
+        AbortSignal.timeout(45000) : undefined
+    });
+  }
+
+  // Premium tier fallback - try secondary model if primary fails
+  private async streamWithPremiumFallback(params: {
     primaryModelId: string;
     currentMessage: string;
     promptResult: any;
@@ -62,75 +83,41 @@ export class AIResponseHandler {
     maxTokens: number;
     shareCode: string;
     threadId: string;
-    messageContext: any;
-    reasoningMode?: boolean;
   }) {
-    const { primaryModelId, currentMessage, promptResult, providerOptions, maxTokens, shareCode, threadId, messageContext, reasoningMode } = params;
+    const { primaryModelId, currentMessage, promptResult, providerOptions, maxTokens, shareCode, threadId } = params;
 
-    // Define fallback models
-    const getFallbackModel = (failedModel: string): string => {
-      if (reasoningMode) {
-        return 'google/gemini-2.0-flash-001'; // Reliable paid model for reasoning
-      }
-      return 'google/gemini-2.0-flash-001'; // Reliable paid model for general use
-    };
-
-    // Try primary model first
     try {
-      // Attempting primary model
-
-      return streamText({
-        model: this.getModel(primaryModelId, currentMessage),
-        system: promptResult.system,
-        messages: promptResult.messages,
+      // Try primary model
+      return await this.streamDirectly({
+        modelId: primaryModelId,
+        currentMessage,
+        promptResult,
         providerOptions,
-        maxTokens,
-        temperature: 0.7,
-        abortSignal: primaryModelId.includes('deepseek') ?
-          AbortSignal.timeout(45000) : undefined
+        maxTokens
+      });
+    } catch (error: any) {
+      // For premium users, try fallback to reliable model
+      const fallbackModelId = 'openai/gpt-4o'; // Reliable premium fallback
+
+      console.warn(`Premium model ${primaryModelId} failed, falling back to ${fallbackModelId}:`, error.message);
+
+      // Emit fallback notification to premium user
+this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
+        threadId,
+        primaryModel: primaryModelId,
+        fallbackModel: fallbackModelId,
+        reason: 'premium_model_error',
+        timestamp: Date.now()
       });
 
-    } catch (error: any) {
-      // Primary model failed
-
-      // Determine if this is a rate limit or other recoverable error
-      const isRecoverableError =
-        error.message?.includes('rate limit') ||
-        error.message?.includes('quota') ||
-        error.message?.includes('429') ||
-        error.statusCode === 429 ||
-        error.message?.includes('Model error') ||
-        error.message?.includes('Rate limit exceeded');
-
-      if (isRecoverableError) {
-        const fallbackModelId = getFallbackModel(primaryModelId);
-        // Auto-fallback triggered
-
-        // Emit fallback notification to client
-this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
-          threadId,
-          primaryModel: primaryModelId,
-          fallbackModel: fallbackModelId,
-          reason: 'rate_limit_or_error',
-          timestamp: Date.now()
-        });
-
-        // Try fallback model
-        // Attempting fallback model
-        return streamText({
-          model: this.getModel(fallbackModelId, currentMessage),
-          system: promptResult.system,
-          messages: promptResult.messages,
-          providerOptions,
-          maxTokens,
-          temperature: 0.7,
-          abortSignal: fallbackModelId.includes('deepseek') ?
-            AbortSignal.timeout(45000) : undefined
-        });
-      }
-
-      // Re-throw non-recoverable errors
-      throw error;
+      // Try fallback model
+      return await this.streamDirectly({
+        modelId: fallbackModelId,
+        currentMessage,
+        promptResult,
+        providerOptions,
+        maxTokens
+      });
     }
   }
 
@@ -236,16 +223,16 @@ this.io.to(`room:${shareCode}`).emit('user-typing', {
     prompt: string,
     roomName: string,
     participants: string[],
-    modelId: string = 'gpt-4o',
-    chatHistory: Array<{ role: 'user' | 'assistant', content: string }> = [],
-    reasoningMode: boolean = false
+    modelId = 'gpt-4o',
+    chatHistory: { role: 'user' | 'assistant', content: string }[] = [],
+    reasoningMode = false
   ): Promise<void> {
     try {
       // Starting AI stream
       this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
 
       // Extract current user from prompt (format: "User: message")
-      const promptMatch = prompt.match(/^(.+?):\s*(.+)$/);
+      const promptMatch = /^(.+?):\s*(.+)$/.exec(prompt);
       const currentUser = promptMatch ? promptMatch[1] : 'User';
       const currentMessage = promptMatch ? promptMatch[2] : prompt;
 
@@ -285,8 +272,12 @@ id: `msg-${Date.now()}-${Math.random()}`,
 const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       const messageContext = this.modelRouter.analyzeMessageContext(analysisText, chatHistory.length);
 
-      // Simple model routing for now (remove complex fallback logic)
-      let routedModelId = this.modelRouter.routeModel({ tier: 'free' }, messageContext, modelId, undefined, reasoningMode);
+      // Determine user tier (for now assume free, but this should come from user data)
+      // TODO: Get actual user tier from session/auth data
+      const userTier: 'free' | 'basic' | 'premium' = 'free' as 'free' | 'basic' | 'premium';
+      
+      // Route model based on tier and context
+      const routedModelId = this.modelRouter.routeModel({ tier: userTier }, messageContext, modelId, undefined, reasoningMode);
 
       // Model routing completed
 
@@ -335,32 +326,34 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       // Prompt prepared
       // Messages ready
 
-      // Auto-fallback system: Try free models first, fallback to paid on failure
-      const result = await this.streamWithAutoFallback({
-        primaryModelId: routedModelId,
-        currentMessage,
-        promptResult,
-        providerOptions,
-        maxTokens,
-        shareCode,
-        threadId,
-        messageContext,
-        reasoningMode
-      });
+      // Choose streaming strategy based on user tier
+      const result = userTier === 'premium' 
+        ? await this.streamWithPremiumFallback({
+            primaryModelId: routedModelId,
+            currentMessage,
+            promptResult,
+            providerOptions,
+            maxTokens,
+            shareCode,
+            threadId
+          })
+        : await this.streamDirectly({
+            modelId: routedModelId,
+            currentMessage,
+            promptResult,
+            providerOptions,
+            maxTokens
+          });
 
       let fullText = '';
       let fullReasoning = '';
       let hasReasoningStarted = false;
       let usageTotals: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
-      let inThinkBlock = false;
 
       // CRITICAL: Memory protection - prevent OOM from huge AI responses
       const MAX_RESPONSE_SIZE = 500000; // 500KB limit for main response
       const MAX_REASONING_SIZE = 200000; // 200KB limit for reasoning
       let isTruncated = false;
-      // DeepSeek R1 uses <think> tags, other models may use different formats
-      const startMarkers = ['<think>', '<thinking>', '<reasoning>', '<thought>', '<chain_of_thought>'];
-      const endMarkers = ['</think>', '</thinking>', '</reasoning>', '</thought>', '</chain_of_thought>'];
 
       if (process.env.NODE_ENV === 'development') console.debug('Starting AI stream for model:', routedModelId);
 
@@ -370,117 +363,14 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       for await (const delta of result.fullStream) {
         if (process.env.NODE_ENV === 'development') console.debug('Received delta:', delta.type);
 
-        // Handle error deltas - trigger fallback if possible
+        // Handle error deltas - simple error handling without fallbacks
         if (delta.type === 'error') {
           const deltaAny = delta as any;
           console.error('Model error delta:', deltaAny);
 
-          // Check if this is a rate limit error that we can fallback from
           const errorMessage = deltaAny.error?.message || JSON.stringify(deltaAny.error);
-          const isRateLimitError = errorMessage.includes('rate limit') ||
-            errorMessage.includes('Rate limit exceeded') ||
-            errorMessage.includes('429');
 
-          if (isRateLimitError && routedModelId.includes(':free')) {
-            // Rate limit detected, attempting fallback
-
-            // Try fallback model
-            const fallbackModelId = 'google/gemini-2.0-flash-001';
-
-            // Emit fallback notification
-this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
-              threadId,
-              primaryModel: routedModelId,
-              fallbackModel: fallbackModelId,
-              reason: 'rate_limit',
-              timestamp: Date.now()
-            });
-
-            // Start new stream with fallback model
-            try {
-              const fallbackResult = streamText({
-                model: this.getModel(fallbackModelId, currentMessage),
-                system: promptResult.system,
-                messages: promptResult.messages,
-                providerOptions,
-                maxTokens,
-                temperature: 0.7
-              });
-
-              // Continue with fallback stream
-              for await (const fallbackDelta of fallbackResult.fullStream) {
-                // Process fallback deltas normally
-                if (fallbackDelta.type === 'text-delta') {
-                  const chunk = fallbackDelta.textDelta;
-                  fullText += chunk;
-
-this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
-                    threadId,
-                    chunk,
-                    timestamp: Date.now(),
-                    modelUsed: fallbackModelId
-                  });
-                }
-                // Handle other delta types for fallback...
-              }
-
-              // End fallback stream
-this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
-                threadId,
-                text: fullText,
-                timestamp: Date.now(),
-                modelUsed: fallbackModelId
-              });
-
-              // CRITICAL FIX: Save fallback AI message to database AND broadcast to all users
-              try {
-                const { SocketDatabaseService } = await import('../database/socketQueries');
-                const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
-
-                if (roomValidation.valid && roomValidation.room) {
-                  const result = await SocketDatabaseService.insertRoomMessage({
-                    roomId: roomValidation.room.id,
-                    threadId,
-                    senderName: 'AI Assistant',
-                    content: fullText,
-                    isAiResponse: true
-                  });
-
-                  if (result.success) {
-                    // Fallback AI message saved
-
-                    // Broadcast fallback AI message to ALL users in the room
-this.io.to(`room:${shareCode}`).emit('room-message-created', {
-                      new: {
-                        id: result.messageId,
-                        room_id: roomValidation.room.id,
-                        thread_id: threadId,
-                        sender_name: 'AI Assistant',
-                        content: fullText,
-                        is_ai_response: true,
-                        created_at: new Date().toISOString()
-                      },
-                      eventType: 'INSERT',
-                      table: 'room_messages',
-                      schema: 'public'
-                    });
-
-                    // Fallback AI message broadcasted
-                  }
-                }
-              } catch (saveError) {
-                console.error('Failed to save/broadcast fallback AI message:', saveError);
-              }
-
-              return; // Exit after successful fallback
-
-            } catch (fallbackError) {
-              console.error('Fallback model also failed:', fallbackError);
-              // Fall through to error handling below
-            }
-          }
-
-          // If no fallback or fallback failed, emit error
+          // Emit error directly without complex fallback logic
 this.io.to(`room:${shareCode}`).emit('ai-error', {
             threadId,
             error: 'Model failed to generate response',
@@ -541,7 +431,7 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
             }
 
             // Extract reasoning content between <think> tags
-            const thinkMatch = chunk.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
+            const thinkMatch = /<think>([\s\S]*?)(?:<\/think>|$)/.exec(chunk);
             if (thinkMatch) {
               const reasoningContent = thinkMatch[1];
               if (reasoningContent.trim()) {

@@ -1,4 +1,4 @@
-import { FREE_MODEL_ROUTING, PAID_FALLBACK_ROUTING, getModelInfo, isModelAvailableForTier } from './modelConfig';
+import { SIMPLE_MODEL_ROUTING, PREMIUM_MODEL_ROUTING, getModelInfo, isModelAvailableForTier } from './modelConfig';
 
 interface UserTier {
   tier: 'free' | 'basic' | 'premium';
@@ -27,43 +27,27 @@ export class ModelRouter {
    * Route to the best model based on user tier and message context
    */
   routeModel(userTier: UserTier, context: MessageContext, selectedModel?: string, costControl?: CostControl, reasoningMode?: boolean): string {
-    // PROMINENT Debug logging
     // Reasoning mode routing across tiers
     if (reasoningMode === true) {
       if (userTier.tier === 'premium') {
         return 'openai/o1-preview';
       }
-      // Free/Basic explicit reasoning goes to DeepSeek R1
-      return 'deepseek/deepseek-r1';
+      // Free/Basic explicit reasoning - use DeepSeek for better reasoning
+      return 'deepseek/deepseek-chat-v3-0324';
     }
 
-    // Handle auto mode for free users (only if not in reasoning mode)
-    if ((selectedModel === 'auto' || userTier.tier === 'free') && !reasoningMode) {
-      return this.getOptimalFreeModel(context);
+    // Auto mode or free/basic tier - use smart routing
+    if (selectedModel === 'auto' || userTier.tier === 'free' || userTier.tier === 'basic') {
+      return this.getOptimalModel(context, userTier.tier);
     }
 
-    // CRITICAL FIX: Handle invalid model names from frontend cookies
-    if (selectedModel) {
-      // Map common invalid model names to valid ones
-      const modelMapping: Record<string, string> = {
-        'gemini-2.5-flash': 'google/gemini-2.0-flash-exp:free',
-        'gemini-flash': 'google/gemini-2.0-flash-exp:free',
-        'gemini-2.0-flash': 'google/gemini-2.0-flash-exp:free',
-        'deepseek-r1': 'deepseek/deepseek-r1:free',
-        'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet',
-        'gpt-4o': 'openai/gpt-4o'
-      };
-
-      // Map invalid model names to valid ones
-      const mappedModel = modelMapping[selectedModel] || selectedModel;
-
-      // Check if the mapped model is available for their tier
-      if (isModelAvailableForTier(mappedModel, userTier.tier)) {
-        // Check cost controls for premium tier
-        if (userTier.tier === 'premium' && costControl) {
-          return this.applyCostControl(mappedModel, costControl);
+    // Premium tier with specific model selection
+    if (selectedModel && userTier.tier === 'premium') {
+      if (isModelAvailableForTier(selectedModel, userTier.tier)) {
+        if (costControl) {
+          return this.applyCostControl(selectedModel, costControl);
         }
-        return mappedModel;
+        return selectedModel;
       }
     }
 
@@ -72,18 +56,79 @@ export class ModelRouter {
   }
 
   /**
-   * Smart model selection for free users (auto mode)
-   * Note: Reasoning models are now opt-in only, not auto-routed
+   * Smart model selection based on content analysis
+   * Routes to the best model for the specific task type
    */
-  private getOptimalFreeModel(context: MessageContext): string {
-    // Code generation, debugging
-    if (context.hasCode) {
-      return FREE_MODEL_ROUTING.coding;
+  private getOptimalModel(context: MessageContext, tier: string): string {
+    // Code-related tasks - use DeepSeek for superior coding capabilities
+    if (context.hasCode || this.isCodeRelated(context.content)) {
+      return SIMPLE_MODEL_ROUTING.coding;
     }
 
-    // All other cases use general model (no auto-reasoning)
-    // Academic, shopping, web searches, general chat
-    return FREE_MODEL_ROUTING.general;
+    // Math-related tasks - use DeepSeek for better mathematical reasoning
+    if (this.isMathRelated(context.content)) {
+      return SIMPLE_MODEL_ROUTING.math;
+    }
+
+    // General tasks - use Gemini Flash-Lite for fast, efficient responses
+    return SIMPLE_MODEL_ROUTING.general;
+  }
+
+  /**
+   * Enhanced code detection beyond just syntax
+   */
+  private isCodeRelated(content: string): boolean {
+    const lowerContent = content.toLowerCase();
+    
+    // Programming keywords and concepts
+    const codeKeywords = [
+      'function', 'class', 'import', 'export', 'const', 'let', 'var',
+      'def ', 'class ', 'import ', 'from ', 'return', 'console.log',
+      'api', 'endpoint', 'database', 'sql', 'query', 'component',
+      'props', 'state', 'hook', 'async', 'await', 'promise',
+      'array', 'object', 'string', 'number', 'boolean',
+      'debug', 'error', 'exception', 'try', 'catch',
+      'git', 'commit', 'merge', 'branch', 'repository',
+      'npm', 'package', 'install', 'dependency',
+      'react', 'vue', 'angular', 'node', 'express',
+      'python', 'javascript', 'typescript', 'java', 'c++',
+      'algorithm', 'data structure', 'recursive', 'iteration'
+    ];
+
+    // File extensions and code indicators
+    const codeIndicators = [
+      '.js', '.ts', '.py', '.java', '.cpp', '.html', '.css',
+      '.json', '.xml', '.yaml', '.yml', '.sql', '.sh',
+      '```', 'code', 'script', 'syntax', 'compile', 'runtime'
+    ];
+
+    return codeKeywords.some(keyword => lowerContent.includes(keyword)) ||
+           codeIndicators.some(indicator => lowerContent.includes(indicator));
+  }
+
+  /**
+   * Enhanced math detection for mathematical content
+   */
+  private isMathRelated(content: string): boolean {
+    const lowerContent = content.toLowerCase();
+    
+    // Mathematical keywords
+    const mathKeywords = [
+      'math', 'mathematics', 'algebra', 'geometry', 'calculus',
+      'trigonometry', 'statistics', 'probability', 'equation',
+      'formula', 'theorem', 'proof', 'derivative', 'integral',
+      'matrix', 'vector', 'polynomial', 'logarithm', 'exponential',
+      'factorial', 'permutation', 'combination', 'set theory',
+      'logic', 'algorithm', 'optimization', 'graph theory'
+    ];
+
+    // Mathematical symbols and patterns
+    const mathSymbols = /[=<>±∞∑∫√^²³¹°π∆λμσφθω]/;
+    const mathPatterns = /\d+\s*[\+\-\*\/\^]\s*\d+|x\s*=|f\(x\)|∫|∑|lim|dx|dy/;
+
+    return mathKeywords.some(keyword => lowerContent.includes(keyword)) ||
+           mathSymbols.test(content) ||
+           mathPatterns.test(content);
   }
 
   /**
@@ -91,18 +136,18 @@ export class ModelRouter {
    */
   private applyCostControl(selectedModel: string, costControl: CostControl): string {
     const modelInfo = getModelInfo(selectedModel);
-    if (!modelInfo) return FREE_MODEL_ROUTING.fallback;
+    if (!modelInfo) return SIMPLE_MODEL_ROUTING.fallback;
 
     // If approaching warning threshold, suggest efficient alternatives
     if (costControl.monthlySpend > costControl.warningThreshold) {
 console.log(` User approaching cost limit, suggesting efficient model`);
-      return 'deepseek/deepseek-r1'; // Most efficient reasoning model
+      return 'deepseek/deepseek-chat-v3-0324'; // Most efficient model
     }
 
     // If hard limit reached, force fallback
     if (costControl.monthlySpend > costControl.hardLimit) {
 console.log(` User hit cost limit, forcing fallback`);
-      return FREE_MODEL_ROUTING.fallback;
+      return SIMPLE_MODEL_ROUTING.fallback;
     }
 
     return selectedModel;
@@ -113,12 +158,13 @@ console.log(` User hit cost limit, forcing fallback`);
    */
   private getTierDefault(tier: string): string {
     switch (tier) {
+      case 'free':
       case 'basic':
-        return 'google/gemini-2.0-flash';
+        return SIMPLE_MODEL_ROUTING.general; // Gemini 2.5 Flash-Lite
       case 'premium':
-        return 'openai/gpt-4o';
+        return PREMIUM_MODEL_ROUTING.general; // GPT-5 or best available
       default:
-        return FREE_MODEL_ROUTING.general;
+        return SIMPLE_MODEL_ROUTING.fallback;
     }
   }
 
