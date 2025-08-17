@@ -25,6 +25,7 @@ export class AIResponseHandler {
   private promptEngine: RoomPromptEngine;
   private contextManager: ContextManager;
   private modelRouter: ModelRouter;
+  private activeStreams: Map<string, AbortController> = new Map();
 
   constructor(io: SocketIOServer, config: Partial<AIResponseConfig> = {}) {
     this.io = io;
@@ -59,8 +60,19 @@ export class AIResponseHandler {
     promptResult: any;
     providerOptions: any;
     maxTokens: number;
+    threadId: string;
   }) {
-    const { modelId, currentMessage, promptResult, providerOptions, maxTokens } = params;
+    const { modelId, currentMessage, promptResult, providerOptions, maxTokens, threadId } = params;
+
+    // Create abort controller for this stream
+    const abortController = new AbortController();
+    this.activeStreams.set(threadId, abortController);
+
+    // Combine timeout and manual abort signals
+    const timeoutSignal = modelId.includes('deepseek') ? AbortSignal.timeout(45000) : undefined;
+    const abortSignal = timeoutSignal 
+      ? AbortSignal.any([abortController.signal, timeoutSignal])
+      : abortController.signal;
 
     return streamText({
       model: this.getModel(modelId, currentMessage),
@@ -69,8 +81,7 @@ export class AIResponseHandler {
       providerOptions,
       maxTokens,
       temperature: 0.7,
-      abortSignal: modelId.includes('deepseek') ?
-        AbortSignal.timeout(45000) : undefined
+      abortSignal
     });
   }
 
@@ -93,7 +104,8 @@ export class AIResponseHandler {
         currentMessage,
         promptResult,
         providerOptions,
-        maxTokens
+        maxTokens,
+        threadId
       });
     } catch (error: any) {
       // For premium users, try fallback to reliable model
@@ -116,7 +128,8 @@ this.io.to(`room:${shareCode}`).emit('ai-fallback-used', {
         currentMessage,
         promptResult,
         providerOptions,
-        maxTokens
+        maxTokens,
+        threadId
       });
     }
   }
@@ -227,6 +240,10 @@ this.io.to(`room:${shareCode}`).emit('user-typing', {
     chatHistory: { role: 'user' | 'assistant', content: string }[] = [],
     reasoningMode = false
   ): Promise<void> {
+    // Declare these outside try block so they're accessible in catch
+    let fullText = '';
+    let fullReasoning = '';
+    
     try {
       // Starting AI stream
       this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
@@ -342,11 +359,10 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
             currentMessage,
             promptResult,
             providerOptions,
-            maxTokens
+            maxTokens,
+            threadId
           });
 
-      let fullText = '';
-      let fullReasoning = '';
       let hasReasoningStarted = false;
       let usageTotals: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
 
@@ -769,10 +785,100 @@ this.io.to(`room:${shareCode}`).emit('room-message-created', {
       } catch (e) {
         console.error('Critical error saving/broadcasting AI message:', e);
       }
+      
+      // Cleanup: Remove abort controller
+      this.activeStreams.delete(threadId);
     } catch (error) {
-      console.error('Error streaming AI response:', error);
-      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
+      // Check if this was a user-initiated abort
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log(`AI response aborted by user for threadId: ${threadId}`);
+        
+        // Save partial response if we have any content
+        if (fullText.trim()) {
+          try {
+            const { SocketDatabaseService } = await import('../database/socketQueries');
+            const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
+            
+            if (roomValidation.valid && roomValidation.room) {
+              const result = await SocketDatabaseService.insertRoomMessage({
+                roomId: roomValidation.room.id,
+                threadId,
+                senderName: 'AI Assistant',
+                content: fullText + '\n\n[Response stopped by user]',
+                isAiResponse: true,
+                reasoning: fullReasoning || undefined
+              });
+
+              if (result.success) {
+                // Broadcast partial AI message to ALL users in the room
+                this.io.to(`room:${shareCode}`).emit('room-message-created', {
+                  new: {
+                    id: result.messageId,
+                    room_id: roomValidation.room.id,
+                    thread_id: threadId,
+                    sender_name: 'AI Assistant',
+                    content: fullText + '\n\n[Response stopped by user]',
+                    is_ai_response: true,
+                    reasoning: fullReasoning || null,
+                    created_at: new Date().toISOString()
+                  },
+                  eventType: 'INSERT',
+                  table: 'room_messages',
+                  schema: 'public'
+                });
+              }
+            }
+          } catch (saveError) {
+            console.error('Failed to save partial AI response:', saveError);
+          }
+        }
+        
+        // Emit stream end with partial content
+        this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
+          threadId,
+          text: fullText || 'Response stopped by user',
+          reasoning: fullReasoning || undefined,
+          timestamp: Date.now(),
+          stopped: true
+        });
+      } else {
+        console.error('Error streaming AI response:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
+      }
+      
+      // Cleanup: Remove abort controller
+      this.activeStreams.delete(threadId);
+    }
+  }
+
+  // Stop AI response gracefully and save partial content
+  async stopAIResponse(shareCode: string, threadId: string): Promise<void> {
+    const abortController = this.activeStreams.get(threadId);
+    
+    if (!abortController) {
+      console.warn(`No active stream found for threadId: ${threadId}`);
+      return;
+    }
+
+    try {
+      // Abort the stream
+      abortController.abort();
+      
+      // Remove from active streams
+      this.activeStreams.delete(threadId);
+      
+      // Emit stopped event
+      this.io.to(`room:${shareCode}`).emit('ai-stream-stopped', {
+        threadId,
+        timestamp: Date.now(),
+        reason: 'user_stopped'
+      });
+
+      console.log(`AI response stopped for threadId: ${threadId}`);
+    } catch (error) {
+      console.error('Error stopping AI response:', error);
+      throw error;
     }
   }
 

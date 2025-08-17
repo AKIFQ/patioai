@@ -1234,6 +1234,19 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             // Placeholder: surface your checkout/upgrade flow here
             // Debug logging removed
           }}
+          isAIStreaming={isAIStreaming}
+          onStopAI={() => {
+            if (roomContext && typeof invokeAIRef.current === 'function') {
+              // Get the socket from global window object for stop functionality
+              const socket = (window as any).__patio_socket;
+              if (socket) {
+                socket.emit('stop-ai', {
+                  shareCode: roomContext.shareCode,
+                  threadId: roomContext.chatSessionId
+                });
+              }
+            }
+          }}
         />
       </div>
 

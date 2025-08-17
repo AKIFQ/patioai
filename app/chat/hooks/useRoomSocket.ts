@@ -443,6 +443,25 @@ console.error(' AI Error received:', payload);
         };
         addTrackedListener('ai-error', aiErrorHandler);
 
+        // AI Stop handlers
+        const aiStoppedHandler = (payload: { threadId?: string; success?: boolean }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+          setIsAIStreaming(false);
+          if (process.env.NODE_ENV === 'development') console.info('AI response stopped successfully');
+        };
+        addTrackedListener('ai-stopped', aiStoppedHandler);
+
+        const aiStreamStoppedHandler = (payload: { threadId?: string; timestamp?: number; reason?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+          setIsAIStreaming(false);
+          if (process.env.NODE_ENV === 'development') console.info('AI stream stopped:', payload.reason);
+        };
+        addTrackedListener('ai-stream-stopped', aiStreamStoppedHandler);
+
         // AI Fallback notification - inform user when switching models
         const aiFallbackHandler = (payload: { threadId?: string; primaryModel: string; fallbackModel: string; reason: string; timestamp?: number }) => {
           const threadId = payload.threadId || chatSessionId || '';

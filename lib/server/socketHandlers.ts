@@ -376,6 +376,21 @@ console.error('Error toggling AI:', error);
       }
     });
 
+    // Handle AI response stopping
+    socket.on('stop-ai', async (data: { shareCode: string; threadId: string }) => {
+      try {
+        const { shareCode, threadId } = data;
+        
+        // Stop the AI response gracefully
+        await (aiHandler as any).stopAIResponse(shareCode, threadId);
+        
+        socket.emit('ai-stopped', { success: true, threadId });
+      } catch (error) {
+console.error('Error stopping AI:', error);
+        socket.emit('ai-error', { error: 'Failed to stop AI response', threadId: data.threadId });
+      }
+    });
+
     // Handle chat session creation
     socket.on('chat-session-created', async (data: { sessionId: string; title?: string }) => {
       try {
