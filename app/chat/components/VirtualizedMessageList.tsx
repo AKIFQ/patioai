@@ -86,7 +86,7 @@ const VirtualizedMessageList = memo(({
   useEffect(() => {
     if (height === 0 && containerRef.current) {
       const resizeObserver = new ResizeObserver(entries => {
-        for (let entry of entries) {
+        for (const entry of entries) {
           const newHeight = entry.contentRect.height;
           if (newHeight > 0) {
             setActualHeight(newHeight);

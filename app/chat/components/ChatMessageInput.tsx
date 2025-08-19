@@ -28,7 +28,8 @@ import {
   FileIcon,
   Zap,
   Plus,
-  Check
+  Check,
+  Square
 } from 'lucide-react';
 
 // Memoized FilePreview component outside MessageInput (before MessageInput)
@@ -114,7 +115,7 @@ interface RoomContext {
   roomName: string;
   displayName: string;
   sessionId: string;
-  participants: Array<{ displayName: string; joinedAt: string }>;
+  participants: { displayName: string; joinedAt: string }[];
   maxParticipants: number;
   tier: 'free' | 'pro';
   chatSessionId?: string;
@@ -136,7 +137,9 @@ const MessageInput = ({
   reasoningMode = false,
   setReasoningMode,
   userTier = 'free',
-  onUpgrade
+  onUpgrade,
+  isAIStreaming = false,
+  onStopAI
 }: {
   chatId: string;
   currentChatId: string;
@@ -154,6 +157,8 @@ const MessageInput = ({
   setReasoningMode?: (value: boolean) => void;
   userTier?: 'free' | 'basic' | 'premium';
   onUpgrade?: () => void;
+  isAIStreaming?: boolean;
+  onStopAI?: () => void;
 }) => {
   const { selectedBlobs } = useUpload();
   const router = useRouter();
@@ -317,7 +322,7 @@ const MessageInput = ({
     
     // Submit through parent component WITHOUT triggering AI
     const submissionId = Math.random().toString(36).substring(7);
-    console.log(`📤 [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
+console.log(` [${submissionId}] SEND ONLY: "${input.substring(0, 50)}"`);
     
     onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, false, reasoningMode);
     
@@ -328,7 +333,7 @@ const MessageInput = ({
       fileInputRef.current.value = '';
     }
     
-    console.log(`✅ [${submissionId}] SEND ONLY: Completed`);
+console.log(` [${submissionId}] SEND ONLY: Completed`);
   };
 
   // Handle prompt submission (with AI response)
@@ -351,7 +356,7 @@ const MessageInput = ({
     
     // Submit through parent component WITH AI response triggered
     const submissionId = Math.random().toString(36).substring(7);
-    console.log(`⚡ [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
+console.log(` [${submissionId}] PROMPT SUBMIT: "${input.substring(0, 50)}"`);
     
     onSubmit(input, attachedFiles.length > 0 ? attachedFiles : undefined, true, reasoningMode);
     
@@ -362,7 +367,7 @@ const MessageInput = ({
       fileInputRef.current.value = '';
     }
     
-    console.log(`✅ [${submissionId}] PROMPT SUBMIT: Completed`);
+console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
   };
 
   // Focus textarea on mount for mobile to open the keyboard when user taps the input
@@ -543,19 +548,34 @@ const MessageInput = ({
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            {/* Prompt button */}
+            {/* Prompt button or Stop button */}
             {!isLoading && (
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={handlePromptSubmit}
-                disabled={!input.trim() && attachedFiles.length === 0}
-                className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group flex-shrink-0"
-                title="Send with AI response (Shift + Enter)"
-              >
-                <Zap className="text-amber-500 w-4 h-4 sm:w-5 sm:h-5 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
-              </Button>
+              <>
+                {isAIStreaming ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={onStopAI}
+                    className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-colors border border-red-500/30 rounded-lg cursor-pointer group flex-shrink-0"
+                    title="Stop AI response"
+                  >
+                    <Square className="text-red-500 w-4 h-4 sm:w-5 sm:h-5 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={handlePromptSubmit}
+                    disabled={!input.trim() && attachedFiles.length === 0}
+                    className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group flex-shrink-0"
+                    title="Send with AI response (Shift + Enter)"
+                  >
+                    <Zap className="text-amber-500 w-4 h-4 sm:w-5 sm:h-5 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+                  </Button>
+                )}
+              </>
             )}
 
             {/* Send button or spinner with matched sizing */}

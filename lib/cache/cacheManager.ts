@@ -158,7 +158,7 @@ export class CacheManager {
   }
 
   // Warm cache with frequently accessed data
-  async warmCache(warmingData: Array<{ key: string; fetcher: () => Promise<any>; ttl?: number }>): Promise<void> {
+  async warmCache(warmingData: { key: string; fetcher: () => Promise<any>; ttl?: number }[]): Promise<void> {
     const startTime = Date.now();
     
     try {
@@ -343,11 +343,11 @@ export class ExternalAPICache {
   }
 
   // Warm API cache with common requests
-  async warmAPICache(apiType: string, commonRequests: Array<{
+  async warmAPICache(apiType: string, commonRequests: {
     endpoint: string;
     params: any;
     fetcher: () => Promise<any>;
-  }>): Promise<void> {
+  }[]): Promise<void> {
     const warmingData = commonRequests.map(({ endpoint, params, fetcher }) => ({
       key: this.generateAPIKey(apiType, endpoint, params),
       fetcher,

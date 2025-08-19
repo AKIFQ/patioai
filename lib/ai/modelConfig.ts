@@ -23,36 +23,36 @@ export const MODEL_TIERS: Record<string, ModelTier> = {
   free: {
     id: 'free',
     name: 'Free',
-    description: 'Free tier with OpenRouter free models and smart fallbacks',
+    description: 'Free tier with smart model routing for optimal performance',
     models: {
       auto: {
         id: 'auto',
-        name: 'Auto (Smart Routing with Free Models)',
+        name: 'Auto (Smart Routing)',
         provider: 'openrouter',
         costTier: 'free',
         inputCost: 0,
         outputCost: 0,
         reasoning: false
       },
-      'gemini-flash': {
-        id: 'google/gemini-2.0-flash-exp:free',
-        name: 'Gemini 2.0 Flash (Free)',
+      'gemini-flash-lite': {
+        id: 'google/gemini-2.5-flash-lite',
+        name: 'Gemini 2.5 Flash-Lite',
         provider: 'openrouter',
         costTier: 'free',
         inputCost: 0.10, // $0.10 per 1M input tokens
         outputCost: 0.40, // $0.40 per 1M output tokens
         reasoning: false,
-        specialization: 'Fast general tasks, 1M tokens, 20/min rate limit'
+        specialization: 'Fast general tasks, translation, classification, multimodal'
       },
-      'deepseek-r1': {
-        id: 'deepseek/deepseek-r1:free',
-        name: 'DeepSeek R1 (Free)',
+      'deepseek-chat': {
+        id: 'deepseek/deepseek-chat-v3-0324',
+        name: 'DeepSeek Chat V3',
         provider: 'openrouter',
         costTier: 'free',
-        inputCost: 0.55, // $0.55 per 1M input tokens
-        outputCost: 2.19, // $2.19 per 1M output tokens
-        reasoning: true,
-        specialization: 'Coding, math, complex reasoning, 128K tokens, 20/min rate limit'
+        inputCost: 0.14, // $0.14 per 1M input tokens
+        outputCost: 0.28, // $0.28 per 1M output tokens
+        reasoning: false,
+        specialization: 'Superior coding, mathematical reasoning, algorithmic problems'
       }
     },
     monthlyLimit: 2000,
@@ -63,36 +63,36 @@ export const MODEL_TIERS: Record<string, ModelTier> = {
   basic: {
     id: 'basic',
     name: 'Basic',
-    description: 'Free models with paid fallbacks and higher usage limits',
+    description: 'Same smart routing as free tier with higher usage limits',
     models: {
       auto: {
         id: 'auto',
-        name: 'Auto (Smart Routing with Fallbacks)',
+        name: 'Auto (Smart Routing)',
         provider: 'openrouter',
         costTier: 'free',
         inputCost: 0,
         outputCost: 0,
         reasoning: false
       },
-      'gemini-flash': {
-        id: 'google/gemini-2.0-flash-exp:free',
-        name: 'Gemini 2.0 Flash (Free)',
+      'gemini-flash-lite': {
+        id: 'google/gemini-2.5-flash-lite',
+        name: 'Gemini 2.5 Flash-Lite',
         provider: 'openrouter',
         costTier: 'free',
         inputCost: 0.10, // $0.10 per 1M input tokens
         outputCost: 0.40, // $0.40 per 1M output tokens
         reasoning: false,
-        specialization: 'Fast general tasks, 1M tokens, 20/min rate limit'
+        specialization: 'Fast general tasks, translation, classification, multimodal'
       },
-      'deepseek-r1': {
-        id: 'deepseek/deepseek-r1:free',
-        name: 'DeepSeek R1 (Free)',
+      'deepseek-chat': {
+        id: 'deepseek/deepseek-chat-v3-0324',
+        name: 'DeepSeek Chat V3',
         provider: 'openrouter',
         costTier: 'free',
-        inputCost: 0.55, // $0.55 per 1M input tokens
-        outputCost: 2.19, // $2.19 per 1M output tokens
-        reasoning: true,
-        specialization: 'Coding, math, complex reasoning, 128K tokens, 20/min rate limit'
+        inputCost: 0.14, // $0.14 per 1M input tokens
+        outputCost: 0.28, // $0.28 per 1M output tokens
+        reasoning: false,
+        specialization: 'Superior coding, mathematical reasoning, algorithmic problems'
       }
     },
     monthlyLimit: 8000,
@@ -151,22 +151,12 @@ export const MODEL_TIERS: Record<string, ModelTier> = {
   }
 };
 
-// Free tier model routing logic - try free models first with auto-fallback
-export const FREE_MODEL_ROUTING = {
-  general: 'deepseek/deepseek-chat-v3-0324:free', // Try free model first, fallback to paid
-  academic: 'deepseek/deepseek-chat-v3-0324:free', // Try free model first, fallback to paid
-  coding: 'deepseek/deepseek-r1-distill-llama-70b:free', // Try free reasoning model first
-  reasoning: 'deepseek/deepseek-r1-distill-llama-70b:free', // Try free reasoning model first
-  fallback: 'google/gemini-2.0-flash-001' // Reliable paid fallback
-};
-
-// Paid fallback models when free models hit rate limits
-export const PAID_FALLBACK_ROUTING = {
-  general: 'google/gemini-2.0-flash-001',
-  academic: 'google/gemini-2.0-flash-001',
-  coding: 'openai/gpt-4o-mini',
-  reasoning: 'openai/o1-preview',
-  fallback: 'google/gemini-2.0-flash-001'
+// Simplified routing logic for free/basic tiers
+export const SIMPLE_MODEL_ROUTING = {
+  general: 'google/gemini-2.5-flash-lite', // Fast, efficient for general tasks
+  coding: 'deepseek/deepseek-chat-v3-0324', // Superior coding capabilities
+  math: 'deepseek/deepseek-chat-v3-0324', // Strong mathematical reasoning
+  fallback: 'google/gemini-2.5-flash-lite' // Reliable default
 };
 
 // Premium tier model routing - only the best models

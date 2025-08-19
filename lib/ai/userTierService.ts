@@ -71,7 +71,7 @@ export class UserTierService {
   /**
    * Update user's monthly usage (tokens + cost) and log model
    */
-  async updateUsage(userId: string, tokensUsed: number, cost: number, modelUsed: string, requestType: string = 'chat'): Promise<void> {
+  async updateUsage(userId: string, tokensUsed: number, cost: number, modelUsed: string, requestType = 'chat'): Promise<void> {
     try {
       const tokens = Math.max(0, Math.floor(tokensUsed || 0));
       const costNumber = Number(cost || 0);

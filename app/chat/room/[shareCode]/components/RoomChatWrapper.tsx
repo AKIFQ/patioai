@@ -12,7 +12,7 @@ interface RoomContext {
   roomName: string;
   displayName: string;
   sessionId: string;
-  participants: Array<{ displayName: string; joinedAt: string; sessionId: string; userId?: string }>;
+  participants: { displayName: string; joinedAt: string; sessionId: string; userId?: string }[];
   maxParticipants: number;
   tier: 'free' | 'pro';
   createdBy?: string;
@@ -96,7 +96,7 @@ export default function RoomChatWrapper({
           prevContext.shareCode !== newContext.shareCode ||
           prevContext.displayName !== newContext.displayName ||
           prevContext.chatSessionId !== newContext.chatSessionId) {
-        console.log('🎯 Room context updated:', {
+console.log(' Room context updated:', {
           shareCode,
           threadId: finalThreadId,
           displayName
@@ -115,7 +115,7 @@ export default function RoomChatWrapper({
     return (
       <div className="flex h-full w-full items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Connecting to room...</p>
         </div>
       </div>
@@ -125,7 +125,7 @@ export default function RoomChatWrapper({
   // Use the loaded messages (now properly filtered by thread on server-side)
   const chatMessages = initialMessages;
 
-  console.log('🎯 Room chat rendering:', {
+console.log(' Room chat rendering:', {
     threadId: roomContext.chatSessionId,
     messageCount: chatMessages.length
   });
@@ -134,7 +134,7 @@ export default function RoomChatWrapper({
     <ChatErrorBoundary 
       critical={true}
       onError={(error, errorInfo, errorId) => {
-        console.error('🚨 Room Chat Error:', { error, errorInfo, errorId, shareCode, roomContext });
+console.error(' Room Chat Error:', { error, errorInfo, errorId, shareCode, roomContext });
       }}
     >
       <div className="flex w-full h-full overflow-hidden">

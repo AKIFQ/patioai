@@ -41,7 +41,7 @@ export const useReasoningStream = (messages: Message[], status: string) => {
     }
 
     // Prefer extracting reasoning from structured parts when available (AI SDK reasoning SSE)
-    const parts = (lastMessage as any).parts as Array<any> | undefined;
+    const parts = (lastMessage as any).parts as any[] | undefined;
     if (parts && parts.length > 0 && reasoningState.streamingMessageId === lastMessage.id) {
       const reasoningPart = parts.find((p) => p.type === 'reasoning');
       if (reasoningPart) {
@@ -71,7 +71,7 @@ export const useReasoningStream = (messages: Message[], status: string) => {
     if (hasReasoningMarkers && reasoningState.streamingMessageId === lastMessage.id) {
       let reasoning = '';
       if (messageContent.includes('<thinking>')) {
-        const thinkingMatch = messageContent.match(/<thinking>(.*?)<\/thinking>/s);
+        const thinkingMatch = /<thinking>(.*?)<\/thinking>/s.exec(messageContent);
         reasoning = thinkingMatch ? thinkingMatch[1].trim() : '';
       } else if (messageContent.includes('**Reasoning:**')) {
         const reasoningMatch = messageContent.split('**Reasoning:**')[1];

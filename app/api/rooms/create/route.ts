@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create the room
+    // Create the room with auto-generated password
     const { data: room, error } = await supabase
       .from('rooms')
       .insert({
@@ -119,9 +119,10 @@ export async function POST(req: NextRequest) {
         share_code: shareCode,
         creator_tier: userTier,
         max_participants: maxParticipants,
-        expires_at: new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000).toISOString()
+        expires_at: new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000).toISOString(),
+        password: null // Will be set by database trigger
       })
-      .select()
+      .select('id, name, share_code, creator_tier, max_participants, expires_at, created_at, password, password_expires_at')
       .single();
 
     if (error) {
@@ -152,7 +153,9 @@ export async function POST(req: NextRequest) {
         maxParticipants: room.max_participants,
         tier: room.creator_tier,
         expiresAt: room.expires_at,
-        createdAt: room.created_at
+        createdAt: room.created_at,
+        password: room.password,
+        passwordExpiresAt: room.password_expires_at
       },
       shareableLink
     });

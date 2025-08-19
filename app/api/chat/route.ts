@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 
 export const maxDuration = 60;
 
-const getSystemPrompt = (selectedFiles: string[], reasoningMode: boolean = false) => {
+const getSystemPrompt = (selectedFiles: string[], reasoningMode = false) => {
   const reasoningGuidelines = reasoningMode ? `
 
 REASONING GUIDELINES (512 Token Limit):
@@ -67,14 +67,14 @@ function errorHandler(error: unknown) {
 
 const modelRouter = new ModelRouter();
 
-const getModel = (selectedModel: string, userTier: string = 'free', messageContent?: string, reasoningMode?: boolean) => {
+const getModel = (selectedModel: string, userTier = 'free', messageContent?: string, reasoningMode?: boolean) => {
   // Analyze message context for smart routing
   const context = modelRouter.analyzeMessageContext(messageContent || '', 1);
   
   // Route model based on user tier and context
   const routedModel = modelRouter.routeModel({ tier: userTier as any }, context, selectedModel, undefined, reasoningMode);
   
-  console.log(`🎯 Chat model routing: ${selectedModel} → ${routedModel} (tier: ${userTier}, reasoning: ${reasoningMode})`);
+console.log(` Chat model routing: ${selectedModel} → ${routedModel} (tier: ${userTier}, reasoning: ${reasoningMode})`);
   
   return openRouterService.getModel(routedModel);
 };
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
   const chatSessionId = body.chatId;
   const signal = body.signal;
   const selectedFiles: string[] = body.selectedBlobs ?? [];
-  const webSearch: boolean = !!body.webSearch;
+  const webSearch = !!body.webSearch;
 
   if (!chatSessionId) {
     return new NextResponse('Chat session ID is empty.', {
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
         await userTierService.updateUsage(userId, totalTokens, estimatedCost, routedModel, 'chat');
         await tierRateLimiter.increment(userId, userSubscription.tier as any, 'ai_requests', 1);
         
-        console.log(`💰 Usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost`);
+console.log(` Usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost`);
       }
 
       await saveChatToSupbabase(

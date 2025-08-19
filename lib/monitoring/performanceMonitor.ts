@@ -217,7 +217,7 @@ export class PerformanceMonitor {
   }
 
   // Clear old metrics (for memory management)
-  clearOldMetrics(olderThanHours: number = 24): number {
+  clearOldMetrics(olderThanHours = 24): number {
     const cutoffTime = new Date(Date.now() - (olderThanHours * 60 * 60 * 1000));
     const initialCount = this.metrics.length;
     this.metrics = this.metrics.filter(m => m.timestamp > cutoffTime);

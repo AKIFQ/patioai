@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,8 +12,10 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Copy, Check, Users, Clock } from 'lucide-react';
+import { Share2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import ShareRoomModal from './ShareRoomModal';
+
 
 interface Room {
   id: string;
@@ -23,6 +25,8 @@ interface Room {
   tier: 'free' | 'pro';
   expiresAt: string;
   createdAt: string;
+  password?: string | null;
+  passwordExpiresAt?: string | null;
 }
 
 interface CreateRoomModalProps {
@@ -35,7 +39,8 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
   const [roomName, setRoomName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createdRoom, setCreatedRoom] = useState<{ room: Room; shareableLink: string } | null>(null);
-  const [isCopied, setIsCopied] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const handleCreateRoom = async () => {
     if (!roomName.trim()) {
@@ -51,7 +56,9 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: roomName }),
+        body: JSON.stringify({ 
+          name: roomName
+        }),
       });
 
       if (!response.ok) {
@@ -70,24 +77,13 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
     }
   };
 
-  const handleCopyLink = async () => {
-    if (!createdRoom) return;
-    
-    try {
-      await navigator.clipboard.writeText(createdRoom.shareableLink);
-      setIsCopied(true);
-      toast.success('Link copied to clipboard!');
-      setTimeout(() => setIsCopied(false), 2000);
-    } catch (error) {
-      toast.error('Failed to copy link');
-    }
-  };
+
 
   const handleClose = () => {
     const wasRoomCreated = !!createdRoom;
     setRoomName('');
     setCreatedRoom(null);
-    setIsCopied(false);
+    setShowShareModal(false);
     onClose();
     
     // Notify parent that a room was created so it can refresh the room list
@@ -106,120 +102,130 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md z-[200]">
-        {!createdRoom ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Create Room</DialogTitle>
-              <DialogDescription>
-                Create a new chat room and get a shareable link to invite others.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="roomName" className="text-sm font-medium">Room Name</Label>
-                <Input
-                  id="roomName"
-                  placeholder="e.g., Family Vacation Planning"
-                  value={roomName}
-                  onChange={(e) => setRoomName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isCreating) {
-                      handleCreateRoom();
-                    }
-                  }}
-                  className="h-9"
-                />
-              </div>
+    <>
+      {/* Main Create Room Modal */}
+      <Dialog open={isOpen && !showShareModal} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-md backdrop-blur-md bg-background/95 border-border/40">
+          {!createdRoom ? (
+            <>
+              <DialogHeader className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
+                    <Plus className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl font-medium">Create Room</DialogTitle>
+                    <DialogDescription className="text-muted-foreground/80">
+                      Create a secure chat room for your team
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
               
-              <div className="bg-muted/30 p-3 rounded-lg space-y-2 border border-border/40">
-                <div className="text-sm text-muted-foreground/80">
-                  <span className="hidden sm:inline">Free tier: 5 participants max</span>
-                  <span className="sm:hidden">5 participants max</span>
-                </div>
-                <div className="text-sm text-muted-foreground/80">
-                  <span>Expires in 7 days</span>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateRoom} disabled={isCreating || !roomName.trim()}>
-                {isCreating ? 'Creating...' : 'Create Room'}
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-lg font-medium">Room Created Successfully!</DialogTitle>
-              <DialogDescription className="text-muted-foreground/80">
-                <span className="hidden sm:inline">Share this link with others to invite them to your room.</span>
-                <span className="sm:hidden">Share this link to invite others.</span>
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div className="bg-muted/30 p-4 rounded-lg space-y-3 border border-border/40">
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Room Name</Label>
-                  <p className="text-sm font-medium">{createdRoom.room.name}</p>
-                </div>
-                
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Share Code</Label>
-                  <p className="text-sm font-mono text-muted-foreground/80">{createdRoom.room.shareCode}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Max Participants</Label>
-                    <p className="text-muted-foreground/80 font-medium">{createdRoom.room.maxParticipants}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Expires</Label>
-                    <p className="text-muted-foreground/80 font-medium">{formatExpirationDate(createdRoom.room.expiresAt)}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Shareable Link</Label>
-                <div className="flex gap-2">
-                  <Input 
-                    value={createdRoom.shareableLink} 
-                    readOnly 
-                    className="font-mono text-sm h-9"
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="roomName" className="text-sm font-medium">Room Name</Label>
+                  <Input
+                    id="roomName"
+                    placeholder="Team Planning"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isCreating) {
+                        handleCreateRoom();
+                      }
+                    }}
                   />
-                  <Button 
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCopyLink}
-                    className="shrink-0 h-9 w-9 p-0 hover:bg-muted/70 transition-colors"
-                  >
-                    {isCopied ? (
-                      <Check className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
+                </div>
+                
+                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
+                  <div className="text-sm text-muted-foreground/80 space-y-1">
+                    <div>5 participants maximum</div>
+                    <div>Expires in 7 days</div>
+                    <div>Password protected automatically</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <DialogFooter>
-              <Button onClick={handleClose} size="sm" className="h-8">
-                Done
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateRoom} disabled={isCreating || !roomName.trim()}>
+                  {isCreating ? 'Creating...' : 'Create Room'}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            // Show Room Creation Success
+            <>
+              <DialogHeader className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
+                    <Plus className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl font-medium">Room Created</DialogTitle>
+                    <DialogDescription className="text-muted-foreground/80">
+                      Share with others to start collaborating
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-6">
+                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Code</Label>
+                      <p className="font-mono text-base mt-1">{createdRoom.room.shareCode}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Password</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="font-mono text-base">
+                          {showPassword ? createdRoom.room.password : '•••••••'}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <span className="text-xs">{showPassword ? 'Hide' : 'Show'}</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button 
+                  onClick={() => setShowShareModal(true)} 
+                  className="flex-1 bg-amber-500 hover:bg-amber-600"
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share Room
+                </Button>
+                <Button onClick={handleClose} variant="outline">
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Separate Share Room Modal */}
+      {showShareModal && createdRoom && (
+        <ShareRoomModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          room={createdRoom.room}
+          shareableLink={createdRoom.shareableLink}
+        />
+      )}
+    </>
   );
 }

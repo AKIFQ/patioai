@@ -1,4 +1,4 @@
-import { Server as SocketIOServer } from 'socket.io';
+import type { Server as SocketIOServer } from 'socket.io';
 import { SocketMonitor } from '../monitoring/socketMonitor';
 import { alertSystem } from '../monitoring/alertSystem';
 
@@ -16,7 +16,7 @@ export function setSocketIOInstance(socketServer: SocketIOServer) {
   
   // Set up alert system
   alertSystem.addAlertHandler((alert) => {
-    console.log(`🚨 [${alert.type.toUpperCase()}] ${alert.message}`);
+    // Debug logging removed
     
     // Emit alert to monitoring dashboard if needed
     if (alert.type === 'critical') {
@@ -28,7 +28,7 @@ export function setSocketIOInstance(socketServer: SocketIOServer) {
     }
   });
   
-  console.log('Socket.IO instance set for event emission with monitoring enabled');
+  // Debug logging removed
 }
 
 export function getSocketIOInstance(): SocketIOServer | null {
@@ -45,7 +45,7 @@ export function getSocketIOInstance(): SocketIOServer | null {
 export function emitRoomMessageCreated(roomIdOrShareCode: string, messageData: any) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-    console.warn('Socket.IO not initialized, cannot emit room message event');
+console.warn('Socket.IO not initialized, cannot emit room message event');
     return;
   }
 
@@ -57,59 +57,54 @@ export function emitRoomMessageCreated(roomIdOrShareCode: string, messageData: a
   };
 
   // Emit to all users in the room (using share code for room identification)
-  socketIO.to(`room:${roomIdOrShareCode}`).emit('room-message-created', eventPayload);
+socketIO.to(`room:${roomIdOrShareCode}`).emit('room-message-created', eventPayload);
 
-  console.log(`📡 Emitted room-message-created event for room ${roomIdOrShareCode}:`, {
-    threadId: messageData.thread_id,
-    sender: messageData.sender_name,
-    isAI: messageData.is_ai_response,
-    content: messageData.content?.substring(0, 30)
-  });
+  // Debug logging removed
 
   // Get room info to count connected users
-  const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${roomIdOrShareCode}`);
+const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${roomIdOrShareCode}`);
   const connectedUsers = roomSockets ? roomSockets.size : 0;
-  console.log(`📊 Room ${roomIdOrShareCode} has ${connectedUsers} connected users`);
+  // Debug logging removed
 }
 
 export function emitChatMessageCreated(userId: string, messageData: any) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-    console.warn('Socket.IO not initialized, cannot emit chat message event');
+console.warn('Socket.IO not initialized, cannot emit chat message event');
     return;
   }
 
   // Emit to user's personal channel for sidebar updates
-  socketIO.to(`user:${userId}`).emit('chat-message-created', {
+socketIO.to(`user:${userId}`).emit('chat-message-created', {
     new: messageData,
     eventType: 'INSERT',
     table: 'chat_messages',
     schema: 'public'
   });
 
-  console.log(`Emitted chat message created event for user ${userId}`);
+  // Debug logging removed
 }
 
 export function emitSidebarRefresh(userId: string) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-    console.warn('Socket.IO not initialized, cannot emit sidebar refresh');
+console.warn('Socket.IO not initialized, cannot emit sidebar refresh');
     return;
   }
 
   // Emit to user's personal channel
-  socketIO.to(`user:${userId}`).emit('sidebar-refresh-requested', {
+socketIO.to(`user:${userId}`).emit('sidebar-refresh-requested', {
     timestamp: new Date().toISOString()
   });
 
-  console.log(`Emitted sidebar refresh for user ${userId}`);
+  // Debug logging removed
 }
 
 // Helper function to emit API-driven events with configuration
 export function emitAPIEvent(eventType: string, data: any, target?: string) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-    console.warn('Socket.IO not initialized, cannot emit API event');
+console.warn('Socket.IO not initialized, cannot emit API event');
     return;
   }
 
@@ -125,47 +120,39 @@ export function emitAPIEvent(eventType: string, data: any, target?: string) {
     socketIO.emit(eventType, eventData);
   }
 
-  console.log(`Emitted API event ${eventType} to ${target || 'all'}`);
+  // Debug logging removed
 }
 
 // Helper function to emit user-specific events
 export function emitUserEvent(userId: string, eventType: string, data: any) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-    console.warn('Socket.IO not initialized, cannot emit user event');
+console.warn('Socket.IO not initialized, cannot emit user event');
     return;
   }
 
   // Get user channel info to count connected sockets
-  const userSockets = socketIO.sockets.adapter.rooms.get(`user:${userId}`);
+const userSockets = socketIO.sockets.adapter.rooms.get(`user:${userId}`);
   const connectedSockets = userSockets ? userSockets.size : 0;
   
-  console.log(`📡 Emitting ${eventType} to user ${userId} (${connectedSockets} connected sockets):`, {
-    threadId: data.threadId,
-    sender: data.senderName,
-    content: data.firstMessage?.substring(0, 30)
-  });
+  // Debug logging removed
 
-  emitAPIEvent(eventType, data, `user:${userId}`);
+emitAPIEvent(eventType, data, `user:${userId}`);
 }
 
 // Helper function to emit room-specific events
 export function emitRoomEvent(shareCode: string, eventType: string, data: any) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-    console.warn('Socket.IO not initialized, cannot emit room event');
+console.warn('Socket.IO not initialized, cannot emit room event');
     return;
   }
 
   // Get room info to count connected users
-  const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${shareCode}`);
+const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${shareCode}`);
   const connectedUsers = roomSockets ? roomSockets.size : 0;
   
-  console.log(`📡 Emitting ${eventType} to room ${shareCode} (${connectedUsers} connected users):`, {
-    threadId: data.threadId,
-    sender: data.senderName,
-    content: data.firstMessage?.substring(0, 30)
-  });
+  // Debug logging removed
 
-  emitAPIEvent(eventType, data, `room:${shareCode}`);
+emitAPIEvent(eventType, data, `room:${shareCode}`);
 }

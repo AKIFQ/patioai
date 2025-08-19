@@ -9,6 +9,8 @@ import { isToday, isYesterday, subDays } from 'date-fns';
 import { TZDate } from '@date-fns/tz';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import SidebarSocketWrapper from './components/SidebarSocketWrapper';
+import { ModalProvider } from './contexts/ModalContext';
+import GlobalModals from './components/GlobalModals';
 
 export const maxDuration = 60;
 
@@ -246,46 +248,51 @@ export default async function Layout(props: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen w-full bg-background overflow-hidden" data-chat-page>
-      <SidebarProvider className="h-full w-full flex">
-        <SidebarSocketWrapper
-          userId={userData?.id || ''}
-          userRooms={(userData?.rooms || []).map(room => ({
-            shareCode: room.shareCode,
-            name: room.name
-          }))}
-        >
-          <ChatHistoryDrawer
-            userInfo={{
-              id: userData?.id || '',
-              full_name: userData?.full_name || '',
-              email: userData?.email || ''
-            }}
-            initialChatPreviews={userData?.allChatPreviews || []}
-            categorizedChats={categorizeChats(userData?.allChatPreviews || [])}
-            documents={userData?.documents || []}
-            rooms={userData?.rooms || []}
-            roomChatsData={userData?.roomChatsData || []}
-          />
-          <main className="flex-1 w-full min-w-0 overflow-hidden md:ml-0">
-            <UploadProvider userId={userData?.id || ''}>
-              {React.cloneElement(props.children as React.ReactElement, {
-                sidebarData: {
-                  userInfo: {
-                    id: userData?.id || '',
-                    full_name: userData?.full_name || '',
-                    email: userData?.email || ''
-                  },
-                  initialChatPreviews: userData?.allChatPreviews || [],
-                  categorizedChats: categorizeChats(userData?.allChatPreviews || []),
-                  documents: userData?.documents || [],
-                  rooms: userData?.rooms || [],
-                  roomChatsData: userData?.roomChatsData || []
-                }
-              })}
-            </UploadProvider>
-          </main>
-        </SidebarSocketWrapper>
-      </SidebarProvider>
+      <ModalProvider>
+        <SidebarProvider className="h-full w-full flex">
+          <SidebarSocketWrapper
+            userId={userData?.id || ''}
+            userRooms={(userData?.rooms || []).map(room => ({
+              shareCode: room.shareCode,
+              name: room.name
+            }))}
+          >
+            <ChatHistoryDrawer
+              userInfo={{
+                id: userData?.id || '',
+                full_name: userData?.full_name || '',
+                email: userData?.email || ''
+              }}
+              initialChatPreviews={userData?.allChatPreviews || []}
+              categorizedChats={categorizeChats(userData?.allChatPreviews || [])}
+              documents={userData?.documents || []}
+              rooms={userData?.rooms || []}
+              roomChatsData={userData?.roomChatsData || []}
+            />
+            <main className="flex-1 w-full min-w-0 overflow-hidden md:ml-0">
+              <UploadProvider userId={userData?.id || ''}>
+                {React.cloneElement(props.children as React.ReactElement, {
+                  sidebarData: {
+                    userInfo: {
+                      id: userData?.id || '',
+                      full_name: userData?.full_name || '',
+                      email: userData?.email || ''
+                    },
+                    initialChatPreviews: userData?.allChatPreviews || [],
+                    categorizedChats: categorizeChats(userData?.allChatPreviews || []),
+                    documents: userData?.documents || [],
+                    rooms: userData?.rooms || [],
+                    roomChatsData: userData?.roomChatsData || []
+                  }
+                })}
+              </UploadProvider>
+            </main>
+          </SidebarSocketWrapper>
+        </SidebarProvider>
+        
+        {/* Global Modals - Rendered outside sidebar so they stay visible when sidebar closes */}
+        <GlobalModals />
+      </ModalProvider>
       
       {/* Mobile Sidebar - Rendered separately for mobile control */}
       {/* The MobileSidebar component is now rendered directly in the Chat component */}

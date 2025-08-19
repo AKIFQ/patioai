@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
 
@@ -22,10 +23,11 @@ async function saveRoomMessage(
   content: string,
   isAiResponse = false,
   sources?: any,
-  reasoning?: string
+  reasoning?: string,
+  roomName?: string
 ): Promise<boolean> {
   const messageId = Math.random().toString(36).substring(7);
-  console.log(`💾 [${messageId}] SAVING MESSAGE:`, {
+console.log(` [${messageId}] SAVING MESSAGE:`, {
     sender: senderName,
     isAI: isAiResponse,
     contentPreview: content.substring(0, 30),
@@ -54,11 +56,11 @@ async function saveRoomMessage(
     });
 
     if (!result.success) {
-      console.error(`❌ [${messageId}] Error saving message:`, result.error);
+console.error(` [${messageId}] Error saving message:`, result.error);
       return false;
     }
 
-    console.log(`✅ [${messageId}] Message saved successfully:`, {
+console.log(` [${messageId}] Message saved successfully:`, {
       dbId: result.messageId,
       sender: senderName,
       isAI: isAiResponse,
@@ -83,18 +85,46 @@ async function saveRoomMessage(
     if (isFirstMessage && !isAiResponse) {
       console.log(`🆕 NEW THREAD CREATED - emitting thread-created event for ${shareCode}`);
       
-      // Emit to room channel for users currently in the room
-      // This will reach all users who have joined the room via socket
-      emitRoomEvent(shareCode, 'thread-created', {
+      const threadEventData = {
         threadId,
         roomId,
         shareCode,
+        roomName: roomName || 'Unknown Room', // Include room name for sidebar display
         senderName,
         firstMessage: content,
         createdAt: new Date().toISOString()
-      });
+      };
+      
+      // Emit to room channel for users currently in the room
+      emitRoomEvent(shareCode, 'thread-created', threadEventData);
 
-      console.log(`📢 Emitted thread-created event to room:${shareCode} for new thread ${threadId}`);
+      // CRITICAL: Also emit to all room participants' personal channels for sidebar updates
+      // This ensures users see sidebar updates even when not actively in the room
+      try {
+        const { data: sidebarParticipants } = await supabase
+          .from('room_participants')
+          .select('user_id')
+          .eq('room_id', roomId)
+          .not('user_id', 'is', null); // Only get authenticated users
+
+        if (sidebarParticipants && sidebarParticipants.length > 0) {
+          const { emitUserEvent } = await import('@/lib/server/socketEmitter');
+          
+          for (const participant of sidebarParticipants) {
+            if (participant.user_id) {
+              // Emit to each participant's personal channel
+              emitUserEvent(`auth_${participant.user_id}`, 'thread-created', threadEventData);
+            }
+          }
+          
+console.log(` Emitted thread-created to ${sidebarParticipants.length} user channels for sidebar updates`);
+        }
+      } catch (error) {
+        console.error('Error emitting thread-created to user channels:', error);
+        // Don't throw - sidebar notifications are not critical for message sending
+      }
+
+console.log(` Emitted thread-created event to room:${shareCode} for new thread ${threadId}`);
     }
 
     // Trigger AI response for user messages
@@ -152,12 +182,12 @@ async function saveRoomMessage(
 
     // Mark if this is the first message for potential sidebar updates
     if (isFirstMessage && !isAiResponse) {
-      console.log(`🎉 [${messageId}] First message in thread - will trigger sidebar update via Socket.IO`);
+console.log(` [${messageId}] First message in thread - will trigger sidebar update via Socket.IO`);
     }
 
     return true;
   } catch (error) {
-    console.error(`💥 [${messageId}] Exception saving message:`, error);
+console.error(` [${messageId}] Exception saving message:`, error);
     return false;
   }
 }
@@ -168,11 +198,11 @@ export async function POST(
   { params }: { params: Promise<{ shareCode: string }> }
 ) {
   const requestId = Math.random().toString(36).substring(7);
-  console.log(`🚀 [${requestId}] API CALL START - Room chat request received`);
+console.log(` [${requestId}] API CALL START - Room chat request received`);
 
   try {
     const { shareCode } = await params;
-    console.log(`📝 [${requestId}] Share code: ${shareCode}`);
+console.log(` [${requestId}] Share code: ${shareCode}`);
 
     // Room chats work for both authenticated and anonymous users
     // Anonymous users are identified by sessionId parameter
@@ -180,7 +210,7 @@ export async function POST(
     const body = await req.json();
     const { messages, displayName, threadId, triggerAI = true } = body;
 
-    console.log(`📨 [${requestId}] Room chat API received:`, {
+console.log(` [${requestId}] Room chat API received:`, {
       shareCode,
       displayName,
       threadId,
@@ -235,6 +265,24 @@ export async function POST(
 
     // Simplified: Skip daily usage limits for now (can be re-added later if needed)
 
+    // Check if user was removed from the room
+    const { data: removedParticipant } = await supabase
+      .from('removed_room_participants')
+      .select('*')
+      .eq('room_id', room.id)
+      .eq('removed_display_name', displayName)
+      .single();
+
+    if (removedParticipant) {
+      return new NextResponse(JSON.stringify({ 
+        error: 'REMOVED_FROM_ROOM',
+        roomName: room.name 
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // Simplified: Just check if display name is in the room
     const { data: participant } = await supabase
       .from('room_participants')
@@ -251,27 +299,27 @@ export async function POST(
     }
 
     // Save user message to thread
-    console.log(`💾 [${requestId}] Saving user message: "${message.substring(0, 50)}" (triggerAI: ${triggerAI})`);
-    const messageSaved = await saveRoomMessage(room.id, shareCode, threadId, displayName, message, false);
+console.log(` [${requestId}] Saving user message: "${message.substring(0, 50)}" (triggerAI: ${triggerAI})`);
+    const messageSaved = await saveRoomMessage(room.id, shareCode, threadId, displayName, message, false, undefined, undefined, room.name);
     if (!messageSaved) {
-      console.log(`❌ [${requestId}] Failed to save user message`);
+console.log(` [${requestId}] Failed to save user message`);
       return new NextResponse('Failed to save message', {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    console.log(`✅ [${requestId}] User message saved successfully`);
+console.log(` [${requestId}] User message saved successfully`);
 
     // Room chats always use triggerAI: false and handle AI via Socket.IO streaming
     // Return success after saving user message
-    console.log(`📤 [${requestId}] Message saved successfully (AI handled via Socket.IO)`);
+console.log(` [${requestId}] Message saved successfully (AI handled via Socket.IO)`);
     return new NextResponse('Message saved successfully', {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    console.error(`💥 [${requestId}] Error in room chat:`, error);
+console.error(` [${requestId}] Error in room chat:`, error);
 
     return new NextResponse('Internal server error', {
       status: 500,

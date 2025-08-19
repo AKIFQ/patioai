@@ -31,7 +31,7 @@ export class AuditLogger {
   private events: AuditEvent[] = [];
   private errorTracker: ErrorTracker;
   private maxEvents = 10000; // Keep last 10k events in memory
-  private suspiciousPatterns: Map<string, number> = new Map();
+  private suspiciousPatterns = new Map<string, number>();
 
   private constructor() {
     this.errorTracker = ErrorTracker.getInstance();
@@ -299,13 +299,13 @@ export class AuditLogger {
   }
 
   // Get security alerts based on audit events
-  getSecurityAlerts(): Array<{
+  getSecurityAlerts(): {
     type: string;
     severity: 'low' | 'medium' | 'high' | 'critical';
     message: string;
     count: number;
     lastOccurrence: Date;
-  }> {
+  }[] {
     const alerts = [];
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -399,8 +399,8 @@ export class AuditLogger {
 
   private logToConsole(event: AuditEvent): void {
     const emoji = this.getSeverityEmoji(event.severity);
-    const outcomeEmoji = event.outcome === 'success' ? '✅' : 
-                        event.outcome === 'failure' ? '❌' : '🚫';
+const outcomeEmoji = event.outcome === 'success' ? '' :
+event.outcome === 'failure' ? '' : '';
     
     console.log(
       `${emoji} AUDIT [${event.severity.toUpperCase()}] ${outcomeEmoji} ${event.action} on ${event.resource}`,
@@ -418,8 +418,8 @@ export class AuditLogger {
       case 'low': return '🟢';
       case 'medium': return '🟡';
       case 'high': return '🟠';
-      case 'critical': return '🔴';
-      default: return '⚪';
+case 'critical': return '';
+default: return '';
     }
   }
 

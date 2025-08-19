@@ -27,7 +27,7 @@ export const useAIRenderDetection = ({
       const isVisible = messageElement.offsetHeight > 20; // Quick height check
       
       if (hasContent && isVisible) {
-        console.log('✅ AI message actually rendered:', messageId);
+console.log(' AI message actually rendered:', messageId);
         onRenderComplete();
         return true;
       }
@@ -72,10 +72,10 @@ export const useAIRenderDetection = ({
   }, [checkIfRendered, onRenderComplete]);
 
   useEffect(() => {
-    console.log('🔍 RENDER DETECTION:', { isLoading, messagesLength: messages.length });
+console.log(' RENDER DETECTION:', { isLoading, messagesLength: messages.length });
     
     if (!isLoading || messages.length === 0) {
-      console.log('❌ RENDER DETECTION: Not loading or no messages');
+console.log(' RENDER DETECTION: Not loading or no messages');
       // Cancel any ongoing detection
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
@@ -85,11 +85,11 @@ export const useAIRenderDetection = ({
     }
 
     const lastMessage = messages[messages.length - 1];
-    console.log('🔍 LAST MESSAGE:', { role: lastMessage?.role, id: lastMessage?.id, lastTracked: lastMessageIdRef.current });
+console.log(' LAST MESSAGE:', { role: lastMessage?.role, id: lastMessage?.id, lastTracked: lastMessageIdRef.current });
     
     // Only detect for new AI messages
     if (lastMessage?.role === 'assistant' && lastMessage.id !== lastMessageIdRef.current) {
-      console.log('🚀 STARTING RENDER DETECTION for:', lastMessage.id);
+console.log(' STARTING RENDER DETECTION for:', lastMessage.id);
       lastMessageIdRef.current = lastMessage.id;
       
       // Cancel previous detection

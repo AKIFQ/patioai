@@ -1,4 +1,4 @@
-import { Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 
 export interface HealthMetrics {
   isConnected: boolean;
@@ -23,9 +23,9 @@ export class ConnectionHealthMonitor {
   private options: Required<HealthMonitorOptions>;
   private metrics: HealthMetrics;
   private pingInterval: NodeJS.Timer | null = null;
-  private pendingPings: Map<string, { timestamp: number; timeout: NodeJS.Timeout }> = new Map();
+  private pendingPings = new Map<string, { timestamp: number; timeout: NodeJS.Timeout }>();
   private connectionStartTime: number = Date.now();
-  private isBackgroundMode: boolean = false;
+  private isBackgroundMode = false;
   private normalInterval: number;
   private backgroundInterval: number;
 
@@ -59,11 +59,11 @@ export class ConnectionHealthMonitor {
    */
   start(): void {
     if (this.pingInterval) {
-      console.log('🏥 Health monitor already running');
+      // Debug logging removed
       return;
     }
 
-    console.log('🏥 Starting connection health monitor');
+    // Debug logging removed
     this.connectionStartTime = Date.now();
     
     // Start periodic health checks
@@ -79,7 +79,7 @@ export class ConnectionHealthMonitor {
    * Stop health monitoring
    */
   stop(): void {
-    console.log('🛑 Stopping connection health monitor');
+    // Debug logging removed
     
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
@@ -110,7 +110,7 @@ export class ConnectionHealthMonitor {
       return;
     }
 
-    console.log('🏥 Setting background mode:', isBackground);
+    // Debug logging removed
     this.isBackgroundMode = isBackground;
     
     // Update interval and restart monitoring
@@ -145,7 +145,7 @@ export class ConnectionHealthMonitor {
     const pingId = this.generatePingId();
     const startTime = Date.now();
 
-    console.log('🏥 Performing health check:', pingId);
+    // Debug logging removed
 
     try {
       // Set up timeout for ping
@@ -162,7 +162,7 @@ export class ConnectionHealthMonitor {
       });
 
     } catch (error) {
-      console.error('🏥 Health check error:', error);
+console.error(' Health check error:', error);
       this.handlePingFailure('Ping emission failed');
     }
   }
@@ -173,7 +173,7 @@ export class ConnectionHealthMonitor {
   private handlePingResponse(pingId: string, response: any): void {
     const pingInfo = this.pendingPings.get(pingId);
     if (!pingInfo) {
-      console.warn('🏥 Received ping response for unknown ping:', pingId);
+console.warn(' Received ping response for unknown ping:', pingId);
       return;
     }
 
@@ -183,7 +183,7 @@ export class ConnectionHealthMonitor {
 
     const roundTripTime = Date.now() - pingInfo.timestamp;
     
-    console.log(`🏥 Health check successful: ${roundTripTime}ms RTT`);
+    // Debug logging removed
 
     // Update metrics
     this.metrics.lastPingTime = Date.now();
@@ -198,7 +198,7 @@ export class ConnectionHealthMonitor {
    * Handle ping timeout
    */
   private handlePingTimeout(pingId: string): void {
-    console.warn('🏥 Health check timeout:', pingId);
+console.warn(' Health check timeout:', pingId);
     const pingInfo = this.pendingPings.get(pingId);
     if (pingInfo) {
       clearTimeout(pingInfo.timeout);
@@ -211,14 +211,14 @@ export class ConnectionHealthMonitor {
    * Handle ping failure
    */
   private handlePingFailure(reason: string): void {
-    console.warn('🏥 Health check failed:', reason);
+console.warn(' Health check failed:', reason);
     
     this.metrics.consecutiveFailures++;
     this.updateHealthStatus();
 
     // Trigger reconnection if too many failures
     if (this.metrics.consecutiveFailures >= this.options.maxFailures) {
-      console.error('🏥 Too many consecutive failures, triggering reconnection');
+console.error(' Too many consecutive failures, triggering reconnection');
       this.options.onReconnectNeeded();
     }
   }
@@ -242,7 +242,7 @@ export class ConnectionHealthMonitor {
 
     // Notify if status changed
     if (oldStatus !== newStatus) {
-      console.log(`🏥 Health status changed: ${oldStatus} → ${newStatus}`);
+      // Debug logging removed
       this.options.onStatusChange(newStatus, this.getMetrics());
     }
   }
@@ -252,7 +252,7 @@ export class ConnectionHealthMonitor {
    */
   private setupSocketListeners(): void {
     this.socket.on('connect', () => {
-      console.log('🏥 Socket connected, resetting health metrics');
+      // Debug logging removed
       this.metrics.isConnected = true;
       this.metrics.consecutiveFailures = 0;
       this.connectionStartTime = Date.now();
@@ -260,13 +260,13 @@ export class ConnectionHealthMonitor {
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('🏥 Socket disconnected:', reason);
+      // Debug logging removed
       this.metrics.isConnected = false;
       this.updateHealthStatus();
     });
 
     this.socket.on('reconnect', (attemptNumber) => {
-      console.log('🏥 Socket reconnected after', attemptNumber, 'attempts');
+      // Debug logging removed
       this.metrics.reconnectionCount++;
       this.connectionStartTime = Date.now();
       this.updateHealthStatus();
@@ -277,6 +277,6 @@ export class ConnectionHealthMonitor {
    * Generate unique ping ID
    */
   private generatePingId(): string {
-    return `ping_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+return `ping_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }

@@ -24,8 +24,12 @@ import {
   Check,
   X,
   Copy,
-  Loader2
+  Loader2,
+  Share2
 } from 'lucide-react';
+
+// Import ShareRoomModal
+import ShareRoomModal from './ShareRoomModal';
 
 interface RoomContext {
   shareCode: string;
@@ -63,6 +67,9 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [removingUser, setRemovingUser] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [roomPassword, setRoomPassword] = useState<string | null>(null);
+  const [isLoadingPassword, setIsLoadingPassword] = useState(false);
   
   // Mobile detection - use more reliable method
   const [isMobile, setIsMobile] = useState(false);
@@ -80,6 +87,35 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Fetch password when modal opens
+  useEffect(() => {
+    if (isOpen && isCreator) {
+      fetchRoomPassword();
+    }
+  }, [isOpen, isCreator]);
+
+  // Fetch room password for admin
+  const fetchRoomPassword = async () => {
+    if (!isCreator) return; // Only creator can see password
+    
+    setIsLoadingPassword(true);
+    try {
+      const response = await fetch(`/api/rooms/${roomContext.shareCode}/password`);
+      if (response.ok) {
+        const data = await response.json();
+        setRoomPassword(data.password);
+      } else {
+        console.error('Failed to fetch room password');
+        setRoomPassword('Password unavailable');
+      }
+    } catch (error) {
+      console.error('Error fetching room password:', error);
+      setRoomPassword('Password unavailable');
+    } finally {
+      setIsLoadingPassword(false);
+    }
+  };
 
   // Copy share link to clipboard
   const handleCopyShareLink = async () => {
@@ -164,37 +200,38 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
   // Shared header
   const SettingsHeader = (
-    <DialogHeader className="flex-shrink-0 p-0 space-y-0">
-      <div className="flex items-center justify-between px-4 py-3">
-        <DialogTitle className="text-lg font-semibold">
-          Room Settings
-        </DialogTitle>
+    <div className="flex-shrink-0 px-6 py-4 border-b border-border/40">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+          <Settings className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div>
+          <DialogTitle className="text-xl font-medium">Room Settings</DialogTitle>
+          <p className="text-sm text-muted-foreground/80">Manage your room configuration</p>
+        </div>
       </div>
-    </DialogHeader>
+    </div>
   );
 
   // Shared content
   const SettingsContent = (
     <div 
-      className="flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-6 min-h-0"
+      className="flex-1 overflow-y-auto px-6 py-6 space-y-6 min-h-0"
       style={{ 
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y'
       }}
     >
-      <div className="space-y-5 pb-safe">
+      <div className="space-y-6">
         {/* Room Information */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Crown className="h-4 w-4" />
-            Room Information
-          </div>
+        <div className="space-y-4">
+          <h3 className="text-sm font-medium">Room Information</h3>
           
           {/* Room Name */}
-          <div className="space-y-1">
-            <div className="text-xs font-medium text-muted-foreground">Name</div>
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Name</div>
             {editingName ? (
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <Input
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
@@ -205,14 +242,13 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                       setNewRoomName(roomContext.roomName);
                     }
                   }}
-                  className="flex-1 h-8 text-sm"
+                  className="flex-1"
                   autoFocus
                 />
                 <Button 
                   size="sm" 
                   onClick={handleUpdateRoomName} 
-                  className="h-9 px-3 touch-manipulation"
-                  style={{ minHeight: '36px' }}
+                  className="bg-amber-500 hover:bg-amber-600"
                 >
                   {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
                 </Button>
@@ -223,24 +259,20 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     setEditingName(false);
                     setNewRoomName(roomContext.roomName);
                   }}
-                  className="h-9 px-3 touch-manipulation"
-                  style={{ minHeight: '36px' }}
                 >
                   Cancel
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-1">
-                <div className="flex-1 text-sm font-medium px-2 py-1 bg-muted/30 rounded">
-                  {roomContext.roomName}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg">
+                  <div className="text-sm font-medium">{roomContext.roomName}</div>
                 </div>
                 {isCreator && (
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={() => setEditingName(true)} 
-                    className="h-9 px-3 touch-manipulation"
-                    style={{ minHeight: '36px' }}
+                    onClick={() => setEditingName(true)}
                   >
                     Edit
                   </Button>
@@ -250,10 +282,10 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           </div>
 
           {/* Share Link */}
-          <div className="space-y-1">
-            <div className="text-xs font-medium text-muted-foreground">Share Link</div>
-            <div className="flex gap-1">
-              <div className="flex-1 text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded font-mono break-all">
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Share Link</div>
+            <div className="flex gap-2">
+              <div className="flex-1 text-sm px-3 py-2 bg-amber-30 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg font-mono break-all">
                 {`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
               </div>
               <Button 
@@ -268,30 +300,82 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             </div>
           </div>
 
+          {/* Share Button */}
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Share Room</div>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={() => {
+                if (!roomPassword && isCreator) {
+                  fetchRoomPassword();
+                }
+                setShowShareModal(true);
+              }}
+              className="w-full h-9 touch-manipulation flex items-center gap-2 bg-amber-500 text-white hover:bg-amber-600 border-amber-500"
+              style={{ minHeight: '36px' }}
+            >
+              <Share2 className="h-4 w-4" />
+              {isLoadingPassword ? 'Loading...' : 'Share to Social Platforms'}
+            </Button>
+          </div>
+
+          {/* Room Password (Admin Only) */}
+          {isCreator && (
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Room Password</div>
+              <div className="flex gap-2">
+                <div className="flex-1 text-sm px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg font-mono break-all">
+                  {isLoadingPassword ? (
+                    <span className="text-muted-foreground/60">Loading password...</span>
+                  ) : roomPassword ? (
+                    roomPassword
+                  ) : (
+                    <span className="text-muted-foreground/60">Click share to load password</span>
+                  )}
+                </div>
+                {roomPassword && roomPassword !== 'Password unavailable' && (
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      navigator.clipboard.writeText(roomPassword);
+                      toast.success('Password copied to clipboard');
+                    }}
+                    className="h-9 w-9 p-0 touch-manipulation"
+                    style={{ minHeight: '36px', minWidth: '36px' }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Room Stats */}
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-sm text-muted-foreground/80">
             <span><span className="font-medium">Participants:</span> {roomContext.participants.length}/{roomContext.maxParticipants}</span>
             <span><span className="font-medium">Tier:</span> {roomContext.tier}</span>
           </div>
         </div>
 
         {/* Participants */}
-        <div className="space-y-3">
-          <div className="text-sm font-semibold text-foreground">
-            Participants ({roomContext.participants.length})
-          </div>
+        <div className="space-y-4">
+          <h3 className="text-sm font-medium">Participants ({roomContext.participants.length})</h3>
           
-          <div className="space-y-2">
+          <div className="space-y-3">
             {roomContext.participants.map((participant, index) => (
               <div key={index} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-medium text-sm flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 font-medium text-sm flex items-center justify-center border border-amber-200 dark:border-amber-800/50">
                     {participant.displayName.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{participant.displayName}</span>
                     {participant.displayName === roomContext.createdBy && (
-                      <Crown className="h-4 w-4 text-yellow-500" />
+                      <div className="w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-amber-500" title="Room Creator" />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -301,7 +385,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     variant="ghost"
                     onClick={() => handleRemoveUser(participant.sessionId || '', participant.displayName)}
                     disabled={removingUser === participant.displayName}
-                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 touch-manipulation"
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 touch-manipulation"
                     style={{ minHeight: '32px', minWidth: '32px' }}
                   >
                     {removingUser === participant.displayName ? (
@@ -318,11 +402,8 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
         {/* Danger Zone */}
         {isCreator && (
-          <div className="space-y-3 pb-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-red-600">
-              <Trash2 className="h-4 w-4" />
-              Danger Zone
-            </div>
+          <div className="space-y-4 pb-4">
+            <h3 className="text-sm font-medium text-red-600">Danger Zone</h3>
             
             {!showDeleteConfirm ? (
               <Button
@@ -367,58 +448,90 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
   if (isMobile) {
     return (
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 w-9 p-0 hover:bg-muted/50 transition-colors touch-manipulation"
-            aria-label="Room settings"
-            style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
+      <>
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 p-0 hover:bg-muted/50 transition-colors touch-manipulation"
+              aria-label="Room settings"
+              style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent 
+            side="bottom" 
+            className="h-[80vh] max-h-[600px] p-0 gap-0 flex flex-col rounded-t-xl border-t-2"
+            style={{ 
+              WebkitOverflowScrolling: 'touch',
+              touchAction: 'pan-y'
+            }}
           >
-            <Settings className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent 
-          side="bottom" 
-          className="h-[80vh] max-h-[600px] p-0 gap-0 flex flex-col rounded-t-xl border-t-2"
-          style={{ 
-            WebkitOverflowScrolling: 'touch',
-            touchAction: 'pan-y'
+            {/* Drag handle - make it more prominent */}
+            <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-2" />
+            {SettingsHeader}
+            {SettingsContent}
+          </SheetContent>
+        </Sheet>
+
+        {/* Share Room Modal */}
+        <ShareRoomModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          room={{
+            id: 'temp-id',
+            name: roomContext.roomName,
+            shareCode: roomContext.shareCode,
+            password: roomPassword || 'Password loading...',
+            passwordExpiresAt: expiresAt || new Date().toISOString()
           }}
-        >
-          {/* Drag handle - make it more prominent */}
-          <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-2" />
-          {SettingsHeader}
-          {SettingsContent}
-        </SheetContent>
-      </Sheet>
+          shareableLink={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
+        />
+      </>
     );
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 hover:bg-muted/50 transition-colors flex-shrink-0 touch-manipulation"
-          aria-label="Room settings"
-          style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 hover:bg-muted/50 transition-colors flex-shrink-0 touch-manipulation"
+            aria-label="Room settings"
+            style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
 
-      <DialogContent 
-        className="sm:max-w-[500px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"
-        onPointerDownOutside={() => setIsOpen(false)}
-        onEscapeKeyDown={() => setIsOpen(false)}
-      >
-        {SettingsHeader}
-        {SettingsContent}
-      </DialogContent>
-    </Dialog>
+        <DialogContent 
+          className="sm:max-w-[500px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"
+          onPointerDownOutside={() => setIsOpen(false)}
+          onEscapeKeyDown={() => setIsOpen(false)}
+        >
+          {SettingsHeader}
+          {SettingsContent}
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Room Modal */}
+      <ShareRoomModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        room={{
+          id: 'temp-id',
+          name: roomContext.roomName,
+          shareCode: roomContext.shareCode,
+          password: roomPassword || 'Password loading...',
+          passwordExpiresAt: expiresAt || new Date().toISOString()
+        }}
+        shareableLink={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
+      />
+    </>
   );
 };
 

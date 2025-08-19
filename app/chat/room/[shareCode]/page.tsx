@@ -40,11 +40,60 @@ async function checkRoomExpiration(shareCode: string) {
     }
 }
 
-// Ensure user is properly added to room with correct user_id
+// Check if user is removed from room and redirect to removal page
+async function checkUserRemovalStatus(shareCode: string, displayName: string, userId?: string) {
+    try {
+        const roomInfo = await getRoomInfo(shareCode);
+        if (!roomInfo) return { isRemoved: false };
+
+        // Check if user was removed from the room
+        let removedParticipant = null;
+        if (userId) {
+            // Check by user_id for authenticated users
+            const { data } = await (supabase as any)
+                .from('removed_room_participants')
+                .select('*')
+                .eq('room_id', roomInfo.room.id)
+                .eq('removed_user_id', userId)
+                .single();
+            removedParticipant = data;
+        } else {
+            // Check by display_name for anonymous users
+            const { data } = await (supabase as any)
+                .from('removed_room_participants')
+                .select('*')
+                .eq('room_id', roomInfo.room.id)
+                .eq('removed_display_name', displayName)
+                .single();
+            removedParticipant = data;
+        }
+
+        if (removedParticipant) {
+            return { 
+                isRemoved: true, 
+                roomName: roomInfo.room.name,
+                shareCode: shareCode 
+            };
+        }
+
+        return { isRemoved: false };
+    } catch (error) {
+        console.error('Error checking user removal status:', error);
+        return { isRemoved: false };
+    }
+}
+
+// Ensure user is properly added to room with correct user_id (only if not removed)
 async function ensureUserInRoom(shareCode: string, displayName: string, userId?: string) {
     try {
         const roomInfo = await getRoomInfo(shareCode);
         if (!roomInfo) return;
+
+        // First check if user was removed from the room
+        const removalStatus = await checkUserRemovalStatus(shareCode, displayName, userId);
+        if (removalStatus.isRemoved) {
+            throw new Error('REMOVED_FROM_ROOM');
+        }
 
         // Check if user is already a participant (by user_id if authenticated, or display_name if anonymous)
         let existingParticipant;
@@ -85,6 +134,9 @@ async function ensureUserInRoom(shareCode: string, displayName: string, userId?:
         }
     } catch (error) {
         console.error('Error ensuring user in room:', error);
+        if (error.message === 'REMOVED_FROM_ROOM') {
+            throw error;
+        }
     }
 }
 
@@ -134,11 +186,29 @@ export default async function RoomChatPage(props: {
     // Get current user info to check if they're the creator
     const userInfo = await getUserInfo();
 
-    // Ensure the user is added to the room participants
-    await ensureUserInRoom(shareCode, searchParams.displayName, userInfo?.id);
+    // Check if user was removed from the room and redirect if so
+    try {
+        const removalStatus = await checkUserRemovalStatus(shareCode, searchParams.displayName, userInfo?.id);
+        if (removalStatus.isRemoved) {
+            redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(removalStatus.roomName || 'Unknown Room')}`);
+        }
+    } catch (error) {
+        console.error('Error checking removal status:', error);
+    }
+
+    // Ensure the user is added to the room participants (only if not removed)
+    try {
+        await ensureUserInRoom(shareCode, searchParams.displayName, userInfo?.id);
+    } catch (error) {
+        if (error.message === 'REMOVED_FROM_ROOM') {
+            const roomInfo = await getRoomInfo(shareCode);
+            redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(roomInfo?.room.name || 'Unknown Room')}`);
+        }
+        console.error('Error ensuring user in room:', error);
+    }
 
     // If user just signed in (has auth but was previously anonymous), update their participant record
-    if (userInfo && searchParams.sessionId && searchParams.sessionId.startsWith('session_')) {
+    if (userInfo && searchParams.sessionId?.startsWith('session_')) {
         try {
             // Update the anonymous participant to authenticated
             await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {

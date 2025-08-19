@@ -1,0 +1,25 @@
+
+> your-app@2.0.0 dev
+> npm run build:server && node --expose-gc dist/server.js
+
+
+> your-app@2.0.0 build:server
+> npx tsc server.ts --outDir dist --target es2020 --module commonjs --esModuleInterop --skipLibCheck
+
+Memory Manager: Started adaptive monitoring
+ Memory Protection: Started emergency monitoring
+ OPENROUTER_API_KEY (server.ts): sk-or-…8c2d
+ ✓ Compiled /instrumentation in 178ms (152 modules)
+Langfuse secret key was not passed to constructor or not set as 'LANGFUSE_SECRET_KEY' environment variable. No observability data will be sent to Langfuse.
+Memory Manager initialized with adaptive monitoring
+Memory Protection initialized with emergency mode
+Alert System initialized with updated thresholds
+Server error: Error: listen EADDRINUSE: address already in use :::3000
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::3000)
+    at <unknown> (dist/server.js:143:10) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}

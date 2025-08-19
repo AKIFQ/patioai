@@ -31,7 +31,7 @@ export class ChatErrorBoundary extends Component<ErrorBoundaryProps, ErrorBounda
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     const errorId = `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.error('🚨 Error Boundary caught error:', errorId, error);
+console.error(' Error Boundary caught error:', errorId, error);
     
     return {
       hasError: true,
@@ -45,7 +45,7 @@ export class ChatErrorBoundary extends Component<ErrorBoundaryProps, ErrorBounda
     const { errorId } = this.state;
 
     // Log detailed error information
-    console.error('🚨 Error Boundary Details:', {
+console.error(' Error Boundary Details:', {
       errorId,
       error: error.message,
       stack: error.stack,
@@ -89,7 +89,7 @@ export class ChatErrorBoundary extends Component<ErrorBoundaryProps, ErrorBounda
         url: window.location.href
       };
       
-      console.log('🚨 Error Report:', JSON.stringify(errorReport, null, 2));
+console.log(' Error Report:', JSON.stringify(errorReport, null, 2));
       
       // In a production environment, you might send this to an error reporting service:
       // await fetch('/api/errors', { method: 'POST', body: JSON.stringify(errorReport) });
@@ -99,7 +99,7 @@ export class ChatErrorBoundary extends Component<ErrorBoundaryProps, ErrorBounda
   }
 
   private handleRetry = () => {
-    console.log('🔄 Retrying after error boundary catch');
+console.log(' Retrying after error boundary catch');
     this.setState({
       hasError: false,
       error: null,

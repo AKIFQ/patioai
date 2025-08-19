@@ -23,12 +23,12 @@ interface RoomSocketHookProps {
   onReasoningEnd?: (threadId: string, reasoning: string) => void;
   onContentStart?: (threadId: string) => void;
   // Cross-thread activity
-  onCrossThreadActivity?: (activities: Array<{
+  onCrossThreadActivity?: (activities: {
     threadId: string;
     threadName: string;
     activeUsers: string[];
     typingUsers: string[];
-  }>) => void;
+  }[]) => void;
 }
 
 export function useRoomSocket({
@@ -123,7 +123,7 @@ export function useRoomSocket({
 
   // Handle participant changes from Socket.IO
   const handleParticipantChange = useCallback((data: any) => {
-    console.log('Participant change:', data);
+    // Participant change
     if (onParticipantChange) {
       onParticipantChange([]);
     }
@@ -131,7 +131,7 @@ export function useRoomSocket({
 
   // Handle room deletion from Socket.IO
   const handleRoomDeleted = useCallback((data: any) => {
-    console.log('Room deleted:', data);
+    // Room deleted
     // Redirect user away from deleted room
     if (typeof window !== 'undefined') {
       window.location.href = '/chat';
@@ -146,7 +146,7 @@ export function useRoomSocket({
         retryDelay: 1000,
         queueSize: 50
       });
-      console.log('📨 Message queue initialized for room socket');
+// Message queue initialized
     }
   }, [socket]);
 
@@ -323,6 +323,30 @@ export function useRoomSocket({
         addTrackedListener('user-typing', handleTypingUpdate);
         addTrackedListener('user-joined-room', handleParticipantChange);
         addTrackedListener('user-left-room', handleParticipantChange);
+        addTrackedListener('user-removed-from-room', (data: any) => {
+          console.log('User removed from room:', data);
+          // Update participant list if provided
+          if (onParticipantChange && data.updatedParticipants) {
+            onParticipantChange(data.updatedParticipants);
+          }
+          // If current user was removed, redirect them (but only if they were actively in the room)
+          if (data.removedUser?.displayName === displayName) {
+            // Check if this is due to room expiration vs actual removal
+            const isExpiredRoom = data.reason?.includes('expired') || 
+                                data.details?.includes('expired') ||
+                                !hasMessagesRef.current; // If no messages were loaded, user wasn't really "in" the room
+            
+            if (isExpiredRoom) {
+              console.log('Room expired or user was not actively in room - no redirect needed');
+              return;
+            }
+            
+            console.log('Current user was actively removed from room, redirecting...');
+            if (typeof window !== 'undefined') {
+              window.location.href = `/room/${shareCode}/removed?roomName=${encodeURIComponent(data.roomName || 'Unknown Room')}`;
+            }
+          }
+        });
         addTrackedListener('room-deleted', handleRoomDeleted);
 
         // Streaming listeners with tracking
@@ -330,7 +354,7 @@ export function useRoomSocket({
           const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(true);
-          if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-start', payload);
+if (process.env.NODE_ENV === 'development') console.info(' ai-stream-start', payload);
           onStreamStart?.(threadId);
         };
         addTrackedListener('ai-stream-start', aiStreamStartHandler);
@@ -339,7 +363,7 @@ export function useRoomSocket({
         const aiReasoningStartHandler = (payload: { threadId?: string; timestamp?: number; modelUsed?: string }) => {
           const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
-          if (process.env.NODE_ENV === 'development') console.info('🔎 reasoning-start model:', payload?.modelUsed);
+if (process.env.NODE_ENV === 'development') console.info(' reasoning-start model:', payload?.modelUsed);
           onReasoningStart?.(threadId);
         };
         const aiReasoningChunkHandler = (payload: { threadId?: string; reasoning: string; timestamp?: number; modelUsed?: string }) => {
@@ -361,12 +385,12 @@ export function useRoomSocket({
         // Cross-thread activity listener
         const crossThreadActivityHandler = (payload: { 
           roomId: string; 
-          activities: Array<{
+          activities: {
             threadId: string;
             threadName: string;
             activeUsers: string[];
             typingUsers: string[];
-          }>;
+          }[];
           timestamp: string;
         }) => {
           // Only process cross-thread activity for the current room
@@ -384,7 +408,7 @@ export function useRoomSocket({
         const aiContentStartHandler = (payload: { threadId?: string; timestamp?: number; modelUsed?: string }) => {
           const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
-          if (process.env.NODE_ENV === 'development') console.info('🔎 model used:', payload?.modelUsed);
+if (process.env.NODE_ENV === 'development') console.info(' model used:', payload?.modelUsed);
           onContentStart?.(threadId);
         };
         const aiStreamChunkHandler = (payload: { threadId?: string; chunk: string; timestamp?: number; modelUsed?: string }) => {
@@ -398,7 +422,7 @@ export function useRoomSocket({
           const { text, reasoning } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(false);
-          if (process.env.NODE_ENV === 'development') console.info('🔎 ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
+if (process.env.NODE_ENV === 'development') console.info(' ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
           onStreamEnd?.(threadId, text, reasoning);
         };
         
@@ -411,7 +435,7 @@ export function useRoomSocket({
           const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           
-          console.error('🚨 AI Error received:', payload);
+console.error(' AI Error received:', payload);
           setIsAIStreaming(false); // Stop the thinking state
           
           // You can add additional error handling here, like showing a toast notification
@@ -419,12 +443,31 @@ export function useRoomSocket({
         };
         addTrackedListener('ai-error', aiErrorHandler);
 
+        // AI Stop handlers
+        const aiStoppedHandler = (payload: { threadId?: string; success?: boolean }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+          setIsAIStreaming(false);
+          if (process.env.NODE_ENV === 'development') console.info('AI response stopped successfully');
+        };
+        addTrackedListener('ai-stopped', aiStoppedHandler);
+
+        const aiStreamStoppedHandler = (payload: { threadId?: string; timestamp?: number; reason?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+          setIsAIStreaming(false);
+          if (process.env.NODE_ENV === 'development') console.info('AI stream stopped:', payload.reason);
+        };
+        addTrackedListener('ai-stream-stopped', aiStreamStoppedHandler);
+
         // AI Fallback notification - inform user when switching models
         const aiFallbackHandler = (payload: { threadId?: string; primaryModel: string; fallbackModel: string; reason: string; timestamp?: number }) => {
           const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           
-          console.log(`🔄 AI Fallback: ${payload.primaryModel} → ${payload.fallbackModel} (${payload.reason})`);
+console.log(` AI Fallback: ${payload.primaryModel} → ${payload.fallbackModel} (${payload.reason})`);
           
           // You can add UI notification here if needed
           // For example: show a toast saying "Switched to backup model due to rate limits"
@@ -437,7 +480,17 @@ export function useRoomSocket({
           setConnectionStatus('SUBSCRIBED');
         };
         const roomErrorHandler = (error: any) => {
-          console.warn('Room Socket.IO error (non-critical):', error);
+          console.warn('Room Socket.IO error:', error);
+          
+          // Handle removal from room
+          if (error.error === 'REMOVED_FROM_ROOM') {
+            console.log('User was removed from room via Socket.IO, redirecting...');
+            if (typeof window !== 'undefined') {
+              window.location.href = `/room/${shareCode}/removed?roomName=${encodeURIComponent(error.roomName || 'Unknown Room')}`;
+            }
+            return;
+          }
+          
           if (error && Object.keys(error).length > 0) {
             setConnectionStatus('CHANNEL_ERROR');
           }
@@ -461,12 +514,12 @@ export function useRoomSocket({
       
       // Prevent double cleanup
       if (cleanupExecuted) {
-        console.log('⚠️ Cleanup already executed, skipping');
+console.log(' Cleanup already executed, skipping');
         return;
       }
       cleanupExecuted = true;
 
-      console.log('🧹 Starting room socket cleanup for:', shareCode);
+      // Starting room socket cleanup
 
       // Clean up empty thread if no messages were sent (disable during active sessions to reduce churn)
       // if (!hasMessagesRef.current && chatSessionId) {
@@ -475,15 +528,15 @@ export function useRoomSocket({
 
       // Clean up socket listeners using tracked listeners
       if (socket) {
-        console.log(`🧹 Removing ${eventListeners.size} tracked socket listeners`);
+        // Removing tracked socket listeners
         
         // Remove all tracked listeners with their specific handlers
         for (const [event, handler] of eventListeners.entries()) {
           try {
             socket.off(event, handler);
-            console.log(`✅ Removed listener: ${event}`);
+// Removed listener
           } catch (error) {
-            console.warn(`⚠️ Failed to remove listener ${event}:`, error);
+console.warn(` Failed to remove listener ${event}:`, error);
           }
         }
         
@@ -523,7 +576,7 @@ export function useRoomSocket({
         document.removeEventListener('visibilitychange', handleVisibility);
       }
       
-      console.log('✅ Room socket cleanup completed for:', shareCode);
+// Room socket cleanup completed
     };
   }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange, onStreamStart, onStreamChunk, onStreamEnd]);
 
@@ -534,21 +587,21 @@ export function useRoomSocket({
     roomName: string;
     participants: string[];
     modelId?: string;
-    chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+    chatHistory?: {role: 'user' | 'assistant', content: string}[];
     reasoningMode?: boolean;
   }) => {
     if (socket && isConnected) {
       // Use message queue for critical AI invocation
       if (messageQueueRef.current) {
-        console.log('🧠 Queueing AI invocation for reliability');
+        // Queueing AI invocation
         messageQueueRef.current.enqueue('invoke-ai', payload, 'high');
       } else {
         // Fallback to direct emit
-        console.log('🧠 Direct AI invocation (no queue available)');
+        // Direct AI invocation
         socket.emit('invoke-ai', payload);
       }
     } else {
-      console.warn('⚠️ Cannot invoke AI: socket not connected');
+console.warn(' Cannot invoke AI: socket not connected');
     }
   }, [socket, isConnected]);
 

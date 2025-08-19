@@ -12,6 +12,7 @@ const supabase = createClient(
 interface JoinRoomRequest {
   displayName: string;
   sessionId: string;
+  password?: string;
 }
 
 export async function POST(
@@ -21,7 +22,7 @@ export async function POST(
   try {
     const { shareCode } = await params;
     const body: JoinRoomRequest = await req.json();
-    const { displayName, sessionId } = body;
+    const { displayName, sessionId, password } = body;
 
     // Validate input
     if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0) {
@@ -52,6 +53,37 @@ export async function POST(
 
     const room = validation.room!;
 
+    // Get room with password information for validation
+    const { data: roomWithPassword, error: roomError } = await supabase
+      .from('rooms')
+      .select('id, name, share_code, max_participants, creator_tier, expires_at, created_at, password, password_expires_at')
+      .eq('share_code', shareCode)
+      .single();
+    
+    if (roomError || !roomWithPassword) {
+      console.error('Error fetching room with password:', roomError);
+      return NextResponse.json(
+        { error: 'Failed to fetch room details' },
+        { status: 500 }
+      );
+    }
+
+    // Check if password has expired
+    if (roomWithPassword.password_expires_at && new Date(roomWithPassword.password_expires_at) < new Date()) {
+      return NextResponse.json(
+        { error: 'Room password has expired. Please contact the room admin for a new password.' },
+        { status: 400 }
+      );
+    }
+
+    // Check password if room has one
+    if (roomWithPassword.password && roomWithPassword.password !== password) {
+      return NextResponse.json(
+        { error: 'Incorrect password' },
+        { status: 400 }
+      );
+    }
+
     // Get authenticated user if available
     const session = await getSession();
     const userId = session?.id || null;
@@ -68,14 +100,15 @@ export async function POST(
       }
     }
 
-    // ATOMIC OPERATION: Use upsert with capacity check
+    // ATOMIC OPERATION: Use upsert with capacity check and removal validation
     // This prevents race conditions by handling both insert and update atomically
     const { data: result, error: upsertError } = await (supabase as any)
       .rpc('join_room_safely', {
         p_room_id: room.id,
         p_session_id: sessionId,
         p_display_name: displayName.trim(),
-        p_user_id: userId
+        p_user_id: userId,
+        p_password: password || null
       });
 
     if (upsertError) {
@@ -98,6 +131,18 @@ export async function POST(
     // Handle function JSON response (it returns { success, error? })
     if (result && result.success === false) {
       const err = (result as any).error || 'Failed to join room';
+      
+      // Handle removed user case specifically
+      if (err === 'REMOVED_FROM_ROOM') {
+        return NextResponse.json(
+          { 
+            error: 'REMOVED_FROM_ROOM',
+            roomName: room.name
+          },
+          { status: 403 }
+        );
+      }
+      
       const status = err === 'Room is full' ? 409 : 400;
       return NextResponse.json({ error: err }, { status });
     }

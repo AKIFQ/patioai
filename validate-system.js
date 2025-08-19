@@ -18,20 +18,20 @@ async function validateSystem() {
     try {
       const response = await fetch(`${baseUrl}${test.url}`);
       if (response.ok) {
-        console.log(`✅ ${test.name} - PASSED (${response.status})`);
+console.log(` ${test.name} - PASSED (${response.status})`);
         passed++;
       } else {
-        console.log(`❌ ${test.name} - FAILED (${response.status})`);
+console.log(` ${test.name} - FAILED (${response.status})`);
         failed++;
       }
     } catch (error) {
-      console.log(`❌ ${test.name} - ERROR: ${error.message}`);
+console.log(` ${test.name} - ERROR: ${error.message}`);
       failed++;
     }
   }
   
-  console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
-  console.log(`Overall: ${failed === 0 ? '✅ SYSTEM HEALTHY' : '⚠️ ISSUES DETECTED'}`);
+console.log(`\n Results: ${passed} passed, ${failed} failed`);
+console.log(`Overall: ${failed === 0 ? ' SYSTEM HEALTHY' : ' ISSUES DETECTED'}`);
   
   return failed === 0;
 }
