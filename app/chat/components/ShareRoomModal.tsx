@@ -75,8 +75,8 @@ export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }:
   const isRoomCreator = true; // This should be determined based on actual user/room data
   
   const defaultMessage = isRoomCreator 
-    ? `Let's chat with AI together!\n\nJoin me in "${room.name}" - our secure AI collaboration space where we can brainstorm, create, and explore together.\n\nRoom Code: ${room.shareCode}\nPassword: ${room.password || 'Generating secure password...'}\n\nReady to dive in? Join here: ${shareableLink}`
-    : `You're invited to chat with AI!\n\nJoin "${room.name}" - a secure AI collaboration space for brainstorming, creating, and exploring together.\n\nRoom Code: ${room.shareCode}\nPassword: Ask the room creator for the current password\n\nReady to collaborate? Join here: ${shareableLink}`;
+    ? `Let's chat with AI together!\n\nJoin me in our room "${room.name}" - our secure AI chat space where we can brainstorm, create, and explore together.\n\nRoom Code: ${room.shareCode}\nPassword: ${room.password || 'Generating secure password...'}\n\nReady to dive in? Join here: ${shareableLink}`
+    : `You're invited to chat with AI!\n\nJoin our room"${room.name}" - a secure AI chat space for brainstorming, creating, and exploring together.\n\nRoom Code: ${room.shareCode}\nPassword: Ask the room creator for the current password\n\nReady to collaborate? Join here: ${shareableLink}`;
 
   const handleCopyLink = async () => {
     try {
