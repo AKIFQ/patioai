@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Copy, Check, Users, Clock, RefreshCw, Eye, EyeOff, Share2 } from 'lucide-react';
+import { Share2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import ShareRoomModal from './ShareRoomModal';
 
@@ -105,28 +105,29 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
     <>
       {/* Main Create Room Modal */}
       <Dialog open={isOpen && !showShareModal} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-md z-[200]">
+        <DialogContent className="sm:max-w-md backdrop-blur-md bg-background/95 border-border/40">
           {!createdRoom ? (
             <>
-              <DialogHeader>
-                <DialogTitle>Create Room</DialogTitle>
-                <DialogDescription>
-                  Create a new secure chat room with auto-generated password protection.
-                </DialogDescription>
-                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-blue-800">
-                    <span className="text-lg">🔒</span>
-                    <span>Your room will be automatically protected with a secure password that expires in 36 hours.</span>
+              <DialogHeader className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
+                    <Plus className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl font-medium">Create Room</DialogTitle>
+                    <DialogDescription className="text-muted-foreground/80">
+                      Create a secure chat room for your team
+                    </DialogDescription>
                   </div>
                 </div>
               </DialogHeader>
               
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="roomName" className="text-sm font-medium">Room Name</Label>
                   <Input
                     id="roomName"
-                    placeholder="e.g., Family Vacation Planning"
+                    placeholder="Team Planning"
                     value={roomName}
                     onChange={(e) => setRoomName(e.target.value)}
                     onKeyDown={(e) => {
@@ -134,42 +135,19 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                         handleCreateRoom();
                       }
                     }}
-                    className="h-9"
                   />
                 </div>
                 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">
-                      Auto-Generated Password
-                      <span className="text-xs text-muted-foreground ml-2">Secure 8-character password</span>
-                    </Label>
-                    <div className="text-xs text-green-600 font-medium">
-                      🔐 Auto-Secured
-                    </div>
-                  </div>
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="text-sm text-green-800">
-                      <div className="font-medium">Password will be automatically generated</div>
-                      <div className="text-xs mt-1">• 8 characters with mixed case and numbers</div>
-                      <div className="text-xs">• Expires in 36 hours for security</div>
-                      <div className="text-xs">• Only visible to room admin</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-muted/30 p-3 rounded-lg space-y-2 border border-border/40">
-                  <div className="text-sm text-muted-foreground/80">
-                    <span className="hidden sm:inline">Free tier: 5 participants max</span>
-                    <span className="sm:hidden">5 participants max</span>
-                  </div>
-                  <div className="text-sm text-muted-foreground/80">
-                    <span>Expires in 7 days</span>
+                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
+                  <div className="text-sm text-muted-foreground/80 space-y-1">
+                    <div>5 participants maximum</div>
+                    <div>Expires in 7 days</div>
+                    <div>Password protected automatically</div>
                   </div>
                 </div>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
@@ -181,85 +159,56 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
           ) : (
             // Show Room Creation Success
             <>
-              <DialogHeader>
-                <DialogTitle className="text-lg font-medium">Room Created Successfully!</DialogTitle>
-                <DialogDescription className="text-muted-foreground/80">
-                  <span className="hidden sm:inline">Share this link with others to invite them to your room.</span>
-                  <span className="sm:hidden">Share this link to invite others.</span>
-                </DialogDescription>
+              <DialogHeader className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
+                    <Plus className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl font-medium">Room Created</DialogTitle>
+                    <DialogDescription className="text-muted-foreground/80">
+                      Share with others to start collaborating
+                    </DialogDescription>
+                  </div>
+                </div>
               </DialogHeader>
 
-              <div className="space-y-4">
-                <div className="bg-muted/30 p-4 rounded-lg space-y-3 border border-border/40">
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Room Name</Label>
-                    <p className="text-sm font-medium">{createdRoom.room.name}</p>
-                  </div>
-                  
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Share Code</Label>
-                    <p className="text-sm font-mono text-muted-foreground/80">{createdRoom.room.shareCode}</p>
-                  </div>
-                  
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Password Protection</Label>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-green-600 font-medium">🔐 Auto-Generated Secure Password</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="h-6 px-2 text-xs"
-                      >
-                        {showPassword ? 'Hide' : 'View'} Password
-                      </Button>
+              <div className="space-y-6">
+                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Code</Label>
+                      <p className="font-mono text-base mt-1">{createdRoom.room.shareCode}</p>
                     </div>
-                    {showPassword && (
-                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
-                        <div className="font-mono text-green-800 font-medium">{createdRoom.room.password}</div>
-                        <div className="text-green-600 mt-1">
-                          Expires {createdRoom.room.passwordExpiresAt ? 
-                            new Date(createdRoom.room.passwordExpiresAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            }) : 
-                            'in 36 hours'
-                          } • Only visible to you
-                        </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Password</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="font-mono text-base">
+                          {showPassword ? createdRoom.room.password : '•••••••'}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <span className="text-xs">{showPassword ? 'Hide' : 'Show'}</span>
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Max Participants</Label>
-                      <p className="text-muted-foreground/80 font-medium">{createdRoom.room.maxParticipants}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide">Expires</Label>
-                      <p className="text-sm text-muted-foreground/80 font-medium">
-                        {formatExpirationDate(createdRoom.room.expiresAt)}
-                      </p>
                     </div>
                   </div>
                 </div>
-
-
               </div>
 
-              <DialogFooter className="flex gap-2">
+              <DialogFooter className="gap-2">
                 <Button 
                   onClick={() => setShowShareModal(true)} 
-                  size="sm" 
-                  className="h-8 bg-blue-600 hover:bg-blue-700"
+                  className="flex-1 bg-amber-500 hover:bg-amber-600"
                 >
-                  <Share2 className="h-4 w-4 mr-1" />
+                  <Share2 className="h-4 w-4 mr-2" />
                   Share Room
                 </Button>
-                <Button onClick={handleClose} size="sm" className="h-8">
+                <Button onClick={handleClose} variant="outline">
                   Done
                 </Button>
               </DialogFooter>

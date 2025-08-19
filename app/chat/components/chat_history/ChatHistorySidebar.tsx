@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import useSWRInfinite from 'swr/infinite';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import Image from 'next/image';
@@ -584,6 +585,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           </div>
         </SidebarHeader>
 
+
         {/* Rooms List - Clean scrollable section */}
         <div className="border-b border-border">
           <div className="px-3 sm:px-4 py-2">
@@ -997,6 +999,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                   </Button>
                 </div>
               </div>
+
 
               {/* Rooms List */}
               <div className="px-4 py-2 border-b border-border">

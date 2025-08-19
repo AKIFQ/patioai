@@ -6,7 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Users, Clock, AlertCircle, Loader2, Share2 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
+import { AlertCircle, Loader2, Share2, UserPlus, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { getOrCreateSessionId, getStoredDisplayName, storeDisplayName } from '@/lib/utils/session';
 import { useRouter } from 'next/navigation';
@@ -258,136 +264,142 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <CardTitle>Join Room</CardTitle>
-              <CardDescription>
-                You've been invited to join "{roomInfo.room.name}"
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowShareModal(true)}
-              className="ml-4 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
-              title="Share this room"
-            >
-              <Share2 className="h-4 w-4 mr-1" />
-              Share
-            </Button>
-          </div>
-          <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center gap-2 text-sm text-blue-800">
-              <span className="text-lg">🔒</span>
-              <span>This room is password protected. You'll need the password to join.</span>
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-4">
-          <div className="bg-muted/50 p-3 rounded-lg space-y-2">
-            <div className="text-sm">
-              <span>
-                {roomInfo.participantCount}/{roomInfo.room.maxParticipants} participants
-              </span>
-              <span className="text-muted-foreground">
-                ({roomInfo.room.tier} tier)
-              </span>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              <span>Expires in {formatExpirationDate(roomInfo.room.expiresAt)}</span>
-            </div>
-          </div>
-          
-          {roomInfo.participantCount >= roomInfo.room.maxParticipants ? (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                This room is full ({roomInfo.room.maxParticipants} participants maximum)
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="displayName">Your Display Name</Label>
-                <Input
-                  id="displayName"
-                  placeholder="e.g., Alice"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isJoining) {
-                      handleJoinRoom();
-                    }
-                  }}
-                  maxLength={50}
-                  disabled={isAuthenticated}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {isAuthenticated 
-                    ? "Using your account name" 
-                    : "This is how others will see you in the chat"
-                  }
-                </p>
+    <div className="flex items-center justify-center min-h-screen p-4 bg-background">
+      <div className="w-full max-w-md">
+        <Card className="backdrop-blur-md bg-background/95 border-border/40 shadow-lg">
+          <CardHeader className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
+                <UserPlus className="h-4 w-4 text-amber-600" />
               </div>
-
-              {/* Password input - always shown since all rooms require passwords */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium">
-                  Room Password <span className="text-red-500">*</span>
-                  <span className="text-xs text-muted-foreground ml-2">
-                    Required to join this room
-                  </span>
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter room password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isJoining) {
-                      handleJoinRoom();
-                    }
-                  }}
-                  className="h-9"
-                />
-                <div className="text-xs text-muted-foreground">
-                  <span className="text-blue-600 font-medium">🔒</span> All rooms are password protected for security
-                </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl font-medium">Join Room</CardTitle>
+                <CardDescription className="text-muted-foreground/80">
+                  You've been invited to join "{roomInfo.room.name}"
+                </CardDescription>
               </div>
-              
-              {roomInfo.participants.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowShareModal(true)}
+                className="hover:bg-muted/50"
+                title="Share this room"
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <Label className="text-sm font-medium">Already in the room:</Label>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    {roomInfo.participants.map((p, i) => p.displayName).join(', ')}
+                  <span className="text-muted-foreground/80">Participants</span>
+                  <div className="font-medium">
+                    {roomInfo.participantCount}/{roomInfo.room.maxParticipants}
                   </div>
                 </div>
-              )}
-              
-              <Button 
-                onClick={handleJoinRoom} 
-                disabled={isJoining || !displayName.trim() || !password.trim()}
-                className="w-full"
-              >
-                {isJoining ? (
-                  <>
-                    Joining...
-                  </>
-                ) : !password.trim() ? (
-                  'Enter Password'
-                ) : (
-                  'Join Room'
-                )}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                <div>
+                  <span className="text-muted-foreground/80">Expires</span>
+                  <div className="font-medium">{formatExpirationDate(roomInfo.room.expiresAt)}</div>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          
+          <CardContent className="space-y-6">
+            {roomInfo.participantCount >= roomInfo.room.maxParticipants ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  This room is full ({roomInfo.room.maxParticipants} participants maximum)
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="displayName" className="text-sm font-medium">Display Name</Label>
+                    <Input
+                      id="displayName"
+                      placeholder="How others will see you"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !isJoining) {
+                          handleJoinRoom();
+                        }
+                      }}
+                      maxLength={50}
+                      disabled={isAuthenticated}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground/80 mt-1">
+                      {isAuthenticated 
+                        ? "Using your account name" 
+                        : "This is how others will see you"
+                      }
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="password" className="text-sm font-medium">
+                        Room Password <span className="text-red-500">*</span>
+                      </Label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3 w-3 text-muted-foreground/60 hover:text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs p-3">
+                            <div className="space-y-1 text-xs">
+                              <p className="font-medium">Auto-Generated Security</p>
+                              <p>Passwords are automatically generated and refreshed every 36 hours to ensure maximum room security.</p>
+                              <p className="text-muted-foreground">Each room gets a new secure password every 36 hours.</p>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter room password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !isJoining) {
+                          handleJoinRoom();
+                        }
+                      }}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground/80 mt-1">
+                      All rooms are password protected for security
+                    </p>
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={handleJoinRoom} 
+                  disabled={isJoining || !displayName.trim() || !password.trim()}
+                  className="w-full bg-amber-500 hover:bg-amber-600"
+                >
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Joining...
+                    </>
+                  ) : !password.trim() ? (
+                    'Enter Password'
+                  ) : (
+                    'Join Room'
+                  )}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Share Room Modal */}
       {showShareModal && roomInfo && (

@@ -13,8 +13,6 @@ export default function GlobalModals() {
     closeJoinRoomModal,
   } = useModalContext();
 
-
-
   return (
     <>
       {/* Create Room Modal */}
@@ -27,7 +25,7 @@ export default function GlobalModals() {
         }}
       />
 
-      {/* Join Room Modal */}
+      {/* Join Room Modal - For room link/code input only */}
       <JoinRoomModal
         isOpen={isJoinRoomModalOpen}
         onClose={closeJoinRoomModal}
