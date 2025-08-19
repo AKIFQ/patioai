@@ -42,8 +42,7 @@ import ChatHistorySection from './ChatHistorySection';
 import FilesSection from './FilesSection';
 import RoomsSection from './RoomsSection';
 import UploadPage from './FileUpload';
-import CreateRoomModal from '../CreateRoomModal';
-import JoinRoomModal from '../JoinRoomModal';
+import { useModalContext } from '../../contexts/ModalContext';
 import ChatSidebarFooter from './SidebarFooter';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useRouter } from 'next/navigation';
@@ -155,15 +154,18 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   roomChatsData = []
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
-  const [isJoinRoomModalOpen, setIsJoinRoomModalOpen] = useState(false);
-
+  
   // Get mobile state and sidebar context
   const isMobile = useIsMobile();
   const { setOpen } = useSidebar();
   // Mobile sidebar visibility (shared with hamburger button)
   const { isOpen: isMobileSidebarOpen, close: closeMobileSidebar } = useMobileSidebar();
   const router = useRouter();
+  
+  // Get global modal context
+  const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
+
+
 
   // Auto-collapse sidebar on mobile
   useEffect(() => {
@@ -175,6 +177,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       setOpen(true);
     }
   }, [isMobile, setOpen]);
+
+
 
   // Use SWR to manage room data with fallback to initial rooms
   const { data: currentRooms, mutate: mutateRooms, isLoading: isLoadingRooms } = useSWR(
@@ -311,7 +315,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       threadFirstMessages.forEach((firstMsg, threadId) => {
         const roomData = roomsLookup.get(firstMsg.room_id);
 
-        if (roomData?.shareCode) {
+        if (roomData && roomData.shareCode) {
           // Use the first few words of the first user message as the title
           let title = 'New Chat';
           if (firstMsg.content) {
@@ -467,7 +471,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsCreateGroupModalOpen(true)}
+                onClick={openCreateRoomModal}
                 aria-label="Create room"
                 className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
               >
@@ -560,9 +564,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
           {/* Room Action Buttons - Compact */}
           <div className="flex gap-1 sm:gap-2 ml-1 sm:ml-2">
             <Button
-              onClick={() => {
-                setIsCreateGroupModalOpen(true);
-              }}
+              onClick={openCreateRoomModal}
               className="flex-1 h-7 text-xs font-medium"
               size="sm"
               variant="ghost"
@@ -571,9 +573,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               New
             </Button>
             <Button
-              onClick={() => {
-                setIsJoinRoomModalOpen(true);
-              }}
+              onClick={openJoinRoomModal}
               className="flex-1 h-7 text-xs font-medium"
               size="sm"
               variant="outline"
@@ -766,27 +766,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         <ChatSidebarFooter userInfo={userInfo} />
       </Sidebar>
 
-      {/* Modals outside sidebar so they stay visible when sidebar closes */}
-      <CreateRoomModal
-        isOpen={isCreateGroupModalOpen}
-        onClose={() => {
-          setIsCreateGroupModalOpen(false);
-          if (isMobile) {
-            closeMobileSidebar();
-          }
-        }}
-        onRoomCreated={handleRoomCreated}
-      />
 
-      <JoinRoomModal
-        isOpen={isJoinRoomModalOpen}
-        onClose={() => {
-          setIsJoinRoomModalOpen(false);
-          if (isMobile) {
-            closeMobileSidebar();
-          }
-        }}
-      />
     </>
   );
 };
@@ -800,9 +780,8 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
   rooms = [],
   roomChatsData = []
 }) => {
-  const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
-  const [isJoinRoomModalOpen, setIsJoinRoomModalOpen] = useState(false);
   const { isOpen, close } = useMobileSidebar();
+  const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -859,7 +838,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
       threadFirstMessages.forEach((firstMsg, threadId) => {
         const roomData = roomsLookup.get(firstMsg.room_id);
 
-        if (roomData?.shareCode) {
+        if (roomData && roomData.shareCode) {
           // Use the first few words of the first user message as the title
           let title = 'New Chat';
           if (firstMsg.content) {
@@ -951,16 +930,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
   return (
     <>
-      <CreateRoomModal
-        isOpen={isCreateGroupModalOpen}
-        onClose={() => setIsCreateGroupModalOpen(false)}
-        onRoomCreated={handleRoomCreated}
-      />
 
-      <JoinRoomModal
-        isOpen={isJoinRoomModalOpen}
-        onClose={() => setIsJoinRoomModalOpen(false)}
-      />
 
       <Sheet open={isOpen} onOpenChange={handleCloseSidebar}>
         <SheetContent side="left" className="w-[280px] p-0">
@@ -1008,7 +978,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                 <h2 className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wide mb-2">Rooms</h2>
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => setIsCreateGroupModalOpen(true)}
+                    onClick={openCreateRoomModal}
                     className="flex-1 h-7 text-xs font-medium"
                     size="sm"
                     variant="ghost"
@@ -1017,7 +987,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                     New
                   </Button>
                   <Button
-                    onClick={() => setIsJoinRoomModalOpen(true)}
+                    onClick={openJoinRoomModal}
                     className="flex-1 h-7 text-xs font-medium"
                     size="sm"
                     variant="outline"

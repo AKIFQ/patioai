@@ -6,10 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Users, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { Users, Clock, AlertCircle, Loader2, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getOrCreateSessionId, getStoredDisplayName, storeDisplayName } from '@/lib/utils/session';
 import { useRouter } from 'next/navigation';
+import ShareRoomModal from '@/app/chat/components/ShareRoomModal';
+import { useSiteUrl } from '@/hooks/useSiteUrl';
 
 interface Room {
   id: string;
@@ -19,6 +21,7 @@ interface Room {
   tier: 'free' | 'pro';
   expiresAt: string;
   createdAt: string;
+  password: string;
 }
 
 interface Participant {
@@ -38,13 +41,17 @@ interface JoinRoomFormProps {
 
 export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
   const [displayName, setDisplayName] = useState('');
+  const [password, setPassword] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasJoined, setHasJoined] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const router = useRouter();
+  const siteUrl = useSiteUrl();
 
   // Generate a session ID for this browser session
   const [sessionId] = useState(() => getOrCreateSessionId());
@@ -128,6 +135,12 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
       return;
     }
 
+    // Password is always required
+    if (!password.trim()) {
+      toast.error('Please enter the room password to join this secure room');
+      return;
+    }
+
     setIsJoining(true);
     
     try {
@@ -141,12 +154,18 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
         },
         body: JSON.stringify({ 
           displayName: displayName.trim(),
-          sessionId: finalSessionId
+          sessionId: finalSessionId,
+          password: password.trim() || null
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
+        if (error.error === 'Incorrect password') {
+          toast.error('Incorrect password. Please try again.');
+          setShowPasswordInput(true);
+          return;
+        }
         throw new Error(error.error || 'Failed to join room');
       }
 
@@ -242,10 +261,30 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
     <div className="flex items-center justify-center min-h-screen p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Join Room</CardTitle>
-          <CardDescription>
-            You've been invited to join "{roomInfo.room.name}"
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <CardTitle>Join Room</CardTitle>
+              <CardDescription>
+                You've been invited to join "{roomInfo.room.name}"
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowShareModal(true)}
+              className="ml-4 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+              title="Share this room"
+            >
+              <Share2 className="h-4 w-4 mr-1" />
+              Share
+            </Button>
+          </div>
+          <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center gap-2 text-sm text-blue-800">
+              <span className="text-lg">🔒</span>
+              <span>This room is password protected. You'll need the password to join.</span>
+            </div>
+          </div>
         </CardHeader>
         
         <CardContent className="space-y-4">
@@ -294,6 +333,32 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
                   }
                 </p>
               </div>
+
+              {/* Password input - always shown since all rooms require passwords */}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Room Password <span className="text-red-500">*</span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    Required to join this room
+                  </span>
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter room password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isJoining) {
+                      handleJoinRoom();
+                    }
+                  }}
+                  className="h-9"
+                />
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-blue-600 font-medium">🔒</span> All rooms are password protected for security
+                </div>
+              </div>
               
               {roomInfo.participants.length > 0 && (
                 <div>
@@ -306,13 +371,15 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
               
               <Button 
                 onClick={handleJoinRoom} 
-                disabled={isJoining || !displayName.trim()}
+                disabled={isJoining || !displayName.trim() || !password.trim()}
                 className="w-full"
               >
                 {isJoining ? (
                   <>
                     Joining...
                   </>
+                ) : !password.trim() ? (
+                  'Enter Password'
                 ) : (
                   'Join Room'
                 )}
@@ -321,6 +388,25 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Share Room Modal */}
+      {showShareModal && roomInfo && (
+        <ShareRoomModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          room={{
+            id: roomInfo.room.id,
+            name: roomInfo.room.name,
+            shareCode: roomInfo.room.shareCode,
+            maxParticipants: roomInfo.room.maxParticipants,
+            tier: roomInfo.room.tier,
+            expiresAt: roomInfo.room.expiresAt,
+            createdAt: roomInfo.room.createdAt,
+            password: roomInfo.room.password
+          }}
+          shareableLink={`${siteUrl}/room/${shareCode}`}
+        />
+      )}
     </div>
   );
 }

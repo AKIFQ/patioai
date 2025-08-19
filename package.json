@@ -20,7 +20,9 @@
     "remove:all-emojis": "node scripts/remove-all-emojis.js",
     "memory:cleanup": "node scripts/memory-monitor.js --cleanup",
     "memory:monitor": "node scripts/memory-monitor.js --monitor",
-    "memory:thresholds": "node scripts/memory-monitor.js --thresholds"
+    "memory:thresholds": "node scripts/memory-monitor.js --thresholds",
+    "passwords:regenerate": "node scripts/regenerate-expired-passwords.js",
+    "passwords:status": "node scripts/regenerate-expired-passwords.js --status"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.0.5",

@@ -24,15 +24,19 @@ import {
   Check,
   X,
   Copy,
-  Loader2
+  Loader2,
+  Share2
 } from 'lucide-react';
+
+// Import ShareRoomModal
+import ShareRoomModal from './ShareRoomModal';
 
 interface RoomContext {
   shareCode: string;
   roomName: string;
   displayName: string;
   sessionId: string;
-  participants: { displayName: string; joinedAt: string; sessionId: string; userId?: string }[];
+  participants: Array<{ displayName: string; joinedAt: string; sessionId: string; userId?: string }>;
   maxParticipants: number;
   tier: 'free' | 'pro';
   createdBy?: string;
@@ -63,6 +67,9 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [removingUser, setRemovingUser] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [roomPassword, setRoomPassword] = useState<string | null>(null);
+  const [isLoadingPassword, setIsLoadingPassword] = useState(false);
   
   // Mobile detection - use more reliable method
   const [isMobile, setIsMobile] = useState(false);
@@ -80,6 +87,35 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Fetch password when modal opens
+  useEffect(() => {
+    if (isOpen && isCreator) {
+      fetchRoomPassword();
+    }
+  }, [isOpen, isCreator]);
+
+  // Fetch room password for admin
+  const fetchRoomPassword = async () => {
+    if (!isCreator) return; // Only creator can see password
+    
+    setIsLoadingPassword(true);
+    try {
+      const response = await fetch(`/api/rooms/${roomContext.shareCode}/password`);
+      if (response.ok) {
+        const data = await response.json();
+        setRoomPassword(data.password);
+      } else {
+        console.error('Failed to fetch room password');
+        setRoomPassword('Password unavailable');
+      }
+    } catch (error) {
+      console.error('Error fetching room password:', error);
+      setRoomPassword('Password unavailable');
+    } finally {
+      setIsLoadingPassword(false);
+    }
+  };
 
   // Copy share link to clipboard
   const handleCopyShareLink = async () => {
@@ -138,15 +174,8 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
         if (!response.ok) throw new Error('Failed to remove user');
 
         toast.success(`${displayName} removed from room`);
-        
-        // Close the modal immediately to show the loading state
-        setIsOpen(false);
-        
-        // Trigger room update and refresh
         onRoomUpdate?.();
-        
-        // Force a hard refresh to update the entire room context and participant list
-        window.location.reload();
+        router.refresh();
       } catch {
         toast.error('Failed to remove user');
       } finally {
@@ -275,6 +304,58 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             </div>
           </div>
 
+          {/* Share Button */}
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-muted-foreground">Share Room</div>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={() => {
+                if (!roomPassword && isCreator) {
+                  fetchRoomPassword();
+                }
+                setShowShareModal(true);
+              }}
+              className="w-full h-9 touch-manipulation flex items-center gap-2"
+              style={{ minHeight: '36px' }}
+            >
+              <Share2 className="h-4 w-4" />
+              {isLoadingPassword ? 'Loading...' : 'Share to Social Platforms'}
+            </Button>
+          </div>
+
+          {/* Room Password (Admin Only) */}
+          {isCreator && (
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground">Room Password</div>
+              <div className="flex gap-1">
+                <div className="flex-1 text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded font-mono break-all">
+                  {isLoadingPassword ? (
+                    <span className="text-muted-foreground/60">Loading password...</span>
+                  ) : roomPassword ? (
+                    roomPassword
+                  ) : (
+                    <span className="text-muted-foreground/60">Click share to load password</span>
+                  )}
+                </div>
+                {roomPassword && roomPassword !== 'Password unavailable' && (
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      navigator.clipboard.writeText(roomPassword);
+                      toast.success('Password copied to clipboard');
+                    }}
+                    className="h-9 w-9 p-0 touch-manipulation"
+                    style={{ minHeight: '36px', minWidth: '36px' }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Room Stats */}
           <div className="flex justify-between text-xs text-muted-foreground">
             <span><span className="font-medium">Participants:</span> {roomContext.participants.length}/{roomContext.maxParticipants}</span>
@@ -374,58 +455,90 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
 
   if (isMobile) {
     return (
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 w-9 p-0 hover:bg-muted/50 transition-colors touch-manipulation"
-            aria-label="Room settings"
-            style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
+      <>
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 p-0 hover:bg-muted/50 transition-colors touch-manipulation"
+              aria-label="Room settings"
+              style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent 
+            side="bottom" 
+            className="h-[80vh] max-h-[600px] p-0 gap-0 flex flex-col rounded-t-xl border-t-2"
+            style={{ 
+              WebkitOverflowScrolling: 'touch',
+              touchAction: 'pan-y'
+            }}
           >
-            <Settings className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent 
-          side="bottom" 
-          className="h-[80vh] max-h-[600px] p-0 gap-0 flex flex-col rounded-t-xl border-t-2"
-          style={{ 
-            WebkitOverflowScrolling: 'touch',
-            touchAction: 'pan-y'
+            {/* Drag handle - make it more prominent */}
+            <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-2" />
+            {SettingsHeader}
+            {SettingsContent}
+          </SheetContent>
+        </Sheet>
+
+        {/* Share Room Modal */}
+        <ShareRoomModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          room={{
+            id: 'temp-id',
+            name: roomContext.roomName,
+            shareCode: roomContext.shareCode,
+            password: roomPassword || 'Password loading...',
+            passwordExpiresAt: expiresAt || new Date().toISOString()
           }}
-        >
-          {/* Drag handle - make it more prominent */}
-          <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-2" />
-          {SettingsHeader}
-          {SettingsContent}
-        </SheetContent>
-      </Sheet>
+          shareableLink={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
+        />
+      </>
     );
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 hover:bg-muted/50 transition-colors flex-shrink-0 touch-manipulation"
-          aria-label="Room settings"
-          style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 hover:bg-muted/50 transition-colors flex-shrink-0 touch-manipulation"
+            aria-label="Room settings"
+            style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
 
-      <DialogContent 
-        className="sm:max-w-[500px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"
-        onPointerDownOutside={() => setIsOpen(false)}
-        onEscapeKeyDown={() => setIsOpen(false)}
-      >
-        {SettingsHeader}
-        {SettingsContent}
-      </DialogContent>
-    </Dialog>
+        <DialogContent 
+          className="sm:max-w-[500px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"
+          onPointerDownOutside={() => setIsOpen(false)}
+          onEscapeKeyDown={() => setIsOpen(false)}
+        >
+          {SettingsHeader}
+          {SettingsContent}
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Room Modal */}
+      <ShareRoomModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        room={{
+          id: 'temp-id',
+          name: roomContext.roomName,
+          shareCode: roomContext.shareCode,
+          password: roomPassword || 'Password loading...',
+          passwordExpiresAt: expiresAt || new Date().toISOString()
+        }}
+        shareableLink={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
+      />
+    </>
   );
 };
 
