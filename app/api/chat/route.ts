@@ -2,25 +2,29 @@ import { type NextRequest, NextResponse } from 'next/server';
 import type { Message, Attachment } from 'ai';
 import { streamText, convertToCoreMessages } from 'ai';
 import { saveChatToSupbabase } from './SaveToDb';
-import { Ratelimit } from '@upstash/ratelimit';
-import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
-import { openai } from '@ai-sdk/openai';
-import type { AnthropicProviderOptions } from '@ai-sdk/anthropic';
-import { anthropic } from '@ai-sdk/anthropic';
-import { redis } from '@/lib/server/server';
+// Rate limiting removed - using new tier-based system
 import { getSession } from '@/lib/server/supabase';
 import { searchUserDocument } from './tools/documentChat';
 import { websiteSearchTool } from './tools/WebsiteSearchTool';
-import { google } from '@ai-sdk/google';
-import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
-import type { LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
+import { openRouterService } from '@/lib/ai/openRouterService';
+import { ModelRouter } from '@/lib/ai/modelRouter';
+import { userTierService } from '@/lib/ai/userTierService';
+import { tierRateLimiter } from '@/lib/limits/rateLimiter';
 
 export const dynamic = 'force-dynamic';
 
 export const maxDuration = 60;
 
-const getSystemPrompt = (selectedFiles: string[]) => {
-  const basePrompt = `You are a helpful assistant. Answer all questions to the best of your ability. Use tools when necessary. Strive to only use a tool one time per question.
+const getSystemPrompt = (selectedFiles: string[], reasoningMode = false) => {
+  const reasoningGuidelines = reasoningMode ? `
+
+REASONING GUIDELINES (512 Token Limit):
+- Think in 2-3 essential steps only
+- Maximum 100 words of reasoning
+- No repetition or elaboration
+- Be extremely concise and direct` : '';
+
+  const basePrompt = `You are a helpful assistant. Answer all questions to the best of your ability. Use tools when necessary. Strive to only use a tool one time per question.${reasoningGuidelines}
 
 FORMATTING: Your responses are rendered using react-markdown with the following capabilities:
 - GitHub Flavored Markdown (GFM) support through remarkGfm plugin
@@ -61,24 +65,18 @@ function errorHandler(error: unknown) {
   return JSON.stringify(error);
 }
 
-const getModel = (selectedModel: string) => {
-  switch (selectedModel) {
-    case 'claude-3.7-sonnet':
-      return anthropic('claude-4-sonnet-20250514');
-    case 'gpt-4.1':
-      return openai('gpt-4.1-2025-04-14');
-    case 'gpt-4.1-mini':
-      return openai('gpt-4.1-mini');
-    case 'o3':
-      return openai('o3-2025-04-16');
-    case 'gemini-2.5-pro':
-      return google('gemini-2.5-pro');
-    case 'gemini-2.5-flash':
-      return google('gemini-2.5-flash');
-    default:
-      console.error('Invalid model selected:', selectedModel);
-      return openai('gpt-4.1-2025-04-14');
-  }
+const modelRouter = new ModelRouter();
+
+const getModel = (selectedModel: string, userTier = 'free', messageContent?: string, reasoningMode?: boolean) => {
+  // Analyze message context for smart routing
+  const context = modelRouter.analyzeMessageContext(messageContent || '', 1);
+  
+  // Route model based on user tier and context
+  const routedModel = modelRouter.routeModel({ tier: userTier as any }, context, selectedModel, undefined, reasoningMode);
+  
+console.log(` Chat model routing: ${selectedModel} → ${routedModel} (tier: ${userTier}, reasoning: ${reasoningMode})`);
+  
+  return openRouterService.getModel(routedModel);
 };
 
 export async function POST(req: NextRequest) {
@@ -92,31 +90,14 @@ export async function POST(req: NextRequest) {
       }
     });
   }
-  const ratelimit = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(30, '24h') // 30 msg per 24 hours
-  });
-
-  const { success, limit, reset, remaining } = await ratelimit.limit(
-    `ratelimit_${session.id}`
-  );
-  if (!success) {
-    return new NextResponse('Rate limit exceeded. Please try again later.', {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-RateLimit-Limit': limit.toString(),
-        'X-RateLimit-Remaining': remaining.toString(),
-        'X-RateLimit-Reset': new Date(reset * 1000).toISOString()
-      }
-    });
-  }
+  // Rate limiting now handled by tier-based system in userTierService
 
   const body = await req.json();
   const messages: Message[] = body.messages ?? [];
   const chatSessionId = body.chatId;
   const signal = body.signal;
   const selectedFiles: string[] = body.selectedBlobs ?? [];
+  const webSearch = !!body.webSearch;
 
   if (!chatSessionId) {
     return new NextResponse('Chat session ID is empty.', {
@@ -135,65 +116,81 @@ export async function POST(req: NextRequest) {
     fileAttachments = lastMessage.experimental_attachments;
   }
 
-  const selectedModel = body.option ?? 'gpt-3.5-turbo-1106';
+  const selectedModel = body.option ?? 'auto';
+  const reasoningMode = body.reasoningMode ?? false; // New reasoning toggle
   const userId = session.id;
-
-  const providerOptions: LanguageModelV1ProviderMetadata = {};
-  if (selectedModel === 'claude-3.7-sonnet') {
-    providerOptions.anthropic = {
-      thinking: { type: 'enabled', budgetTokens: 12000 }
-    } satisfies AnthropicProviderOptions;
+  
+  // Get user tier
+  const userSubscription = await userTierService.getUserTier(userId);
+  // Enforce new tier-based request limits
+  const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, 'ai_requests');
+  if (!limiterCheck.allowed) {
+    return new NextResponse(limiterCheck.reason || 'Limit reached', {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
+  
+  // Get last message content for context analysis
+  const lastMessageContent = typeof lastMessage.content === 'string' ? lastMessage.content : '';
+  
+  // Route model and get provider options
+  const context = modelRouter.analyzeMessageContext(lastMessageContent, messages.length);
+  const routedModel = modelRouter.routeModel(
+    { tier: userSubscription.tier }, 
+    context, 
+    selectedModel,
+    {
+      monthlySpend: userSubscription.costSpent,
+      requestCount: userSubscription.monthlyUsage,
+      warningThreshold: userSubscription.warningThreshold,
+      hardLimit: userSubscription.hardLimit
+    },
+    reasoningMode // Pass reasoning mode flag
+  );
+  const providerOptions = openRouterService.getProviderOptions(routedModel);
 
-  if (
-    selectedModel === 'gemini-2.5-pro' ||
-    selectedModel === 'gemini-2.5-flash'
-  ) {
-    providerOptions.google = {
-      thinkingConfig: {
-        thinkingBudget: 2048,
-        includeThoughts: true
-      }
-    } satisfies GoogleGenerativeAIProviderOptions;
-  }
-
-  // Only add OpenAI options if o3 model is selected
-  if (selectedModel === 'o3') {
-    providerOptions.openai = {
-      reasoningEffort: 'high'
-    } satisfies OpenAIResponsesProviderOptions;
+  // Dev visibility: log the final model selection
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🧭 Using OpenRouter model: ${routedModel} (selected=${selectedModel}, tier=${userSubscription.tier})`);
   }
 
   const result = streamText({
-    model: getModel(selectedModel),
-    system: getSystemPrompt(selectedFiles),
+    model: getModel(selectedModel, userSubscription.tier, lastMessageContent, reasoningMode),
+    system: getSystemPrompt(selectedFiles, reasoningMode),
     messages: convertToCoreMessages(messages),
     abortSignal: signal,
     providerOptions,
     tools: {
-      searchUserDocument: searchUserDocument({
-        userId,
-        selectedBlobs: selectedFiles
-      }),
-      websiteSearchTool: websiteSearchTool
+      ...(selectedFiles.length > 0
+        ? {
+            searchUserDocument: searchUserDocument({
+              userId,
+              selectedBlobs: selectedFiles
+            })
+          }
+        : {}),
+      ...(webSearch ? { websiteSearchTool: websiteSearchTool } : {})
     },
-    experimental_activeTools:
-      selectedFiles.length > 0
-        ? ['searchUserDocument', 'websiteSearchTool']
-        : ['websiteSearchTool'],
+    experimental_activeTools: [
+      ...(selectedFiles.length > 0 ? ['searchUserDocument'] as const : []),
+      ...(webSearch ? (['websiteSearchTool'] as const) : [])
+    ],
     maxSteps: 3,
     experimental_telemetry: {
       isEnabled: true,
       functionId: 'api_chat',
       metadata: {
         userId: session.id,
-        chatId: chatSessionId
+        chatId: chatSessionId,
+        modelUsed: routedModel,
+        userTier: userSubscription.tier
       },
       recordInputs: true,
       recordOutputs: true
     },
     onFinish: async (event) => {
-      const { text, reasoning, steps, sources } = event;
+      const { text, reasoning, steps, sources, usage } = event;
       const lastMessage = messages[messages.length - 1];
       const lastMessageContent =
         typeof lastMessage.content === 'string' ? lastMessage.content : '';
@@ -204,6 +201,22 @@ export async function POST(req: NextRequest) {
         (foundReasoningStep?.reasoning
           ? foundReasoningStep.reasoning
           : undefined);
+
+      // Track usage and cost
+      if (usage) {
+        const totalTokens = (usage.promptTokens || 0) + (usage.completionTokens || 0);
+        const estimatedCost = openRouterService.estimateCost(
+          routedModel, 
+          usage.promptTokens || 0, 
+          usage.completionTokens || 0
+        );
+        
+        // Update user usage
+        await userTierService.updateUsage(userId, totalTokens, estimatedCost, routedModel, 'chat');
+        await tierRateLimiter.increment(userId, userSubscription.tier as any, 'ai_requests', 1);
+        
+console.log(` Usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost`);
+      }
 
       await saveChatToSupbabase(
         chatSessionId,
@@ -234,9 +247,11 @@ export async function POST(req: NextRequest) {
 
   result.consumeStream(); // We consume the stream if the server is discnnected from the client to ensure the onFinish callback is called
 
-  return result.toDataStreamResponse({
-    sendReasoning: false,
+  const response = result.toDataStreamResponse({
+    sendReasoning: true, // Enable reasoning streaming for Gemini models
     sendSources: true,
     getErrorMessage: errorHandler
   });
+  try { response.headers.set('x-model-used', routedModel); } catch {}
+  return response;
 }

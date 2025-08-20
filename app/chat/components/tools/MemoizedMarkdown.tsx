@@ -150,7 +150,7 @@ const ExternalLinkWithHovercard = ({
 };
 // Memoized component for rendering a single markdown block
 const MemoizedMarkdownBlock = memo(
-  ({ content }: { content: string }) => {
+  ({ content, compact = false }: { content: string; compact?: boolean }) => {
     const createDocumentLink = (href: string) => {
       // Parse the existing URL parameters
       const params = new URLSearchParams(href.substring(1)); // Remove the leading '?'
@@ -240,7 +240,9 @@ const MemoizedMarkdownBlock = memo(
             </td>
           ),
           // Paragraphs and text formatting
-          p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+          p: ({ children }) => (
+            <p className={compact ? 'mb-2 last:mb-0' : 'mb-4 last:mb-0'}>{children}</p>
+          ),
           em: ({ children }) => <em className="italic">{children}</em>,
           strong: ({ children }) => (
             <strong className="font-bold">{children}</strong>
@@ -260,19 +262,19 @@ const MemoizedMarkdownBlock = memo(
             <h1 className="text-2xl font-bold mb-4 mt-6">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-xl font-bold mb-3 mt-5">{children}</h2>
+            <h2 className={compact ? 'text-base font-semibold mb-1.5 mt-3' : 'text-xl font-bold mb-3 mt-5'}>{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-lg font-bold mb-2 mt-4">{children}</h3>
+            <h3 className={compact ? 'text-sm font-semibold mb-1.5 mt-3' : 'text-lg font-bold mb-2 mt-4'}>{children}</h3>
           ),
           h4: ({ children }) => (
-            <h4 className="text-base font-bold mb-2 mt-4">{children}</h4>
+            <h4 className={compact ? 'text-[13px] font-semibold mb-1.5 mt-3' : 'text-base font-bold mb-2 mt-4'}>{children}</h4>
           ),
           h5: ({ children }) => (
-            <h5 className="text-sm font-bold mb-2 mt-3">{children}</h5>
+            <h5 className={compact ? 'text-[12px] font-semibold mb-1 mt-2' : 'text-sm font-bold mb-2 mt-3'}>{children}</h5>
           ),
           h6: ({ children }) => (
-            <h6 className="text-xs font-bold mb-2 mt-3">{children}</h6>
+            <h6 className={compact ? 'text-[11px] font-semibold mb-1 mt-2' : 'text-xs font-bold mb-2 mt-3'}>{children}</h6>
           ),
           // Block elements
           blockquote: ({ children }) => (
@@ -341,7 +343,7 @@ const MemoizedMarkdownBlock = memo(
   },
   (prevProps, nextProps) => {
     // Only re-render if the content has changed
-    return prevProps.content === nextProps.content;
+    return prevProps.content === nextProps.content && prevProps.compact === nextProps.compact;
   }
 );
 
@@ -349,11 +351,11 @@ MemoizedMarkdownBlock.displayName = 'MemoizedMarkdownBlock';
 
 // Component that breaks markdown into blocks and renders each with memoization
 export const MemoizedMarkdown = memo(
-  ({ content, id }: { content: string; id: string }) => {
+  ({ content, id, compact = false }: { content: string; id: string; compact?: boolean }) => {
     const blocks = useMemo(() => parseMarkdownIntoBlocks(content), [content]);
 
     return blocks.map((block, index) => (
-      <MemoizedMarkdownBlock content={block} key={`${id}-block_${index}`} />
+      <MemoizedMarkdownBlock content={block} compact={compact} key={`${id}-block_${index}`} />
     ));
   }
 );

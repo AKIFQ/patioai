@@ -24,6 +24,8 @@ export class ErrorTracker {
   private static instance: ErrorTracker;
   private errors: ErrorEvent[] = [];
   private metrics: ErrorMetrics;
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private metricsInterval: NodeJS.Timeout | null = null;
 
   private constructor() {
     this.metrics = {
@@ -34,13 +36,12 @@ export class ErrorTracker {
       errorRate: 0
     };
 
-    // Clean up old errors every hour
-    setInterval(() => {
+    // CRITICAL: Store interval references to prevent memory leaks
+    this.cleanupInterval = setInterval(() => {
       this.cleanupErrors();
     }, 60 * 60 * 1000);
 
-    // Update error rate every minute
-    setInterval(() => {
+    this.metricsInterval = setInterval(() => {
       this.updateErrorRate();
     }, 60 * 1000);
   }
@@ -77,18 +78,18 @@ export class ErrorTracker {
     this.updateMetrics(errorEvent);
 
     // Log to console with appropriate level
-    const logMessage = `🚨 [${category.toUpperCase()}] ${message}`;
+const logMessage = ` [${category.toUpperCase()}] ${message}`;
     const logContext = context ? JSON.stringify(context, null, 2) : '';
 
     switch (level) {
       case 'error':
-        console.error(logMessage, logContext, error?.stack || '');
+console.error(logMessage, logContext, error?.stack || '');
         break;
       case 'warning':
-        console.warn(logMessage, logContext);
+console.warn(logMessage, logContext);
         break;
       case 'info':
-        console.info(logMessage, logContext);
+        // Debug logging removed
         break;
     }
 
@@ -124,7 +125,7 @@ export class ErrorTracker {
     const error = this.errors.find(e => e.id === errorId);
     if (error) {
       error.resolved = true;
-      console.log(`✅ Error resolved: ${errorId}`);
+      // Debug logging removed
     }
   }
 
@@ -138,7 +139,7 @@ export class ErrorTracker {
   }
 
   // Get recent errors
-  getRecentErrors(limit: number = 50): ErrorEvent[] {
+  getRecentErrors(limit = 50): ErrorEvent[] {
     return this.errors
       .slice(-limit)
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -152,7 +153,7 @@ export class ErrorTracker {
   }
 
   // Get errors by category
-  getErrorsByCategory(category: string, limit: number = 20): ErrorEvent[] {
+  getErrorsByCategory(category: string, limit = 20): ErrorEvent[] {
     return this.errors
       .filter(error => error.category === category)
       .slice(-limit)
@@ -200,7 +201,7 @@ export class ErrorTracker {
     if (this.metrics.errorRate > 10) {
       alerts.push({
         level: 'critical',
-        message: `High error rate: ${this.metrics.errorRate} errors/minute`,
+message: `High error rate: ${this.metrics.errorRate} errors/minute`,
         timestamp: now
       });
     }
@@ -213,7 +214,7 @@ export class ErrorTracker {
     if (recentCriticalErrors >= 5) {
       alerts.push({
         level: 'critical',
-        message: `Multiple critical errors: ${recentCriticalErrors} errors in last 5 minutes`,
+message: `Multiple critical errors: ${recentCriticalErrors} errors in last 5 minutes`,
         timestamp: now
       });
     }
@@ -226,7 +227,7 @@ export class ErrorTracker {
     if (recentDbErrors >= 3) {
       alerts.push({
         level: 'warning',
-        message: `Database issues detected: ${recentDbErrors} database errors in last 5 minutes`,
+message: `Database issues detected: ${recentDbErrors} database errors in last 5 minutes`,
         timestamp: now
       });
     }
@@ -268,7 +269,7 @@ export class ErrorTracker {
 
     const removedCount = beforeCount - this.errors.length;
     if (removedCount > 0) {
-      console.log(`🧹 Error Tracker: Cleaned up ${removedCount} old errors, ${this.errors.length} remaining`);
+      // Debug logging removed
     }
 
     // Rebuild aggregates after cleanup
@@ -278,16 +279,16 @@ export class ErrorTracker {
   private checkAlerts(errorEvent: ErrorEvent) {
     // Immediate critical alerts
     if (errorEvent.level === 'error' && errorEvent.category === 'database') {
-      console.error(`🚨 CRITICAL ALERT: Database error detected - ${errorEvent.message}`);
+console.error(` CRITICAL ALERT: Database error detected - ${errorEvent.message}`);
     }
 
     if (errorEvent.level === 'error' && errorEvent.category === 'auth') {
-      console.error(`🚨 SECURITY ALERT: Authentication error - ${errorEvent.message}`);
+console.error(` SECURITY ALERT: Authentication error - ${errorEvent.message}`);
     }
   }
 
   private generateErrorId(): string {
-    return `err_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+return `err_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   }
 
   // Export for external monitoring
@@ -320,6 +321,36 @@ export class ErrorTracker {
   }
 
   // === Added: Safe cleanup APIs ===
+  
+  /**
+   * CRITICAL: Destroy ErrorTracker instance and clean up intervals to prevent memory leaks
+   */
+  public destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
+    
+    // Clear errors and reset metrics
+    this.errors = [];
+    this.metrics = {
+      totalErrors: 0,
+      errorsByCategory: new Map(),
+      errorsByLevel: new Map(),
+      recentErrors: 0,
+      errorRate: 0
+    };
+    
+    // Reset singleton instance
+    ErrorTracker.instance = null as any;
+    
+    // Debug logging removed
+  }
 
   /**
    * Trim stored errors to the last N entries to aggressively free memory

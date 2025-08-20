@@ -1,4 +1,4 @@
-import { io, Socket } from 'socket.io-client';
+import { io, type Socket } from 'socket.io-client';
 import { config } from '../config/endpoints';
 
 export interface SocketManagerConfig {
@@ -64,34 +64,41 @@ class SocketManager {
 
       socket.on('connect', () => {
         clearTimeout(timeoutId);
-        console.log('Socket.IO connected:', socket.id);
+        // Debug logging removed
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          (window as any).__patio_socket = socket;
+        }
         resolve(socket);
       });
 
       socket.on('connect_error', (error) => {
         clearTimeout(timeoutId);
-        console.error('Socket.IO connection error:', error);
+console.error('Socket.IO connection error:', error);
         reject(error);
       });
 
       socket.on('disconnect', (reason) => {
-        console.log('Socket.IO disconnected:', reason);
-        if (reason === 'io server disconnect') {
-          // Server disconnected, try to reconnect
-          socket.connect();
-        }
+        // Debug logging removed
+        // Don't force reconnection here - let the hook handle it
+        // This prevents duplicate reconnection attempts
       });
 
-      socket.on('reconnect', (attemptNumber) => {
-        console.log('Socket.IO reconnected after', attemptNumber, 'attempts');
+      socket.on('reconnect', (attemptNumber: number) => {
+        // Debug logging removed
+        // Reset connection state
+        this.isConnecting = false;
+        this.connectionPromise = null;
       });
 
-      socket.on('reconnect_error', (error) => {
-        console.error('Socket.IO reconnection error:', error);
+      socket.on('reconnect_error', (error: Error) => {
+console.error(' Socket.IO reconnection error:', error);
       });
 
       socket.on('reconnect_failed', () => {
-        console.error('Socket.IO reconnection failed');
+console.error(' Socket.IO reconnection failed - all attempts exhausted');
+        // Reset connection state so manual reconnection can work
+        this.isConnecting = false;
+        this.connectionPromise = null;
       });
     });
   }
@@ -112,11 +119,13 @@ class SocketManager {
   }
 
   // MVP-level event helpers
-  emit(event: string, data?: any): void {
+  emit(event: string, data?: any): boolean {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
+      return true;
     } else {
-      console.warn('Socket not connected, cannot emit event:', event);
+console.warn(' Socket not connected, cannot emit event:', event);
+      return false;
     }
   }
 

@@ -1,4 +1,3 @@
-import ChatComponent from '../../components/Chat';
 import { cookies } from 'next/headers';
 import { fetchRoomMessages, getRoomInfo } from './fetch';
 import { getUserInfo } from '@/lib/server/supabase';
@@ -41,11 +40,60 @@ async function checkRoomExpiration(shareCode: string) {
     }
 }
 
-// Ensure user is properly added to room with correct user_id
+// Check if user is removed from room and redirect to removal page
+async function checkUserRemovalStatus(shareCode: string, displayName: string, userId?: string) {
+    try {
+        const roomInfo = await getRoomInfo(shareCode);
+        if (!roomInfo) return { isRemoved: false };
+
+        // Check if user was removed from the room
+        let removedParticipant = null;
+        if (userId) {
+            // Check by user_id for authenticated users
+            const { data } = await (supabase as any)
+                .from('removed_room_participants')
+                .select('*')
+                .eq('room_id', roomInfo.room.id)
+                .eq('removed_user_id', userId)
+                .single();
+            removedParticipant = data;
+        } else {
+            // Check by display_name for anonymous users
+            const { data } = await (supabase as any)
+                .from('removed_room_participants')
+                .select('*')
+                .eq('room_id', roomInfo.room.id)
+                .eq('removed_display_name', displayName)
+                .single();
+            removedParticipant = data;
+        }
+
+        if (removedParticipant) {
+            return { 
+                isRemoved: true, 
+                roomName: roomInfo.room.name,
+                shareCode: shareCode 
+            };
+        }
+
+        return { isRemoved: false };
+    } catch (error) {
+        console.error('Error checking user removal status:', error);
+        return { isRemoved: false };
+    }
+}
+
+// Ensure user is properly added to room with correct user_id (only if not removed)
 async function ensureUserInRoom(shareCode: string, displayName: string, userId?: string) {
     try {
         const roomInfo = await getRoomInfo(shareCode);
         if (!roomInfo) return;
+
+        // First check if user was removed from the room
+        const removalStatus = await checkUserRemovalStatus(shareCode, displayName, userId);
+        if (removalStatus.isRemoved) {
+            throw new Error('REMOVED_FROM_ROOM');
+        }
 
         // Check if user is already a participant (by user_id if authenticated, or display_name if anonymous)
         let existingParticipant;
@@ -79,13 +127,16 @@ async function ensureUserInRoom(shareCode: string, displayName: string, userId?:
                     display_name: displayName,
                     user_id: userId || null // Link to authenticated user if available
                 });
-            
+
             console.log('Added user to room:', { userId, displayName, roomId: roomInfo.room.id });
         } else {
             console.log('User already in room:', { userId, displayName });
         }
     } catch (error) {
         console.error('Error ensuring user in room:', error);
+        if (error.message === 'REMOVED_FROM_ROOM') {
+            throw error;
+        }
     }
 }
 
@@ -105,7 +156,7 @@ export default async function RoomChatPage(props: {
 
     // Check if room is expired first
     const expirationCheck = await checkRoomExpiration(shareCode);
-    
+
     if (expirationCheck.notFound) {
         redirect(`/chat`);
     }
@@ -113,9 +164,9 @@ export default async function RoomChatPage(props: {
     if (expirationCheck.expired) {
         const userInfo = await getUserInfo();
         const isCreator = userInfo && expirationCheck.createdBy === userInfo.id;
-        
+
         return (
-            <ExpiredRoomHandler 
+            <ExpiredRoomHandler
                 shareCode={shareCode}
                 roomName={expirationCheck.roomName || 'Unknown Room'}
                 isCreator={isCreator || false}
@@ -134,10 +185,48 @@ export default async function RoomChatPage(props: {
 
     // Get current user info to check if they're the creator
     const userInfo = await getUserInfo();
-    
-    // Ensure the user is added to the room participants
-    await ensureUserInRoom(shareCode, searchParams.displayName, userInfo?.id);
-    
+
+    // Check if user was removed from the room and redirect if so
+    try {
+        const removalStatus = await checkUserRemovalStatus(shareCode, searchParams.displayName, userInfo?.id);
+        if (removalStatus.isRemoved) {
+            redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(removalStatus.roomName || 'Unknown Room')}`);
+        }
+    } catch (error) {
+        console.error('Error checking removal status:', error);
+    }
+
+    // Ensure the user is added to the room participants (only if not removed)
+    try {
+        await ensureUserInRoom(shareCode, searchParams.displayName, userInfo?.id);
+    } catch (error) {
+        if (error.message === 'REMOVED_FROM_ROOM') {
+            const roomInfo = await getRoomInfo(shareCode);
+            redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(roomInfo?.room.name || 'Unknown Room')}`);
+        }
+        console.error('Error ensuring user in room:', error);
+    }
+
+    // If user just signed in (has auth but was previously anonymous), update their participant record
+    if (userInfo && searchParams.sessionId?.startsWith('session_')) {
+        try {
+            // Update the anonymous participant to authenticated
+            await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    roomId: roomInfo?.room.id,
+                    sessionId: searchParams.sessionId,
+                    displayName: userInfo.user_metadata?.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
+                })
+            });
+        } catch (error) {
+            console.warn('Could not update participant record:', error);
+        }
+    }
+
     const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
     if (!roomInfo) {
         // Room not found or deleted - redirect to main chat page
@@ -146,7 +235,7 @@ export default async function RoomChatPage(props: {
 
     // Load messages for the specific thread only
     let roomMessages: any[] = [];
-    
+
     try {
         // Load messages for this specific thread only
         const { data: threadMessages } = await (supabase as any)
@@ -155,18 +244,20 @@ export default async function RoomChatPage(props: {
             .eq('room_id', roomInfo.room.id)
             .eq('thread_id', chatSessionId) // Filter by specific thread
             .order('created_at', { ascending: true });
-        
+
         if (threadMessages && threadMessages.length > 0) {
             // Convert to Message format
             roomMessages = threadMessages.map((msg: any) => ({
                 id: msg.id,
                 role: msg.is_ai_response ? 'assistant' : 'user',
-                content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+                content: msg.content || '',
                 createdAt: new Date(msg.created_at),
                 // Preserve sender information for proper message alignment
-                ...(msg.sender_name && { senderName: msg.sender_name })
+                ...(msg.sender_name && { senderName: msg.sender_name }),
+                ...(msg.reasoning && { reasoning: msg.reasoning }),
+                ...(msg.sources && { sources: typeof msg.sources === 'string' ? JSON.parse(msg.sources) : msg.sources })
             }));
-            
+
             console.log(`Loaded messages for thread ${chatSessionId}:`, roomMessages.length);
         } else {
             console.log(`No messages found for thread ${chatSessionId}`);
@@ -184,6 +275,33 @@ export default async function RoomChatPage(props: {
     console.log('Room page rendering with chatSessionId:', chatSessionId);
     console.log('Room messages count:', roomMessages.length);
 
+    // Create sidebar data for anonymous users
+    let finalSidebarData = props.sidebarData;
+
+    if (!userInfo && searchParams.displayName) {
+        // For anonymous users, create minimal sidebar data with room info
+        finalSidebarData = {
+            userInfo: {
+                id: '',
+                full_name: searchParams.displayName,
+                email: ''
+            },
+            initialChatPreviews: [],
+            categorizedChats: { today: [], yesterday: [], last7Days: [], last30Days: [], last2Months: [], older: [] },
+            documents: [],
+            rooms: [{
+                shareCode: roomInfo.room.shareCode,
+                name: roomInfo.room.name,
+                id: roomInfo.room.id,
+                maxParticipants: roomInfo.room.maxParticipants,
+                tier: roomInfo.room.tier,
+                expiresAt: roomInfo.room.expiresAt,
+                createdAt: roomInfo.room.createdAt
+            }],
+            roomChatsData: []
+        };
+    }
+
     return (
         <RoomChatWrapper
             shareCode={shareCode}
@@ -192,7 +310,7 @@ export default async function RoomChatPage(props: {
             initialModelType={modelType}
             initialSelectedOption={selectedOption}
             userData={userInfo}
-            sidebarData={props.sidebarData}
+            sidebarData={finalSidebarData}
         />
     );
 }

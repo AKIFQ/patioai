@@ -26,7 +26,6 @@ const Custom404: React.FC = () => {
 
       <Button asChild>
         <Link href="/">
-          <Home className="mr-2 h-4 w-4" />
           Back to Home
         </Link>
       </Button>

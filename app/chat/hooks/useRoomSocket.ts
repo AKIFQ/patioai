@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSocket } from '../../../hooks/useSocket';
 import { createClient } from '@/lib/client/client';
+import { MessageQueue } from '@/lib/client/messageQueue';
 import type { Message } from 'ai';
 
 // Create client with proper error handling
@@ -15,7 +16,19 @@ interface RoomSocketHookProps {
   onParticipantChange?: (participants: any[]) => void;
   onStreamStart?: (threadId: string) => void;
   onStreamChunk?: (threadId: string, chunk: string) => void;
-  onStreamEnd?: (threadId: string, text: string) => void;
+  onStreamEnd?: (threadId: string, text: string, reasoning?: string) => void;
+  // New reasoning events
+  onReasoningStart?: (threadId: string) => void;
+  onReasoningChunk?: (threadId: string, reasoning: string) => void;
+  onReasoningEnd?: (threadId: string, reasoning: string) => void;
+  onContentStart?: (threadId: string) => void;
+  // Cross-thread activity
+  onCrossThreadActivity?: (activities: {
+    threadId: string;
+    threadName: string;
+    activeUsers: string[];
+    typingUsers: string[];
+  }[]) => void;
 }
 
 export function useRoomSocket({
@@ -27,7 +40,12 @@ export function useRoomSocket({
   onParticipantChange,
   onStreamStart,
   onStreamChunk,
-  onStreamEnd
+  onStreamEnd,
+  onReasoningStart,
+  onReasoningChunk,
+  onReasoningEnd,
+  onContentStart,
+  onCrossThreadActivity
 }: RoomSocketHookProps) {
   const { socket, isConnected } = useSocket(displayName);
   const [connectionStatus, setConnectionStatus] = useState<string>('DISCONNECTED');
@@ -35,32 +53,34 @@ export function useRoomSocket({
   const roomUuidRef = useRef<string | null>(null);
   const hasMessagesRef = useRef(false);
   const [isAIStreaming, setIsAIStreaming] = useState(false);
+  const isTypingActiveRef = useRef(false);
+  const messageQueueRef = useRef<MessageQueue | null>(null);
 
   // Handle new room messages from Socket.IO
   const handleNewRoomMessage = useCallback((data: any) => {
-    console.log('RAW SOCKET ROOM MESSAGE:', data);
+    if (process.env.NODE_ENV === 'development') console.debug('RAW SOCKET ROOM MESSAGE:', data);
     const newMessage = data.new || data;
-
-    console.log('ROOM MSG received:', {
-      sender: newMessage.sender_name,
-      isAI: newMessage.is_ai_response,
-      content: newMessage.content?.substring(0, 50) + '...',
-      roomId: newMessage.room_id,
-      threadId: newMessage.thread_id,
-      currentUser: displayName,
-      currentThread: chatSessionId
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('ROOM MSG received:', {
+        sender: newMessage.sender_name,
+        isAI: newMessage.is_ai_response,
+        content: newMessage.content?.substring(0, 50) + '...',
+        roomId: newMessage.room_id,
+        threadId: newMessage.thread_id,
+        currentUser: displayName,
+        currentThread: chatSessionId
+      });
+    }
 
     // Filter by thread ID if specified
     if (chatSessionId && newMessage.thread_id !== chatSessionId) {
-      console.log('SKIPPING: Message from different thread');
+      if (process.env.NODE_ENV === 'development') console.debug('SKIPPING: Message from different thread');
       return;
     }
 
     // Track that this thread has messages
     hasMessagesRef.current = true;
-
-    console.log('PROCESSING SOCKET MSG from:', newMessage.sender_name, 'for user:', displayName);
+    if (process.env.NODE_ENV === 'development') console.debug('PROCESSING SOCKET MSG from:', newMessage.sender_name, 'for user:', displayName);
 
     // Convert to Message format with reasoning support
     const message: Message & { senderName?: string; reasoning?: string; sources?: any[] } = {
@@ -84,18 +104,26 @@ export function useRoomSocket({
     onNewMessage(message);
   }, [displayName, chatSessionId, onNewMessage]);
 
-  // Handle typing updates from Socket.IO
+  // Handle typing updates from Socket.IO - only for SAME thread
   const handleTypingUpdate = useCallback((data: any) => {
-    console.log('Typing update received:', data);
+    if (process.env.NODE_ENV === 'development') console.debug('Typing update received:', data);
+    
+    // Only show typing if it's from the SAME thread
+    if (data.threadId && chatSessionId && data.threadId !== chatSessionId) {
+      if (process.env.NODE_ENV === 'development') console.debug('Ignoring typing from different thread:', data.threadId, 'vs', chatSessionId);
+      onTypingUpdate([]); // Clear typing indicators for different threads
+      return;
+    }
+    
     const typingUsers = data.users || [];
     const filteredUsers = typingUsers.filter((name: string) => name && name !== displayName);
-    console.log('Typing users updated:', filteredUsers);
+    if (process.env.NODE_ENV === 'development') console.debug('Typing users updated for same thread:', filteredUsers);
     onTypingUpdate(filteredUsers);
-  }, [displayName, onTypingUpdate]);
+  }, [displayName, chatSessionId, onTypingUpdate]);
 
   // Handle participant changes from Socket.IO
   const handleParticipantChange = useCallback((data: any) => {
-    console.log('Participant change:', data);
+    // Participant change
     if (onParticipantChange) {
       onParticipantChange([]);
     }
@@ -103,19 +131,36 @@ export function useRoomSocket({
 
   // Handle room deletion from Socket.IO
   const handleRoomDeleted = useCallback((data: any) => {
-    console.log('Room deleted:', data);
+    // Room deleted
     // Redirect user away from deleted room
     if (typeof window !== 'undefined') {
       window.location.href = '/chat';
     }
   }, []);
 
-  // Function to broadcast typing status
+  // Initialize message queue when socket is available
+  useEffect(() => {
+    if (socket && !messageQueueRef.current) {
+      messageQueueRef.current = new MessageQueue(socket, {
+        maxRetries: 3,
+        retryDelay: 1000,
+        queueSize: 50
+      });
+// Message queue initialized
+    }
+  }, [socket]);
+
+  // Function to broadcast typing status with queue reliability
   const broadcastTyping = useCallback((isTyping: boolean) => {
-    console.log('broadcastTyping called:', isTyping, 'displayName:', displayName);
+    if (process.env.NODE_ENV === 'development') console.debug('broadcastTyping called:', isTyping, 'displayName:', displayName);
 
     if (!socket || !isConnected || !displayName || !roomUuidRef.current) {
-      console.log('No socket connection or missing data, skipping broadcast');
+      if (process.env.NODE_ENV === 'development') console.debug('No socket connection or missing data, skipping broadcast');
+      return;
+    }
+
+    // Do not broadcast when tab is hidden (visibility-safe typing)
+    if (typeof document !== 'undefined' && document.hidden) {
       return;
     }
 
@@ -126,20 +171,38 @@ export function useRoomSocket({
           clearTimeout(typingTimeoutRef.current);
         }
 
-        console.log('Broadcasting typing START for:', displayName);
-        socket.emit('typing-start', {
-          roomId: shareCode, // Use share code instead of room UUID
-          displayName,
-          timestamp: Date.now()
-        });
+        // Only emit start if not already active
+        if (!isTypingActiveRef.current) {
+          if (process.env.NODE_ENV === 'development') console.debug('Broadcasting typing START for:', displayName);
+          
+          // Use message queue for reliability
+          if (messageQueueRef.current) {
+            messageQueueRef.current.enqueue('typing-start', {
+              roomId: shareCode,
+              displayName,
+              threadId: chatSessionId,
+              timestamp: Date.now()
+            }, 'high');
+          } else {
+            // Fallback to direct emit
+            socket.emit('typing-start', {
+              roomId: shareCode,
+              displayName,
+              threadId: chatSessionId,
+              timestamp: Date.now()
+            });
+          }
+          
+          isTypingActiveRef.current = true;
+        }
 
         // Auto-stop typing after 3 seconds
         typingTimeoutRef.current = setTimeout(() => {
-          console.log('Auto-stopping typing for:', displayName);
+          if (process.env.NODE_ENV === 'development') console.debug('Auto-stopping typing for:', displayName);
           stopTyping();
         }, 3000);
       } else {
-        console.log('Broadcasting typing STOP for:', displayName);
+        if (process.env.NODE_ENV === 'development') console.debug('Broadcasting typing STOP for:', displayName);
         stopTyping();
       }
     } catch (error) {
@@ -148,14 +211,28 @@ export function useRoomSocket({
   }, [socket, isConnected, displayName]);
 
   const stopTyping = useCallback(() => {
-    console.log('stopTyping called');
+    if (process.env.NODE_ENV === 'development') console.debug('stopTyping called');
     try {
-      if (socket && isConnected) {
-        console.log('Emitting typing stop');
-        socket.emit('typing-stop', {
-          roomId: shareCode, // Use share code instead of room UUID
-          displayName
-        });
+      if (socket && isConnected && isTypingActiveRef.current) {
+        if (process.env.NODE_ENV === 'development') console.debug('Emitting typing stop');
+        
+        // Use message queue for reliability
+        if (messageQueueRef.current) {
+          messageQueueRef.current.enqueue('typing-stop', {
+            roomId: shareCode,
+            displayName,
+            threadId: chatSessionId
+          }, 'high');
+        } else {
+          // Fallback to direct emit
+          socket.emit('typing-stop', {
+            roomId: shareCode,
+            displayName,
+            threadId: chatSessionId
+          });
+        }
+        
+        isTypingActiveRef.current = false;
       }
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -173,7 +250,28 @@ export function useRoomSocket({
     }
 
     let mounted = true;
+    let cleanupExecuted = false;
     hasMessagesRef.current = false;
+    
+    // Track all event listeners for proper cleanup
+    const eventListeners = new Map<string, (...args: any[]) => void>();
+    
+    // Define reconnection handler for cleanup access
+    let handleConnect: (() => void) | null = null;
+
+    // Pause typing timers when tab hidden (visibility-safe typing)
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+        isTypingActiveRef.current = false;
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
 
     const initializeRoomSocket = async () => {
       try {
@@ -193,49 +291,213 @@ export function useRoomSocket({
         if (!mounted) return;
 
         roomUuidRef.current = room.id;
-        console.log('Setting up room socket for room:', room.id);
+        if (process.env.NODE_ENV === 'development') console.debug('Setting up room socket for room:', room.id);
 
-        // Join the room
-        socket.emit('join-room', shareCode);
+        // Re-join the room after reconnects
+        handleConnect = () => {
+          socket.emit('join-room', shareCode);
+          // Re-emit thread switch on reconnect
+          if (chatSessionId) {
+            socket.emit('switch-thread', {
+              roomId: shareCode,
+              threadId: chatSessionId,
+              displayName
+            });
+          }
+        };
+        
+        // Join the room initially
+        handleConnect();
+        
+        // Set up reconnection handlers
+        socket.on('connect', handleConnect);
+        socket.on('reconnect', handleConnect as any);
 
-        // Set up event listeners
-        socket.on('room-message-created', handleNewRoomMessage);
-        socket.on('user-typing', handleTypingUpdate);
-        socket.on('user-joined-room', handleParticipantChange);
-        socket.on('user-left-room', handleParticipantChange);
-        socket.on('room-deleted', handleRoomDeleted);
+        // Set up event listeners with tracking
+        const addTrackedListener = (event: string, handler: (...args: any[]) => void) => {
+          socket.on(event, handler);
+          eventListeners.set(event, handler);
+        };
 
-        // Streaming listeners
-        socket.on('ai-stream-start', (payload: { threadId: string; timestamp?: number }) => {
-          const { threadId } = payload;
+        addTrackedListener('room-message-created', handleNewRoomMessage);
+        addTrackedListener('user-typing', handleTypingUpdate);
+        addTrackedListener('user-joined-room', handleParticipantChange);
+        addTrackedListener('user-left-room', handleParticipantChange);
+        addTrackedListener('user-removed-from-room', (data: any) => {
+          console.log('User removed from room:', data);
+          // Update participant list if provided
+          if (onParticipantChange && data.updatedParticipants) {
+            onParticipantChange(data.updatedParticipants);
+          }
+          // If current user was removed, redirect them (but only if they were actively in the room)
+          if (data.removedUser?.displayName === displayName) {
+            // Check if this is due to room expiration vs actual removal
+            const isExpiredRoom = data.reason?.includes('expired') || 
+                                data.details?.includes('expired') ||
+                                !hasMessagesRef.current; // If no messages were loaded, user wasn't really "in" the room
+            
+            if (isExpiredRoom) {
+              console.log('Room expired or user was not actively in room - no redirect needed');
+              return;
+            }
+            
+            console.log('Current user was actively removed from room, redirecting...');
+            if (typeof window !== 'undefined') {
+              window.location.href = `/room/${shareCode}/removed?roomName=${encodeURIComponent(data.roomName || 'Unknown Room')}`;
+            }
+          }
+        });
+        addTrackedListener('room-deleted', handleRoomDeleted);
+
+        // Streaming listeners with tracking
+        const aiStreamStartHandler = (payload: { threadId?: string; timestamp?: number; modelId?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(true);
+if (process.env.NODE_ENV === 'development') console.info(' ai-stream-start', payload);
           onStreamStart?.(threadId);
-        });
-        socket.on('ai-stream-chunk', (payload: { threadId: string; chunk: string; timestamp?: number }) => {
-          const { threadId, chunk } = payload;
+        };
+        addTrackedListener('ai-stream-start', aiStreamStartHandler);
+        
+        // Reasoning events
+        const aiReasoningStartHandler = (payload: { threadId?: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+if (process.env.NODE_ENV === 'development') console.info(' reasoning-start model:', payload?.modelUsed);
+          onReasoningStart?.(threadId);
+        };
+        const aiReasoningChunkHandler = (payload: { threadId?: string; reasoning: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { reasoning } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          onReasoningChunk?.(threadId, reasoning);
+        };
+        const aiReasoningEndHandler = (payload: { threadId?: string; reasoning: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { reasoning } = payload;
+          if (chatSessionId && threadId !== chatSessionId) return;
+          onReasoningEnd?.(threadId, reasoning);
+        };
+        
+        addTrackedListener('ai-reasoning-start', aiReasoningStartHandler);
+        addTrackedListener('ai-reasoning-chunk', aiReasoningChunkHandler);
+        
+        // Cross-thread activity listener
+        const crossThreadActivityHandler = (payload: { 
+          roomId: string; 
+          activities: {
+            threadId: string;
+            threadName: string;
+            activeUsers: string[];
+            typingUsers: string[];
+          }[];
+          timestamp: string;
+        }) => {
+          // Only process cross-thread activity for the current room
+          if (payload.roomId !== shareCode) {
+            if (process.env.NODE_ENV === 'development') console.debug('Ignoring cross-thread activity from different room:', payload.roomId, 'current:', shareCode);
+            return;
+          }
+          if (process.env.NODE_ENV === 'development') console.debug('Cross-thread activity:', payload);
+          onCrossThreadActivity?.(payload.activities);
+        };
+        addTrackedListener('cross-thread-activity', crossThreadActivityHandler);
+        addTrackedListener('ai-reasoning-end', aiReasoningEndHandler);
+        
+        // Content events with tracking
+        const aiContentStartHandler = (payload: { threadId?: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+if (process.env.NODE_ENV === 'development') console.info(' model used:', payload?.modelUsed);
+          onContentStart?.(threadId);
+        };
+        const aiStreamChunkHandler = (payload: { threadId?: string; chunk: string; timestamp?: number; modelUsed?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { chunk } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           onStreamChunk?.(threadId, chunk);
-        });
-        socket.on('ai-stream-end', (payload: { threadId: string; text: string; timestamp?: number }) => {
-          const { threadId, text } = payload;
+        };
+        const aiStreamEndHandler = (payload: { threadId?: string; text: string; reasoning?: string; timestamp?: number; modelUsed?: string; usage?: any }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          const { text, reasoning } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(false);
-          onStreamEnd?.(threadId, text);
-        });
+if (process.env.NODE_ENV === 'development') console.info(' ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
+          onStreamEnd?.(threadId, text, reasoning);
+        };
+        
+        addTrackedListener('ai-content-start', aiContentStartHandler);
+        addTrackedListener('ai-stream-chunk', aiStreamChunkHandler);
+        addTrackedListener('ai-stream-end', aiStreamEndHandler);
+        
+        // AI Error handling - crucial for fixing stuck "thinking" state
+        const aiErrorHandler = (payload: { threadId?: string; error: string; details?: string; timestamp?: number }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+console.error(' AI Error received:', payload);
+          setIsAIStreaming(false); // Stop the thinking state
+          
+          // You can add additional error handling here, like showing a toast notification
+          // or calling an onError callback if needed
+        };
+        addTrackedListener('ai-error', aiErrorHandler);
 
-        // Connection status updates
-        socket.on('room-joined', () => {
-          console.log('Successfully joined room via Socket.IO');
+        // AI Stop handlers
+        const aiStoppedHandler = (payload: { threadId?: string; success?: boolean }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+          setIsAIStreaming(false);
+          if (process.env.NODE_ENV === 'development') console.info('AI response stopped successfully');
+        };
+        addTrackedListener('ai-stopped', aiStoppedHandler);
+
+        const aiStreamStoppedHandler = (payload: { threadId?: string; timestamp?: number; reason?: string }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+          setIsAIStreaming(false);
+          if (process.env.NODE_ENV === 'development') console.info('AI stream stopped:', payload.reason);
+        };
+        addTrackedListener('ai-stream-stopped', aiStreamStoppedHandler);
+
+        // AI Fallback notification - inform user when switching models
+        const aiFallbackHandler = (payload: { threadId?: string; primaryModel: string; fallbackModel: string; reason: string; timestamp?: number }) => {
+          const threadId = payload.threadId || chatSessionId || '';
+          if (chatSessionId && threadId !== chatSessionId) return;
+          
+console.log(` AI Fallback: ${payload.primaryModel} → ${payload.fallbackModel} (${payload.reason})`);
+          
+          // You can add UI notification here if needed
+          // For example: show a toast saying "Switched to backup model due to rate limits"
+        };
+        addTrackedListener('ai-fallback-used', aiFallbackHandler);
+
+        // Connection status updates with tracking
+        const roomJoinedHandler = () => {
+          if (process.env.NODE_ENV === 'development') console.info('Successfully joined room via Socket.IO');
           setConnectionStatus('SUBSCRIBED');
-        });
-
-        socket.on('room-error', (error: any) => {
-          console.warn('Room Socket.IO error (non-critical):', error);
+        };
+        const roomErrorHandler = (error: any) => {
+          console.warn('Room Socket.IO error:', error);
+          
+          // Handle removal from room
+          if (error.error === 'REMOVED_FROM_ROOM') {
+            console.log('User was removed from room via Socket.IO, redirecting...');
+            if (typeof window !== 'undefined') {
+              window.location.href = `/room/${shareCode}/removed?roomName=${encodeURIComponent(error.roomName || 'Unknown Room')}`;
+            }
+            return;
+          }
+          
           if (error && Object.keys(error).length > 0) {
             setConnectionStatus('CHANNEL_ERROR');
           }
-        });
+        };
+        
+        addTrackedListener('room-joined', roomJoinedHandler);
+        addTrackedListener('room-error', roomErrorHandler);
 
         setConnectionStatus('SUBSCRIBED');
 
@@ -249,35 +511,72 @@ export function useRoomSocket({
 
     return () => {
       mounted = false;
+      
+      // Prevent double cleanup
+      if (cleanupExecuted) {
+console.log(' Cleanup already executed, skipping');
+        return;
+      }
+      cleanupExecuted = true;
+
+      // Starting room socket cleanup
 
       // Clean up empty thread if no messages were sent (disable during active sessions to reduce churn)
       // if (!hasMessagesRef.current && chatSessionId) {
       //   fetch('/api/cleanup/empty-threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId: chatSessionId }) }).catch(() => {});
       // }
 
-      // Clean up socket listeners
+      // Clean up socket listeners using tracked listeners
       if (socket) {
-        console.log('Cleaning up room socket listeners');
-        socket.off('room-message-created', handleNewRoomMessage);
-        socket.off('user-typing', handleTypingUpdate);
-        socket.off('user-joined-room', handleParticipantChange);
-        socket.off('user-left-room', handleParticipantChange);
-        socket.off('room-deleted', handleRoomDeleted);
-        socket.off('ai-stream-start');
-        socket.off('ai-stream-chunk');
-        socket.off('ai-stream-end');
-        socket.off('room-joined');
-        socket.off('room-error');
+        // Removing tracked socket listeners
+        
+        // Remove all tracked listeners with their specific handlers
+        for (const [event, handler] of eventListeners.entries()) {
+          try {
+            socket.off(event, handler);
+// Removed listener
+          } catch (error) {
+console.warn(` Failed to remove listener ${event}:`, error);
+          }
+        }
+        
+        // Clear the tracking map
+        eventListeners.clear();
 
+        // Clean up reconnection handlers
+        if (handleConnect) {
+          socket.off('connect', handleConnect);
+          socket.off('reconnect', handleConnect as any);
+        }
+
+        // Leave room (use message queue if available)
         if (shareCode) {
-          socket.emit('leave-room', shareCode);
+          if (messageQueueRef.current) {
+            messageQueueRef.current.enqueue('leave-room', shareCode, 'high');
+          } else {
+            socket.emit('leave-room', shareCode);
+          }
         }
       }
 
+      // Clean up timers
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
+      
+      // Clean up message queue
+      if (messageQueueRef.current) {
+        messageQueueRef.current.clear();
+        messageQueueRef.current = null;
+      }
+
+      // Clean up visibility handler
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      }
+      
+// Room socket cleanup completed
     };
   }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange, onStreamStart, onStreamChunk, onStreamEnd]);
 
@@ -288,10 +587,21 @@ export function useRoomSocket({
     roomName: string;
     participants: string[];
     modelId?: string;
-    chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+    chatHistory?: {role: 'user' | 'assistant', content: string}[];
+    reasoningMode?: boolean;
   }) => {
     if (socket && isConnected) {
-      socket.emit('invoke-ai', payload);
+      // Use message queue for critical AI invocation
+      if (messageQueueRef.current) {
+        // Queueing AI invocation
+        messageQueueRef.current.enqueue('invoke-ai', payload, 'high');
+      } else {
+        // Fallback to direct emit
+        // Direct AI invocation
+        socket.emit('invoke-ai', payload);
+      }
+    } else {
+console.warn(' Cannot invoke AI: socket not connected');
     }
   }, [socket, isConnected]);
 

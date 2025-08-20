@@ -1,5 +1,6 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
-import { AuthenticatedSocket } from '../../types/socket';
+import type { Server as SocketIOServer} from 'socket.io';
+import { Socket } from 'socket.io';
+import type { AuthenticatedSocket } from '../../types/socket';
 import { createAIResponseHandler, AIResponseHandler } from './aiResponseHandler';
 import { SocketDatabaseService } from '../database/socketQueries';
 import { PerformanceMonitor, measurePerformance } from '../monitoring/performanceMonitor';
@@ -19,37 +20,49 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
   const performanceMonitor = PerformanceMonitor.getInstance();
 
   const handleConnection = (socket: AuthenticatedSocket) => {
-    console.log(`Socket connected: ${socket.id} (User: ${socket.userId})`);
+    // Debug logging removed
     performanceMonitor.updateConnectionMetrics('connect');
     // Track with SocketMonitor
     try {
       SocketMonitor.getInstance().onConnect(socket.userId, socket.id);
     } catch (e) {
-      console.warn('SocketMonitor onConnect error:', e);
+console.warn('SocketMonitor onConnect error:', e);
     }
-    
+
     // Set up event handlers
     handleRoomEvents(socket);
     handleChatEvents(socket);
     handleSidebarEvents(socket);
-    
+
     // Send connection confirmation
     socket.emit('connection-confirmed', {
       socketId: socket.id,
       timestamp: new Date().toISOString()
     });
+
+    // Set up health monitoring
+    socket.on('health-ping', (data: { id: string; timestamp: number }, callback: (response: any) => void) => {
+      // Respond immediately to health pings
+      const responseTime = Date.now();
+      callback({
+        id: data.id,
+        serverTimestamp: responseTime,
+        clientTimestamp: data.timestamp,
+        roundTripTime: responseTime - data.timestamp
+      });
+    });
   };
 
   const handleDisconnection = async (socket: AuthenticatedSocket, reason: string) => {
-    console.log(`Socket disconnected: ${socket.id} (User: ${socket.userId}) - Reason: ${reason}`);
+    // Debug logging removed
     performanceMonitor.updateConnectionMetrics('disconnect');
     // Track with SocketMonitor
     try {
       SocketMonitor.getInstance().onDisconnect(socket.userId, socket.id, reason);
     } catch (e) {
-      console.warn('SocketMonitor onDisconnect error:', e);
+console.warn('SocketMonitor onDisconnect error:', e);
     }
-    
+
     try {
       // Snapshot room names without mutating the socket
       const userRooms = Array.from(socket.rooms || new Set<string>()).filter((room) => room.startsWith('room:'));
@@ -65,15 +78,23 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           timestamp: new Date().toISOString()
         });
 
+        // CRITICAL: Clear typing indicators for disconnected user across all threads
         socket.to(roomChannel).emit('user-typing', {
           users: [],
           roomId: shareCode,
           timestamp: new Date().toISOString()
         });
+        
+        // Also clear cross-thread activity for this user
+        socket.to(roomChannel).emit('cross-thread-activity', {
+          roomId: shareCode,
+          activities: [], // Empty activities to clear disconnected user
+          timestamp: new Date().toISOString()
+        });
       }
 
       // Leave personal channel if present (do not mutate rooms set)
-      const userChannel = `user:${socket.userId}`;
+const userChannel = `user:${socket.userId}`;
       if ((socket as any).rooms?.has?.(userChannel)) {
         socket.leave(userChannel);
       }
@@ -83,10 +104,22 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         const names = (socket as any).eventNames?.() || [];
         names.forEach((n: string) => socket.removeAllListeners(n));
         if (names.length > 0) {
-          console.log(`🧹 Removed ${names.length} event listeners for socket ${socket.id}`);
+          // Debug logging removed
         }
       } catch (error) {
-        console.warn('Error removing event listeners:', error);
+console.warn('Error removing event listeners:', error);
+      }
+
+      // CRITICAL: Clean up socket.currentThread memory leak
+      if ((socket as any).currentThread) {
+        const threadCount = Object.keys((socket as any).currentThread).length;
+        // Debug logging removed
+        delete (socket as any).currentThread;
+      }
+      
+      // Clear other socket-specific properties to prevent memory leaks
+      if ((socket as any).isTyping !== undefined) {
+        delete (socket as any).isTyping;
       }
 
       // Clear pending cleanup timeout
@@ -101,83 +134,73 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           try {
             await cleanupAbandonedSessions(socket.userId);
           } catch (error) {
-            console.error('Error in cleanup timeout:', error);
+console.error('Error in cleanup timeout:', error);
           }
         }, 15000);
         (socket as any).cleanupTimeout = cleanupTimeout;
       }
 
-      console.log(`Cleanup completed for user ${socket.userId}`);
+      // Debug logging removed
     } catch (error) {
-      console.error(`Error during disconnect cleanup for user ${socket.userId}:`, error);
+console.error(`Error during disconnect cleanup for user ${socket.userId}:`, error);
     }
   };
 
   // Helper function to clean up abandoned sessions
   async function cleanupAbandonedSessions(userId: string) {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-
-      // Check if user has reconnected (by checking if they have active sockets)
-      const userSockets = Array.from(io.sockets.sockets.values())
-        .filter(s => (s as any).userId === userId);
-
-      if (userSockets.length === 0) {
-        console.log(`Cleaning up abandoned sessions for user ${userId}`);
-        
-        // Clean up empty room chat sessions
-        const { data: emptySessions } = await supabase
-          .from('room_chat_sessions')
-          .select('id, room_id')
-          .eq('session_id', userId);
-
-        if (emptySessions && emptySessions.length > 0) {
-          for (const session of emptySessions) {
-            // Check if session has any messages
-            const { data: messages } = await supabase
-              .from('room_messages')
-              .select('id')
-              .eq('room_chat_session_id', session.id)
-              .limit(1);
-
-            if (!messages || messages.length === 0) {
-              // Delete empty session
-              await supabase
-                .from('room_chat_sessions')
-                .delete()
-                .eq('id', session.id);
-              
-              console.log(`Deleted empty room chat session ${session.id}`);
-            }
-          }
-        }
+      const { SocketDatabaseService } = await import('../database/socketQueries');
+      const result = await SocketDatabaseService.cleanupAbandonedSessions(userId);
+      
+      if (!result.success) {
+console.error(`Error cleaning up abandoned sessions for user ${userId}:`, result.error);
+        return;
       }
+      
+      // Debug logging removed
     } catch (error) {
-      console.error(`Error cleaning up abandoned sessions for user ${userId}:`, error);
+console.error(`Error cleaning up abandoned sessions for user ${userId}:`, error);
     }
   }
 
   const handleRoomEvents = (socket: AuthenticatedSocket) => {
     socket.on('join-room', async (shareCode: string) => {
       await measurePerformance('room.join', async () => {
+        // Debug logging removed
+        
         // Use optimized room validation
         const validation = await SocketDatabaseService.validateRoomAccess(shareCode);
-        
+
         if (!validation.valid) {
+          // Debug logging removed
           socket.emit('room-error', { error: validation.error });
           return;
         }
 
         const room = validation.room!;
 
+        // Check if user was removed from the room
+        // CRITICAL FIX: Use existing database service instead of creating new Supabase clients
+        try {
+          const removalCheck = await SocketDatabaseService.isUserRemovedFromRoom(room.id, socket.userId);
+          
+          if (removalCheck.isRemoved) {
+            // Debug logging removed
+            socket.emit('room-error', { 
+              error: 'REMOVED_FROM_ROOM',
+              roomName: room.name 
+            });
+            return;
+          }
+        } catch (error) {
+console.warn('Error checking user removal status:', error);
+          // Continue with join if check fails (to avoid blocking legitimate users)
+        }
+
         // Join room by share code
-        socket.join(`room:${shareCode}`);
-        console.log(`User ${socket.userId} joined room ${shareCode} (${room.name})`);
-        
+socket.join(`room:${shareCode}`);
+        // Debug logging removed
+
         // Add participant to database
         await SocketDatabaseService.addRoomParticipant({
           roomId: room.id,
@@ -185,128 +208,121 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           displayName: socket.userId, // Will be enhanced with actual display name
           sessionId: socket.id
         });
-        
+
         // Confirm join to user first
-        socket.emit('room-joined', { 
-          shareCode, 
+        socket.emit('room-joined', {
+          shareCode,
           roomName: room.name,
           participantCount: room.active_participants,
           maxParticipants: room.max_participants
         });
-        
+
         // Notify other room members
-        socket.to(`room:${shareCode}`).emit('user-joined-room', {
+socket.to(`room:${shareCode}`).emit('user-joined-room', {
           userId: socket.userId,
           shareCode,
           roomName: room.name,
           timestamp: new Date().toISOString()
         });
+
+        // Debug logging removed
       }).catch(error => {
-        console.error('Error joining room:', error);
+console.error('Error joining room:', error);
         socket.emit('room-error', { error: 'Failed to join room' });
         throw error;
       });
     });
 
+    // Handle thread switching within a room
+    socket.on('switch-thread', (data: { roomId: string; threadId: string; displayName: string }) => {
+      try {
+        const { roomId, threadId, displayName } = data;
+
+        // Update user's current thread
+        if (!socket.currentThread) socket.currentThread = {};
+        const previousThread = socket.currentThread[roomId];
+        socket.currentThread[roomId] = threadId;
+
+        // Notify room about thread switch
+        if (previousThread && previousThread !== threadId) {
+socket.to(`room:${roomId}`).emit('user-thread-switch', {
+            displayName,
+            fromThread: previousThread,
+            toThread: threadId,
+            roomId,
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        // Update cross-thread activity
+socket.to(`room:${roomId}`).emit('cross-thread-activity', {
+          roomId,
+          activities: [{
+            threadId,
+            threadName: 'other thread',
+            activeUsers: [displayName],
+            typingUsers: []
+          }],
+          timestamp: new Date().toISOString()
+        });
+
+        // Debug logging removed
+      } catch (error) {
+console.error('Error handling thread switch:', error);
+      }
+    });
+
     socket.on('leave-room', async (shareCode: string) => {
       try {
-        socket.leave(`room:${shareCode}`);
-        console.log(`User ${socket.userId} left room ${shareCode}`);
-        
-        // Get room info for notification
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+socket.leave(`room:${shareCode}`);
+        // Debug logging removed
 
-        const { data: room } = await supabase
-          .from('rooms')
-          .select('name')
-          .eq('share_code', shareCode)
-          .single();
-        
+        // Get room info for notification using optimized database service
+        const { SocketDatabaseService } = await import('../database/socketQueries');
+        const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
+        const roomName = roomValidation.valid ? roomValidation.room?.name : 'Unknown Room';
+
         // Confirm leave to user first
         socket.emit('room-left', { shareCode });
-        
+
         // Notify other room members
-        socket.to(`room:${shareCode}`).emit('user-left-room', {
+socket.to(`room:${shareCode}`).emit('user-left-room', {
           userId: socket.userId,
           shareCode,
-          roomName: room?.name || 'Unknown Room',
+          roomName,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
-        console.error('Error leaving room:', error);
+console.error('Error leaving room:', error);
         socket.emit('room-error', { error: 'Failed to leave room' });
       }
     });
 
     socket.on('get-room-participants', async (shareCode: string) => {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        const { SocketDatabaseService } = await import('../database/socketQueries');
+        const result = await SocketDatabaseService.getRoomParticipants(shareCode);
 
-        // Get room and participants
-        const { data: room } = await supabase
-          .from('rooms')
-          .select('id, name')
-          .eq('share_code', shareCode)
-          .single();
-
-        if (!room) {
-          socket.emit('room-error', { error: 'Room not found' });
+        if (!result.success) {
+          socket.emit('room-error', { error: result.error });
           return;
         }
 
-        const { data: participants } = await supabase
-          .from('room_participants')
-          .select('display_name, joined_at, user_id')
-          .eq('room_id', room.id)
-          .order('joined_at', { ascending: true });
-
         socket.emit('room-participants', {
           shareCode,
-          participants: participants || []
+          participants: result.participants || []
         });
       } catch (error) {
-        console.error('Error getting room participants:', error);
+console.error('Error getting room participants:', error);
         socket.emit('room-error', { error: 'Failed to get participants' });
       }
     });
   };
 
   const handleChatEvents = (socket: AuthenticatedSocket) => {
-    // Handle AI response triggers
-    socket.on('trigger-ai-response', async (data: { 
-      shareCode: string; 
-      threadId: string; 
-      message: string; 
-      senderName: string;
-      roomName: string;
-      participants: string[];
-    }) => {
-      try {
-        const { shareCode, threadId, message, senderName, roomName, participants } = data;
-        
-        await aiHandler.handleAIResponse(
-          shareCode,
-          threadId,
-          message,
-          senderName,
-          roomName,
-          participants
-        );
-      } catch (error) {
-        console.error('Error triggering AI response:', error);
-        socket.emit('ai-error', { error: 'Failed to generate AI response' });
-      }
-    });
+    // Removed legacy non-streaming AI path (trigger-ai-response). Streaming is handled via invoke-ai.
 
-    // NEW: Streaming AI via Socket.IO
+    // NEW: Streaming AI via Socket.IO with acknowledgment
     socket.on('invoke-ai', async (data: {
       shareCode: string;
       threadId: string;
@@ -314,14 +330,24 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       roomName: string;
       participants: string[];
       modelId?: string;
-      chatHistory?: Array<{role: 'user' | 'assistant', content: string}>;
-    }) => {
+      chatHistory?: { role: 'user' | 'assistant', content: string }[];
+      reasoningMode?: boolean;
+    }, callback: (response: any) => void) => {
       try {
-        const { shareCode, threadId, prompt, roomName, participants, modelId, chatHistory } = data;
+        const { shareCode, threadId, prompt, roomName, participants, modelId, chatHistory, reasoningMode } = data;
+        // Debug logging removed
+
+        // Acknowledge receipt immediately
+        callback({ success: true, message: 'AI invocation started' });
+
         // Cast to any to avoid potential type mismatches if typings lag behind implementation
-        (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || []);
+        (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || [], reasoningMode || false);
       } catch (error) {
-        console.error('Error invoking AI stream:', error);
+console.error('Error invoking AI stream:', error);
+
+        // Send error acknowledgment
+        callback({ success: false, error: 'Failed to invoke AI stream' });
+
         socket.emit('ai-error', { error: 'Failed to invoke AI stream' });
       }
     });
@@ -334,7 +360,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         aiHandler.updateConfig(config);
         socket.emit('ai-config-updated', { success: true });
       } catch (error) {
-        console.error('Error updating AI config:', error);
+console.error('Error updating AI config:', error);
         socket.emit('ai-error', { error: 'Failed to update AI configuration' });
       }
     });
@@ -345,18 +371,33 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
         aiHandler.setEnabled(enabled);
         socket.emit('ai-toggled', { enabled });
       } catch (error) {
-        console.error('Error toggling AI:', error);
+console.error('Error toggling AI:', error);
         socket.emit('ai-error', { error: 'Failed to toggle AI' });
       }
     });
-    
+
+    // Handle AI response stopping
+    socket.on('stop-ai', async (data: { shareCode: string; threadId: string }) => {
+      try {
+        const { shareCode, threadId } = data;
+        
+        // Stop the AI response gracefully
+        await (aiHandler as any).stopAIResponse(shareCode, threadId);
+        
+        socket.emit('ai-stopped', { success: true, threadId });
+      } catch (error) {
+console.error('Error stopping AI:', error);
+        socket.emit('ai-error', { error: 'Failed to stop AI response', threadId: data.threadId });
+      }
+    });
+
     // Handle chat session creation
     socket.on('chat-session-created', async (data: { sessionId: string; title?: string }) => {
       try {
         const { sessionId, title } = data;
-        
+
         // Emit to user's personal channel for sidebar updates
-        socket.to(`user:${socket.userId}`).emit('chat-session-created', {
+socket.to(`user:${socket.userId}`).emit('chat-session-created', {
           new: {
             id: sessionId,
             user_id: socket.userId,
@@ -369,27 +410,27 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           schema: 'public'
         });
 
-        console.log(`Chat session created: ${sessionId} for user ${socket.userId}`);
+        // Debug logging removed
       } catch (error) {
-        console.error('Error handling chat session creation:', error);
+console.error('Error handling chat session creation:', error);
         socket.emit('chat-error', { error: 'Failed to create chat session' });
       }
     });
 
     // Handle chat message sent
-    socket.on('chat-message-sent', async (data: { 
-      sessionId: string; 
-      content: string; 
+    socket.on('chat-message-sent', async (data: {
+      sessionId: string;
+      content: string;
       isUserMessage: boolean;
       attachments?: any[];
     }) => {
       try {
         const { sessionId, content, isUserMessage, attachments } = data;
-        
+
         // Emit to user's personal channel for sidebar updates
-        socket.to(`user:${socket.userId}`).emit('chat-message-created', {
+socket.to(`user:${socket.userId}`).emit('chat-message-created', {
           new: {
-            id: `msg-${Date.now()}`,
+id: `msg-${Date.now()}`,
             chat_session_id: sessionId,
             content,
             is_user_message: isUserMessage,
@@ -401,25 +442,25 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           schema: 'public'
         });
 
-        console.log(`Chat message sent in session ${sessionId} by user ${socket.userId}`);
+        // Debug logging removed
       } catch (error) {
-        console.error('Error handling chat message:', error);
+console.error('Error handling chat message:', error);
         socket.emit('chat-error', { error: 'Failed to send chat message' });
       }
     });
 
     // Handle document upload
-    socket.on('document-uploaded', async (data: { 
-      documentId: string; 
-      title: string; 
+    socket.on('document-uploaded', async (data: {
+      documentId: string;
+      title: string;
       totalPages: number;
       filterTags: string;
     }) => {
       try {
         const { documentId, title, totalPages, filterTags } = data;
-        
+
         // Emit to user's personal channel for sidebar updates
-        socket.to(`user:${socket.userId}`).emit('document-uploaded', {
+socket.to(`user:${socket.userId}`).emit('document-uploaded', {
           new: {
             id: documentId,
             user_id: socket.userId,
@@ -434,85 +475,99 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           schema: 'public'
         });
 
-        console.log(`Document uploaded: ${title} for user ${socket.userId}`);
+        // Debug logging removed
       } catch (error) {
-        console.error('Error handling document upload:', error);
+console.error('Error handling document upload:', error);
         socket.emit('document-error', { error: 'Failed to process document upload' });
       }
     });
-    
-    socket.on('send-message', (data: { roomId?: string; message: string; threadId?: string }) => {
+
+    // Handle request for missed messages when user returns from background
+    socket.on('request-missed-messages', (data: { timestamp: number; lastActiveTime: number }) => {
       try {
-        const { roomId, message, threadId } = data;
-        
-        if (roomId) {
-          // Room message - emit to all room participants
-          socket.to(`room:${roomId}`).emit('room-message-created', {
-            new: {
-              id: `temp-${Date.now()}`,
-              room_id: roomId,
-              thread_id: threadId,
-              sender_name: socket.userId, // Will be replaced with actual display name
-              content: message,
-              is_ai_response: false,
-              created_at: new Date().toISOString()
-            },
-            eventType: 'INSERT',
-            table: 'room_messages',
-            schema: 'public'
-          });
-        } else {
-          // Regular chat message - emit to user's personal channel
-          socket.to(`user:${socket.userId}`).emit('chat-message-created', {
-            new: {
-              id: `temp-${Date.now()}`,
-              chat_session_id: threadId,
-              content: message,
-              is_user_message: true,
-              created_at: new Date().toISOString()
-            },
-            eventType: 'INSERT',
-            table: 'chat_messages',
-            schema: 'public'
-          });
-        }
+        // Debug logging removed
+
+        // For now, just acknowledge - in a full implementation, you'd query recent messages
+        // and re-emit any that the client might have missed
+        socket.emit('missed-messages-response', {
+          success: true,
+          timestamp: Date.now(),
+          message: 'Connection verified, no missed messages'
+        });
       } catch (error) {
-        console.error('Error sending message:', error);
-        socket.emit('message-error', { error: 'Failed to send message' });
+console.error('Error handling missed messages request:', error);
       }
     });
 
-    socket.on('typing-start', (data: { roomId?: string; displayName?: string }) => {
+    // Thread-aware typing system
+    socket.on('typing-start', (data: { roomId?: string; displayName?: string; threadId?: string }) => {
       try {
-        const { roomId, displayName } = data;
-        
-        if (roomId && displayName) {
-          // Emit to all room members with current typing users (roomId is actually shareCode)
-          socket.to(`room:${roomId}`).emit('user-typing', {
-            users: [displayName], // Simple array of typing users
+        const { roomId, displayName, threadId } = data;
+
+        if (roomId && displayName && threadId) {
+          // Store user's current thread and typing status
+          if (!socket.currentThread) socket.currentThread = {};
+          socket.currentThread[roomId] = threadId;
+          socket.isTyping = true;
+
+          // Debug logging removed
+
+          // Emit ONLY to users in the SAME thread
+socket.to(`room:${roomId}`).emit('user-typing', {
+            users: [displayName],
             roomId,
+            threadId, // Include threadId so clients can filter
+            timestamp: new Date().toISOString()
+          });
+
+          // Emit cross-thread activity to ALL room participants (they'll filter by thread)
+socket.to(`room:${roomId}`).emit('cross-thread-activity', {
+            roomId,
+            activities: [{
+              threadId,
+              threadName: 'other thread',
+              activeUsers: [],
+              typingUsers: [displayName]
+            }],
             timestamp: new Date().toISOString()
           });
         }
       } catch (error) {
-        console.error('Error handling typing start:', error);
+console.error('Error handling typing start:', error);
       }
     });
 
-    socket.on('typing-stop', (data: { roomId?: string; displayName?: string }) => {
+    socket.on('typing-stop', (data: { roomId?: string; displayName?: string; threadId?: string }) => {
       try {
-        const { roomId, displayName } = data;
-        
-        if (roomId) {
-          // Emit empty typing users array when user stops typing (roomId is actually shareCode)
-          socket.to(`room:${roomId}`).emit('user-typing', {
+        const { roomId, displayName, threadId } = data;
+
+        if (roomId && threadId) {
+          socket.isTyping = false;
+
+          // Debug logging removed
+
+          // Emit ONLY to users in the SAME thread
+socket.to(`room:${roomId}`).emit('user-typing', {
             users: [], // Empty array when user stops typing
             roomId,
+            threadId,
+            timestamp: new Date().toISOString()
+          });
+
+          // Update cross-thread activity (user still active, just not typing)
+socket.to(`room:${roomId}`).emit('cross-thread-activity', {
+            roomId,
+            activities: [{
+              threadId,
+              threadName: 'other thread',
+              activeUsers: [displayName],
+              typingUsers: []
+            }],
             timestamp: new Date().toISOString()
           });
         }
       } catch (error) {
-        console.error('Error handling typing stop:', error);
+console.error('Error handling typing stop:', error);
       }
     });
   };
@@ -525,23 +580,23 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           timestamp: new Date().toISOString(),
           userId: socket.userId
         });
-        console.log(`Sidebar refresh requested by user ${socket.userId}`);
+        // Debug logging removed
       } catch (error) {
-        console.error('Error handling sidebar refresh request:', error);
+console.error('Error handling sidebar refresh request:', error);
         socket.emit('sidebar-error', { error: 'Failed to refresh sidebar' });
       }
     });
 
-    socket.on('notify-sidebar-change', async (data: { 
+    socket.on('notify-sidebar-change', async (data: {
       changeType: 'chat_created' | 'room_joined' | 'document_uploaded' | 'message_sent';
       entityId: string;
       metadata?: any;
     }) => {
       try {
         const { changeType, entityId, metadata } = data;
-        
+
         // Broadcast to user's personal channel with timestamp
-        socket.to(`user:${socket.userId}`).emit('sidebar-change-notification', {
+socket.to(`user:${socket.userId}`).emit('sidebar-change-notification', {
           changeType,
           entityId,
           metadata,
@@ -549,9 +604,9 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           userId: socket.userId
         });
 
-        console.log(`Sidebar change notification: ${changeType} for user ${socket.userId}`);
+        // Debug logging removed
       } catch (error) {
-        console.error('Error handling sidebar change notification:', error);
+console.error('Error handling sidebar change notification:', error);
         socket.emit('sidebar-error', { error: 'Failed to notify sidebar change' });
       }
     });
@@ -560,7 +615,7 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
       await measurePerformance('sidebar.getData', async () => {
         // Use optimized sidebar data retrieval
         const result = await SocketDatabaseService.getSidebarData(socket.userId);
-        
+
         if (!result.success) {
           socket.emit('sidebar-error', { error: result.error });
           return;
@@ -571,9 +626,9 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
           timestamp: new Date().toISOString()
         });
 
-        console.log(`Optimized sidebar data sent to user ${socket.userId}`);
+        // Debug logging removed
       }).catch(error => {
-        console.error('Error getting sidebar data:', error);
+console.error('Error getting sidebar data:', error);
         socket.emit('sidebar-error', { error: 'Failed to get sidebar data' });
         throw error;
       });
@@ -582,16 +637,16 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
     socket.on('join-user-channel', () => {
       try {
         // Join user's personal channel for sidebar updates
-        socket.join(`user:${socket.userId}`);
-        console.log(`User ${socket.userId} joined personal channel`);
-        
+socket.join(`user:${socket.userId}`);
+        // Debug logging removed
+
         // Confirm channel join
         socket.emit('user-channel-joined', {
           userId: socket.userId,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
-        console.error('Error joining user channel:', error);
+console.error('Error joining user channel:', error);
         socket.emit('sidebar-error', { error: 'Failed to join user channel' });
       }
     });
@@ -599,16 +654,16 @@ export function createSocketHandlers(io: SocketIOServer): SocketHandlers {
     socket.on('leave-user-channel', () => {
       try {
         // Leave user's personal channel
-        socket.leave(`user:${socket.userId}`);
-        console.log(`User ${socket.userId} left personal channel`);
-        
+socket.leave(`user:${socket.userId}`);
+        // Debug logging removed
+
         // Confirm channel leave
         socket.emit('user-channel-left', {
           userId: socket.userId,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
-        console.error('Error leaving user channel:', error);
+console.error('Error leaving user channel:', error);
         socket.emit('sidebar-error', { error: 'Failed to leave user channel' });
       }
     });

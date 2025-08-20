@@ -17,10 +17,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { 
-  Users, 
-  MoreHorizontal, 
-  Copy, 
+import {
+  Users,
+  MoreHorizontal,
+  Copy,
   ExternalLink,
   Crown,
   Clock,
@@ -45,14 +45,14 @@ interface GroupChatsSectionProps {
   onChatSelect: () => void;
 }
 
-export default function GroupChatsSection({ 
-  groupChatRooms, 
-  onChatSelect 
+export default function GroupChatsSection({
+  groupChatRooms,
+  onChatSelect
 }: GroupChatsSectionProps) {
   const handleCopyLink = async (shareCode: string, roomName: string) => {
     const baseUrl = window.location.origin;
     const shareableLink = `${baseUrl}/room/${shareCode}`;
-    
+
     try {
       await navigator.clipboard.writeText(shareableLink);
       toast.success(`Link copied for "${roomName}"`);
@@ -65,7 +65,7 @@ export default function GroupChatsSection({
     const now = new Date();
     const expires = new Date(expiresAt);
     const diffHours = Math.ceil((expires.getTime() - now.getTime()) / (1000 * 60 * 60));
-    
+
     if (diffHours < 24) {
       return `${diffHours}h`;
     } else {
@@ -100,12 +100,11 @@ export default function GroupChatsSection({
             <SidebarMenuItem key={room.id}>
               <div className="flex items-center w-full group">
                 <SidebarMenuButton asChild className="flex-1 min-w-0">
-                  <Link 
+                  <Link
                     href={`/room/${room.shareCode}`}
                     onClick={onChatSelect}
                     className="flex items-center gap-2 w-full"
                   >
-                    <Users className="h-4 w-4 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
                         <span className="truncate text-sm font-medium">
@@ -131,7 +130,7 @@ export default function GroupChatsSection({
                     </div>
                   </Link>
                 </SidebarMenuButton>
-                
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -146,12 +145,10 @@ export default function GroupChatsSection({
                     <DropdownMenuItem
                       onClick={() => handleCopyLink(room.shareCode, room.name)}
                     >
-                      <Copy className="mr-2 h-4 w-4" />
                       Copy invite link
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href={`/room/${room.shareCode}`}>
-                        <ExternalLink className="mr-2 h-4 w-4" />
                         Open room
                       </Link>
                     </DropdownMenuItem>

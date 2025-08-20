@@ -27,8 +27,8 @@ export class AlertSystem {
   private static instance: AlertSystem;
   private alerts: Alert[] = [];
   private alertRules: AlertRule[] = [];
-  private lastAlertTimes: Map<string, Date> = new Map();
-  private alertHandlers: Array<(alert: Alert) => void> = [];
+  private lastAlertTimes = new Map<string, Date>();
+  private alertHandlers: ((alert: Alert) => void)[] = [];
   private monitoringIntervals: NodeJS.Timeout[] = [];
 
   private constructor() {
@@ -227,7 +227,7 @@ export class AlertSystem {
       }
     });
 
-    console.log(`🚨 ALERT [${alert.type.toUpperCase()}]: ${alert.message}`);
+console.log(` ALERT [${alert.type.toUpperCase()}]: ${alert.message}`);
   }
 
   private sanitizeMetrics(metrics: any) {
@@ -266,7 +266,7 @@ export class AlertSystem {
     return this.alerts.filter(alert => !alert.resolved);
   }
 
-  getAllAlerts(limit: number = 100): Alert[] {
+  getAllAlerts(limit = 100): Alert[] {
     return this.alerts
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, limit);
@@ -344,7 +344,7 @@ export class AlertSystem {
     this.lastAlertTimes.clear();
     this.alertHandlers = [];
 
-    console.log('✅ AlertSystem cleanup completed');
+console.log(' AlertSystem cleanup completed');
   }
 }
 

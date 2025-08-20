@@ -1,6 +1,5 @@
 // API-specific caching implementations
 import { CacheManager, ExternalAPICache, withCache } from './cacheManager';
-import { HybridCache } from './redisCache';
 import { PerformanceMonitor } from '../monitoring/performanceMonitor';
 
 // Cache configuration for different API types
@@ -29,12 +28,12 @@ const API_CACHE_CONFIG = {
 
 export class APICache {
   private static instance: APICache;
-  private hybridCache: HybridCache;
+  private cacheManager: CacheManager;
   private externalAPICache: ExternalAPICache;
   private performanceMonitor = PerformanceMonitor.getInstance();
 
   constructor() {
-    this.hybridCache = new HybridCache();
+    this.cacheManager = CacheManager.getInstance();
     this.externalAPICache = new ExternalAPICache();
   }
 
@@ -50,17 +49,17 @@ export class APICache {
     const key = `metadata:${this.hashURL(url)}`;
     const ttlSeconds = Math.floor(API_CACHE_CONFIG.metadata.ttl / 1000);
     
-    await this.hybridCache.set(key, {
+    await this.cacheManager.set(key, {
       url,
       metadata,
       extractedAt: new Date().toISOString()
-    }, ttlSeconds);
+    }, API_CACHE_CONFIG.metadata.ttl);
   }
 
   // Get cached metadata
   async getCachedMetadata(url: string): Promise<any | null> {
     const key = `metadata:${this.hashURL(url)}`;
-    const cached = await this.hybridCache.get(key);
+    const cached = await this.cacheManager.get(key);
     
     if (cached) {
       this.performanceMonitor.recordMetric('cache.metadata.hit', Date.now(), true, undefined, { url });
@@ -74,20 +73,19 @@ export class APICache {
   // Cache search results
   async cacheSearchResults(query: string, filters: any, results: any): Promise<void> {
     const key = `search:${this.hashQuery(query, filters)}`;
-    const ttlSeconds = Math.floor(API_CACHE_CONFIG.search.ttl / 1000);
     
-    await this.hybridCache.set(key, {
+    await this.cacheManager.set(key, {
       query,
       filters,
       results,
       searchedAt: new Date().toISOString()
-    }, ttlSeconds);
+    }, API_CACHE_CONFIG.search.ttl);
   }
 
   // Get cached search results
   async getCachedSearchResults(query: string, filters: any): Promise<any | null> {
     const key = `search:${this.hashQuery(query, filters)}`;
-    const cached = await this.hybridCache.get(key);
+    const cached = await this.cacheManager.get(key);
     
     if (cached) {
       this.performanceMonitor.recordMetric('cache.search.hit', Date.now(), true, undefined, { query });
@@ -101,20 +99,19 @@ export class APICache {
   // Cache AI responses
   async cacheAIResponse(prompt: string, context: any, response: any): Promise<void> {
     const key = `ai:${this.hashPrompt(prompt, context)}`;
-    const ttlSeconds = Math.floor(API_CACHE_CONFIG.ai.ttl / 1000);
     
-    await this.hybridCache.set(key, {
+    await this.cacheManager.set(key, {
       prompt,
       context,
       response,
       generatedAt: new Date().toISOString()
-    }, ttlSeconds);
+    }, API_CACHE_CONFIG.ai.ttl);
   }
 
   // Get cached AI response
   async getCachedAIResponse(prompt: string, context: any): Promise<any | null> {
     const key = `ai:${this.hashPrompt(prompt, context)}`;
-    const cached = await this.hybridCache.get(key);
+    const cached = await this.cacheManager.get(key);
     
     if (cached) {
       this.performanceMonitor.recordMetric('cache.ai.hit', Date.now(), true, undefined, { prompt: prompt.substring(0, 50) });
@@ -128,20 +125,19 @@ export class APICache {
   // Cache document processing results
   async cacheDocumentProcessing(documentId: string, processingType: string, result: any): Promise<void> {
     const key = `document:${documentId}:${processingType}`;
-    const ttlSeconds = Math.floor(API_CACHE_CONFIG.document.ttl / 1000);
     
-    await this.hybridCache.set(key, {
+    await this.cacheManager.set(key, {
       documentId,
       processingType,
       result,
       processedAt: new Date().toISOString()
-    }, ttlSeconds);
+    }, API_CACHE_CONFIG.document.ttl);
   }
 
   // Get cached document processing results
   async getCachedDocumentProcessing(documentId: string, processingType: string): Promise<any | null> {
     const key = `document:${documentId}:${processingType}`;
-    const cached = await this.hybridCache.get(key);
+    const cached = await this.cacheManager.get(key);
     
     if (cached) {
       this.performanceMonitor.recordMetric('cache.document.hit', Date.now(), true, undefined, { documentId, processingType });
@@ -162,7 +158,7 @@ export class APICache {
 
     let totalInvalidated = 0;
     for (const pattern of patterns) {
-      const invalidated = await this.hybridCache.clear(pattern);
+      const invalidated = await this.cacheManager.invalidatePattern(pattern);
       totalInvalidated += invalidated;
     }
 
@@ -296,7 +292,7 @@ export class APICache {
     ];
   }
 
-  private async getRecentDocuments(): Promise<Array<{ id: string }>> {
+  private async getRecentDocuments(): Promise<{ id: string }[]> {
     // This would typically query your database for recent documents
     return [
       { id: 'doc-1' },

@@ -14,7 +14,7 @@ import {
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: '🔒 Admin Panel 🕵️‍♂️',
+title: ' Admin Panel ️‍️',
   description:
     'This is definitely not the admin panel. Just move along, nothing interesting to see here... *whistles innocently*',
   keywords: [
@@ -59,19 +59,19 @@ export default function AdminPage() {
               animation: `float ${Math.random() * 10 + 5}s ease-in-out infinite`
             }}
           >
-            ⚠️
+
           </div>
         ))}
 
         <AlertTriangle className="w-24 h-24 text-destructive animate-shake" />
 
         <h1 className="text-3xl md:text-5xl font-bold text-destructive mt-4 inline-block align-middle animate-glowText">
-          🚨 Access Denied! 🚫
+Access Denied!
         </h1>
 
         <h2 className="text-xl md:text-3xl mt-6 text-foreground font-bold flex items-center justify-center flex-wrap">
           <AlertOctagon className="w-6 h-6 md:w-8 md:h-8 mr-2 shrink-0 text-destructive" />
-          You do not have permission to access this page! 😠
+You do not have permission to access this page!
         </h2>
 
         <p className="text-base md:text-xl text-muted-foreground flex items-center justify-center flex-wrap mt-2 mb-6">
@@ -96,7 +96,6 @@ export default function AdminPage() {
           className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
         >
           <Link href="/admin" target="_blank" className="flex items-center">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Try to log in
           </Link>
         </Button>

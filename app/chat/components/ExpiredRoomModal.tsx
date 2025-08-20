@@ -68,38 +68,37 @@ export default function ExpiredRoomModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
-            <Clock className="h-5 w-5" />
+          <DialogTitle className="flex items-center gap-2 text-muted-foreground font-medium">
+            <Clock className="h-4 w-4" />
             Room Expired
           </DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
-          <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
-            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <AlertDescription className="text-amber-800 dark:text-amber-200">
-              <strong>"{roomName}"</strong> has expired and is no longer accessible.
+          <Alert className="border-border/40 bg-muted/30">
+            <AlertDescription className="text-muted-foreground/80">
+              <span className="font-medium">"{roomName}"</span> has expired and is no longer accessible.
             </AlertDescription>
           </Alert>
 
           <div className="space-y-3">
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-muted-foreground/80">
               Choose an option to continue:
             </div>
 
             {/* Upgrade to Pro Option */}
             <Button 
               onClick={handleUpgradeToPro}
-              className="w-full justify-start gap-3 h-12 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              className="w-full justify-start gap-3 h-10 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all duration-200"
             >
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                <Crown className="h-4 w-4 text-white" />
+              <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                <Crown className="h-3 w-3 text-white" />
               </div>
               <div className="text-left">
-                <div className="font-medium">Upgrade to Pro</div>
-                <div className="text-xs text-white/80">Extend room lifetime & unlock premium features</div>
+                <div className="font-medium text-sm">Upgrade to Pro</div>
+                <div className="text-xs text-white/80 hidden sm:block">Extend room lifetime & unlock premium features</div>
               </div>
-              <Zap className="h-4 w-4 ml-auto" />
+              <Zap className="h-3 w-3 ml-auto" />
             </Button>
 
             {/* Delete Room Option - Only for creators */}
@@ -107,14 +106,14 @@ export default function ExpiredRoomModal({
               <Button 
                 onClick={handleDeleteRoom}
                 variant="outline"
-                className="w-full justify-start gap-3 h-12 border-destructive/30 hover:bg-destructive/10"
+                className="w-full justify-start gap-3 h-10 border-border/40 hover:bg-destructive/5 hover:border-destructive/30 transition-all duration-200"
               >
-                <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
-                  <Trash2 className="h-4 w-4 text-destructive" />
+                <div className="w-6 h-6 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <Trash2 className="h-3 w-3 text-destructive" />
                 </div>
                 <div className="text-left">
-                  <div className="font-medium text-destructive">Delete Room</div>
-                  <div className="text-xs text-muted-foreground">Permanently remove this expired room</div>
+                  <div className="font-medium text-sm text-destructive">Delete Room</div>
+                  <div className="text-xs text-muted-foreground/80 hidden sm:block">Permanently remove this expired room</div>
                 </div>
               </Button>
             )}
@@ -123,7 +122,7 @@ export default function ExpiredRoomModal({
             <Button 
               onClick={handleGoBack}
               variant="ghost"
-              className="w-full"
+              className="w-full h-10 text-muted-foreground hover:text-foreground transition-colors"
             >
               Go Back to Chat
             </Button>

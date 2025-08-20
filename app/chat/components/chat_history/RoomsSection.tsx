@@ -14,8 +14,10 @@ import {
   SidebarMenuButton
 } from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Users, Crown, Clock, MessageSquare, Plus, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Users, Crown, Clock, MessageSquare, Plus, ChevronDown, ChevronRight, AlertTriangle, Share2 } from 'lucide-react';
 import { fetchRoomChatSessions } from '../../room/[shareCode]/fetch';
+import ShareRoomModal from '../ShareRoomModal';
+import { useSiteUrl } from '@/hooks/useSiteUrl';
 
 interface RoomChatSession {
   id: string;
@@ -34,6 +36,7 @@ interface RoomPreview {
   tier: 'free' | 'pro';
   expiresAt: string;
   isCreator?: boolean;
+  password: string;
 }
 
 interface RoomsSectionProps {
@@ -51,10 +54,13 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
   const [roomSessions, setRoomSessions] = useState<Record<string, RoomChatSession[]>>({});
   const [loadingSessions, setLoadingSessions] = useState<Record<string, boolean>>({});
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedRoomForShare, setSelectedRoomForShare] = useState<RoomPreview | null>(null);
   
   const params = useParams();
   const searchParams = useSearchParams();
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
+  const siteUrl = useSiteUrl();
 
   const toggleRoomExpansion = async (shareCode: string) => {
     const newExpanded = new Set(expandedRooms);
@@ -93,6 +99,11 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
 
   const getSessionId = () => {
     return userInfo ? `auth_${userInfo.id}` : '';
+  };
+
+  const handleShareRoom = (room: RoomPreview) => {
+    setSelectedRoomForShare(room);
+    setShowShareModal(true);
   };
 
   // Helper function to check if room is expired
@@ -182,6 +193,9 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                             {room.isCreator && (
                               <Crown className="h-3 w-3 text-amber-500" />
                             )}
+                            <Badge variant="outline" className="text-xs px-1 py-0 border-blue-300 text-blue-600">
+                              🔒 Protected
+                            </Badge>
                             {isExpired && (
                               <Badge variant="destructive" className="text-xs px-1 py-0">
                                 Expired
@@ -196,6 +210,19 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                           </div>
                         </Link>
                       </SidebarMenuButton>
+
+                      {/* Share Button */}
+                      {!isExpired && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-1 h-6 w-6 hover:bg-blue-100 hover:text-blue-600"
+                          onClick={() => handleShareRoom(room)}
+                          title="Share room"
+                        >
+                          <Share2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
 
                     {/* Room Details */}
@@ -215,29 +242,31 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
                           </div>
                         ) : sessions.length > 0 ? (
                           sessions.map((session) => (
-                            <SidebarMenuButton
-                              key={session.id}
-                              asChild
-                              size="sm"
-                              className={`text-xs ${isExpired ? 'pointer-events-none opacity-50' : ''}`}
-                            >
-                              <Link
-                                href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${session.id}`}
-                                onClick={(e) => {
-                                  if (isExpired) {
-                                    e.preventDefault();
-                                    return;
-                                  }
-                                  handleRoomClick(e, room.shareCode);
-                                }}
-                                className="flex items-center gap-2"
+                            <div key={session.id} className="space-y-1">
+                              <SidebarMenuButton
+                                asChild
+                                size="sm"
+                                className={`text-xs ${isExpired ? 'pointer-events-none opacity-50' : ''}`}
                               >
-                                <MessageSquare className="h-3 w-3" />
-                                <span className="truncate">
-                                  {session.chat_title || `Chat with ${session.display_name}`}
-                                </span>
-                              </Link>
-                            </SidebarMenuButton>
+                                <Link
+                                  href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(getDisplayName())}&sessionId=${encodeURIComponent(getSessionId())}&threadId=${session.id}`}
+                                  onClick={(e) => {
+                                    if (isExpired) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    handleRoomClick(e, room.shareCode);
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span className="truncate">
+                                    {session.chat_title || `Chat with ${session.display_name}`}
+                                  </span>
+                                </Link>
+                              </SidebarMenuButton>
+
+                            </div>
                           ))
                         ) : (
                           <div className="text-xs text-muted-foreground py-2">
@@ -253,6 +282,28 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
           </SidebarMenu>
         </ScrollArea>
       </SidebarGroupContent>
+
+      {/* Share Room Modal */}
+      {showShareModal && selectedRoomForShare && (
+        <ShareRoomModal
+          isOpen={showShareModal}
+          onClose={() => {
+            setShowShareModal(false);
+            setSelectedRoomForShare(null);
+          }}
+          room={{
+            id: selectedRoomForShare.id,
+            name: selectedRoomForShare.name,
+            shareCode: selectedRoomForShare.shareCode,
+            maxParticipants: selectedRoomForShare.maxParticipants,
+            tier: selectedRoomForShare.tier,
+            expiresAt: selectedRoomForShare.expiresAt,
+            createdAt: new Date().toISOString(), // We don't have this in RoomPreview, so use current time
+            password: selectedRoomForShare.password
+          }}
+          shareableLink={`${siteUrl}/room/${selectedRoomForShare.shareCode}`}
+        />
+      )}
     </SidebarGroup>
   );
 }

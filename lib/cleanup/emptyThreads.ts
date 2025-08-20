@@ -23,16 +23,16 @@ export async function cleanupEmptyThreads() {
       threadsWithMessages?.map(msg => msg.thread_id).filter(Boolean) || []
     );
 
-    console.log(`📊 Found ${activeThreadIds.size} threads with messages`);
+console.log(` Found ${activeThreadIds.size} threads with messages`);
 
     // For now, we'll implement this as a manual cleanup
     // In a production system, you'd want to track thread creation timestamps
     // and clean up threads that are older than X minutes with no messages
 
-    console.log('✅ Empty thread cleanup completed');
+console.log(' Empty thread cleanup completed');
     return { cleaned: 0, active: activeThreadIds.size };
   } catch (error) {
-    console.error('❌ Error during empty thread cleanup:', error);
+console.error(' Error during empty thread cleanup:', error);
     throw error;
   }
 }

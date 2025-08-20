@@ -24,14 +24,7 @@ function SubmitButton() {
       disabled={pending}
       className="w-full rounded-full"
     >
-      {pending ? (
-        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-      ) : (
-        <>
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign out
-        </>
-      )}
+      {pending ? 'Signing out...' : 'Sign out'}
     </Button>
   );
 } 

@@ -314,21 +314,18 @@ const RenderChatSectionWithSidebar: FC<RenderChatSectionProps> = ({
                         disabled
                         className="text-sm cursor-not-allowed"
                       >
-                        <Share className="mr-2 h-4 w-4" />
                         <span>Share</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleOpenRename(id)}
                         className="text-sm"
                       >
-                        <Edit className="mr-2 h-4 w-4" />
                         <span>Rename</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleDeleteClick(id)}
                         className="text-destructive text-sm"
                       >
-                        <Trash className="mr-2 h-4 w-4" />
                         <span>Delete</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>

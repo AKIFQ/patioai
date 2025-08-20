@@ -1,32 +1,30 @@
 -- Socket.IO Migration Database Optimizations
 -- This migration adds indexes and functions to optimize performance for Socket.IO realtime system
 
-BEGIN;
-
--- Add critical indexes for Socket.IO performance
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_session_time 
+-- Add critical indexes for Socket.IO performance (non-concurrently to allow within migrations)
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_time 
 ON chat_messages(chat_session_id, created_at DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_user_time 
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user_time 
 ON chat_messages(chat_session_id, is_user_message, created_at DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_room_messages_room_thread 
+CREATE INDEX IF NOT EXISTS idx_room_messages_room_thread 
 ON room_messages(room_id, thread_id, created_at DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_room_messages_realtime_optimized 
+CREATE INDEX IF NOT EXISTS idx_room_messages_realtime_optimized 
 ON room_messages(room_id, is_ai_response, created_at DESC, id);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_room_participants_active 
-ON room_participants(room_id, user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_room_participants_active 
+ON room_participants(room_id, user_id);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_room_participants_session 
+CREATE INDEX IF NOT EXISTS idx_room_participants_session 
 ON room_participants(room_id, session_id, display_name);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_sessions_user_updated 
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_updated 
 ON chat_sessions(user_id, updated_at DESC, id);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rooms_active_by_user 
-ON rooms(created_by, expires_at) WHERE expires_at > NOW();
+CREATE INDEX IF NOT EXISTS idx_rooms_active_by_user 
+ON rooms(created_by, expires_at);
 
 -- Consolidated dashboard query function
 CREATE OR REPLACE FUNCTION get_user_dashboard_complete(user_id_param uuid)
@@ -188,4 +186,3 @@ COMMENT ON FUNCTION get_user_dashboard_complete IS
 'Consolidated dashboard query function optimized for Socket.IO realtime system. 
 Reduces multiple queries to a single function call for better performance.';
 
-COMMIT;

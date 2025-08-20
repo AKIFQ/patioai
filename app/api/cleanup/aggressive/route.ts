@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { MemoryManager } from '@/lib/monitoring/memoryManager';
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
             if (!deleteError) {
               results.emptyThreads++;
-              console.log(`✅ Deleted empty thread: ${thread.id}`);
+console.log(` Deleted empty thread: ${thread.id}`);
             }
           }
         }
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
 
             if (!deleteError) {
               results.oldSessions++;
-              console.log(`✅ Deleted old session: ${session.id}`);
+console.log(` Deleted old session: ${session.id}`);
             }
           }
         }
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
 
         if (!updateError) {
           results.abandonedConnections = participantIds.length;
-          console.log(`✅ Cleaned up ${participantIds.length} abandoned participants`);
+console.log(` Cleaned up ${participantIds.length} abandoned participants`);
         }
       }
     } catch (error) {
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
       
       if (memoryResult.success) {
         results.memoryFreed = memoryResult.freedMemory;
-        console.log(`✅ Memory cleanup freed ${Math.round(memoryResult.freedMemory / 1024 / 1024)}MB`);
+console.log(` Memory cleanup freed ${Math.round(memoryResult.freedMemory / 1024 / 1024)}MB`);
       }
     } catch (error) {
       results.errors.push(`Memory cleanup: ${error}`);
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
     // 5. Force garbage collection if available
     if (global.gc) {
       global.gc();
-      console.log('✅ Forced garbage collection');
+console.log(' Forced garbage collection');
     }
 
     const afterMemory = process.memoryUsage().heapUsed;
@@ -145,8 +146,8 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
 
     console.log(`🧹 Aggressive cleanup completed in ${duration}ms`);
-    console.log(`📊 Results: ${results.emptyThreads} threads, ${results.oldSessions} sessions, ${results.abandonedConnections} connections`);
-    console.log(`💾 Total memory freed: ${Math.round(totalMemoryFreed / 1024 / 1024)}MB`);
+console.log(` Results: ${results.emptyThreads} threads, ${results.oldSessions} sessions, ${results.abandonedConnections} connections`);
+console.log(` Total memory freed: ${Math.round(totalMemoryFreed / 1024 / 1024)}MB`);
 
     return NextResponse.json({
       success: true,
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Aggressive cleanup failed:', error);
+console.error(' Aggressive cleanup failed:', error);
     return NextResponse.json(
       { 
         success: false, 

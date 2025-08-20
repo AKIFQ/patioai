@@ -54,7 +54,6 @@ export default function Error({
         <div className="flex flex-col sm:flex-row gap-3">
           <a href="/chat" className="flex-1">
             <Button className="w-full" size="lg">
-              <MessageSquare className="mr-2 h-4 w-4" />
               Start new conversation
             </Button>
           </a>
@@ -64,7 +63,6 @@ export default function Error({
             onClick={() => window.location.reload()}
             className="flex-1"
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
             Retry
           </Button>
         </div>

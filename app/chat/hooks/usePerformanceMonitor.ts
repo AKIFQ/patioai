@@ -19,7 +19,7 @@ export function usePerformanceMonitor(componentName: string) {
   }, []);
 
   // End performance measurement
-  const endMeasurement = useCallback((messageCount: number = 0) => {
+  const endMeasurement = useCallback((messageCount = 0) => {
     const renderTime = performance.now() - renderStartTime.current;
     
     const metrics: PerformanceMetrics = {

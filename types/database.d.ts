@@ -242,6 +242,9 @@ export type Database = {
           created_at: string;
           expires_at: string;
           created_by: string | null;
+          password: string | null;
+          password_generated_at: string | null;
+          password_expires_at: string | null;
         };
         Insert: {
           id?: string;
@@ -250,6 +253,9 @@ export type Database = {
           created_at?: string;
           expires_at: string;
           created_by?: string | null;
+          password?: string | null;
+          password_generated_at?: string | null;
+          password_expires_at?: string | null;
         };
         Update: {
           id?: string;
@@ -258,6 +264,9 @@ export type Database = {
           created_at?: string;
           expires_at?: string;
           created_by?: string | null;
+          password?: string | null;
+          password_generated_at?: string | null;
+          password_expires_at?: string | null;
         };
         Relationships: [];
       };

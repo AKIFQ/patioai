@@ -60,7 +60,16 @@ export default function SignInCard() {
         } else {
           localStorage.removeItem('rememberedEmail');
         }
-        router.push('/chat');
+        
+        // Check if there's a return URL (for room redirects)
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnUrl = urlParams.get('returnUrl');
+        if (returnUrl) {
+          // Redirect to the return URL (room)
+          window.location.href = returnUrl;
+        } else {
+          router.push('/chat');
+        }
       }
     }
   };
@@ -217,10 +226,7 @@ function SubmitButton() {
   return (
     <Button type="submit" className="w-full h-9" disabled={pending}>
       {pending ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          <span className="text-sm">Signing in...</span>
-        </>
+        'Signing in...'
       ) : (
         <span className="text-sm font-medium">Sign in</span>
       )}

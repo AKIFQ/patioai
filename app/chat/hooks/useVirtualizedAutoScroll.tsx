@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { FixedSizeList as List } from 'react-window';
+import type { FixedSizeList as List } from 'react-window';
 
 interface UseVirtualizedAutoScrollOptions {
   /**
@@ -141,7 +141,7 @@ export function useVirtualizedAutoScroll({
   }, [enabled, checkIfAtBottom, userScrolling, enableAutoScroll, resumeDelay]);
 
   // Update item count and dimensions
-  const updateDimensions = useCallback((itemCount: number, containerHeight: number, itemHeight: number = 80) => {
+  const updateDimensions = useCallback((itemCount: number, containerHeight: number, itemHeight = 80) => {
     itemCountRef.current = itemCount;
     containerHeightRef.current = containerHeight;
     itemHeightRef.current = itemHeight;

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserInfo } from '@/lib/server/supabase';
 
@@ -65,6 +66,23 @@ export async function DELETE(
       return NextResponse.json({ error: 'Room creator cannot leave the room. Delete the room instead.' }, { status: 400 });
     }
 
+    // Add user to removed participants list BEFORE deleting from participants
+    const { error: removeError } = await (supabase as any)
+      .from('removed_room_participants')
+      .insert({
+        room_id: room.id,
+        removed_user_id: participant.user_id,
+        removed_session_id: participant.session_id,
+        removed_display_name: participant.display_name,
+        removed_by: userInfo.id,
+        reason: 'removed_by_creator'
+      });
+
+    if (removeError) {
+      console.error('Error tracking participant removal:', removeError);
+      return NextResponse.json({ error: 'Failed to track participant removal' }, { status: 500 });
+    }
+
     // Remove participant from room
     const { error: deleteError } = await (supabase as any)
       .from('room_participants')
@@ -77,11 +95,47 @@ export async function DELETE(
       return NextResponse.json({ error: 'Failed to remove participant' }, { status: 500 });
     }
 
-    // Emit Socket.IO event for participant removal
+    // Get updated participant list for the event
+    const { data: updatedParticipants } = await (supabase as any)
+      .from('room_participants')
+      .select('session_id, display_name, joined_at, user_id')
+      .eq('room_id', room.id)
+      .order('joined_at', { ascending: true });
+
+    // Emit Socket.IO event for participant removal with updated participant list
     try {
       const { getSocketIOInstance } = await import('@/lib/server/socketEmitter');
       const io = getSocketIOInstance();
       if (io) {
+        // Force disconnect the removed user from the room
+        const sockets = await io.in(`room:${shareCode}`).fetchSockets();
+        for (const socket of sockets) {
+          // Check if this socket belongs to the removed user
+          if ((socket as any).userId === participant.user_id || 
+              (socket as any).sessionId === sessionId) {
+console.log(` Forcing disconnect for removed user: ${participant.display_name}`);
+            socket.leave(`room:${shareCode}`);
+            socket.emit('room-error', { 
+              error: 'REMOVED_FROM_ROOM',
+              roomName: 'Room' // Will be filled by frontend
+            });
+          }
+        }
+
+        // Emit removal event
+        io.to(`room:${shareCode}`).emit('user-removed-from-room', {
+          removedUser: {
+            displayName: participant.display_name,
+            sessionId,
+            userId: participant.user_id
+          },
+          shareCode,
+          timestamp: new Date().toISOString(),
+          updatedParticipants: updatedParticipants || [],
+          participantCount: (updatedParticipants || []).length
+        });
+
+        // Also emit the legacy event for backward compatibility
         io.to(`room:${shareCode}`).emit('user-left-room', {
           displayName: participant.display_name,
           sessionId,

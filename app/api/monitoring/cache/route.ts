@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { APICache } from '@/lib/cache/apiCache';
 import { CacheManager } from '@/lib/cache/cacheManager';
 

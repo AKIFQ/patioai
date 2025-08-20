@@ -4,10 +4,11 @@ import type { NextRequest } from 'next/server';
 import { streamText, convertToCoreMessages } from 'ai';
 import type { Message } from 'ai';
 import { saveChatToSupbabase } from './SaveToDb';
-import { Ratelimit } from '@upstash/ratelimit';
 import { getSession } from '@/lib/server/supabase';
 import { openai } from '@ai-sdk/openai';
-import { redis } from '@/lib/server/server';
+import { userTierService } from '@/lib/ai/userTierService';
+import { tierRateLimiter } from '@/lib/limits/rateLimiter';
+// Rate limiting removed - using new tier-based system
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -23,23 +24,13 @@ export async function POST(req: NextRequest) {
       }
     });
   }
-  const ratelimit = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(30, '24h') // 30 msg per 24 hours
-  });
-
-  const { success, limit, reset, remaining } = await ratelimit.limit(
-    `ratelimit_${session.id}`
-  );
-  if (!success) {
-    return new NextResponse('Rate limit exceeded. Please try again later.', {
+  // Enforce tier-based request limits
+  const userSubscription = await userTierService.getUserTier(session.id);
+  const limiterCheck = await tierRateLimiter.check(session.id, userSubscription.tier as any, 'ai_requests');
+  if (!limiterCheck.allowed) {
+    return new NextResponse(limiterCheck.reason || 'Limit reached', {
       status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-RateLimit-Limit': limit.toString(),
-        'X-RateLimit-Remaining': remaining.toString(),
-        'X-RateLimit-Reset': new Date(reset * 1000).toISOString()
-      }
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 
@@ -144,7 +135,12 @@ export async function POST(req: NextRequest) {
         sourceUrls
       );
 
-      // Update token usage
+      // Increment tier counters for API request
+      try {
+        await tierRateLimiter.increment(session.id, userSubscription.tier as any, 'ai_requests', 1);
+      } catch (e) {
+        console.warn('Failed to increment tier counters for website chat:', e);
+      }
     },
     onError: async (event) => {
       const { error } = event;
@@ -153,6 +149,7 @@ export async function POST(req: NextRequest) {
   });
 
   return result.toDataStreamResponse({
+    sendReasoning: true, // Enable reasoning streaming
     sendSources: true
   });
 }

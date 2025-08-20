@@ -228,3 +228,58 @@ body:has([data-chat-page]) footer {
     backface-visibility: hidden;
   }
 }
+
+/* Mobile touch improvements */
+@media (max-width: 768px) {
+  /* Improve touch targets for mobile */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Prevent zoom on double tap for buttons */
+  button, [role="button"] {
+    touch-action: manipulation;
+  }
+  
+  /* Improve scrolling on mobile */
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  
+  /* Safe area padding for devices with notches */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  /* Improve sheet/modal animations on mobile */
+  [data-state="open"] {
+    animation-duration: 200ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  [data-state="closed"] {
+    animation-duration: 150ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* iOS specific improvements */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari specific styles */
+  .ios-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent rubber band scrolling */
+  .ios-no-bounce {
+    overscroll-behavior: none;
+  }
+}

@@ -132,6 +132,7 @@ export class SocketDatabaseService {
     sessionId: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
+      const supabase = this.getClient();
       const { error } = await supabase
         .from('room_participants')
         .upsert({
@@ -163,6 +164,7 @@ export class SocketDatabaseService {
     userId: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
+      const supabase = this.getClient();
       const { error } = await supabase
         .from('room_participants')
         .update({ left_at: new Date().toISOString() })
@@ -188,6 +190,7 @@ export class SocketDatabaseService {
     error?: string;
   }> {
     try {
+      const supabase = this.getClient();
       const { data, error } = await supabase
         .rpc('get_sidebar_data_optimized', { user_id_param: userId });
 
@@ -203,12 +206,12 @@ export class SocketDatabaseService {
   }
 
   // Batch insert chat messages for better performance
-  static async insertChatMessages(messages: Array<{
+  static async insertChatMessages(messages: {
     chatSessionId: string;
     content: string;
     isUserMessage: boolean;
     attachments?: any[];
-  }>): Promise<{ success: boolean; messageIds?: string[]; error?: string }> {
+  }[]): Promise<{ success: boolean; messageIds?: string[]; error?: string }> {
     try {
       const insertData = messages.map(msg => ({
         chat_session_id: msg.chatSessionId,
@@ -218,6 +221,7 @@ export class SocketDatabaseService {
         created_at: new Date().toISOString()
       }));
 
+      const supabase = this.getClient();
       const { data, error } = await supabase
         .from('chat_messages')
         .insert(insertData)
@@ -244,6 +248,7 @@ export class SocketDatabaseService {
     error?: string;
   }> {
     try {
+      const supabase = this.getClient();
       const { data, error } = await supabase
         .from('room_stats')
         .select('*')
@@ -268,6 +273,7 @@ export class SocketDatabaseService {
     error?: string;
   }> {
     try {
+      const supabase = this.getClient();
       // Find empty chat sessions older than 30 minutes
       const { data: emptySessions, error: findError } = await supabase
         .from('chat_sessions')
@@ -313,6 +319,7 @@ export class SocketDatabaseService {
     error?: string;
   }> {
     try {
+      const supabase = this.getClient();
       const { error } = await supabase.rpc('refresh_room_stats');
 
       if (error) {
@@ -323,6 +330,75 @@ export class SocketDatabaseService {
     } catch (error) {
       console.error('Error refreshing materialized views:', error);
       return { success: false, error: 'Database error' };
+    }
+  }
+
+  // Get room participants optimized
+  static async getRoomParticipants(shareCode: string): Promise<{
+    success: boolean;
+    room?: { id: string; name: string };
+    participants?: { display_name: string; joined_at: string; user_id: string }[];
+    error?: string;
+  }> {
+    try {
+      const supabase = this.getClient();
+      
+      // Get room info first
+      const { data: room, error: roomError } = await supabase
+        .from('rooms')
+        .select('id, name')
+        .eq('share_code', shareCode)
+        .single();
+
+      if (roomError || !room) {
+        return { success: false, error: 'Room not found' };
+      }
+
+      // Get participants
+      const { data: participants, error: participantsError } = await supabase
+        .from('room_participants')
+        .select('display_name, joined_at, user_id')
+        .eq('room_id', room.id)
+        .order('joined_at', { ascending: true });
+
+      if (participantsError) {
+        return { success: false, error: participantsError.message };
+      }
+
+      return { 
+        success: true, 
+        room,
+        participants: participants || []
+      };
+    } catch (error) {
+      console.error('Error getting room participants:', error);
+      return { success: false, error: 'Database error' };
+    }
+  }
+
+  // CRITICAL FIX: Check if user was removed from room without creating new clients
+  static async isUserRemovedFromRoom(roomId: string, userId: string): Promise<{ isRemoved: boolean; error?: string }> {
+    try {
+      const supabaseClient = getSupabaseClient();
+      if (!supabaseClient) {
+        return { isRemoved: false, error: 'Supabase client not available' };
+      }
+
+      const { data, error } = await supabaseClient
+        .from('removed_room_participants')
+        .select('id')
+        .eq('room_id', roomId)
+        .eq('removed_user_id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        return { isRemoved: false, error: error.message };
+      }
+
+      return { isRemoved: !!data };
+    } catch (error) {
+      console.error('Error checking user removal status:', error);
+      return { isRemoved: false, error: String(error) };
     }
   }
 }

@@ -8,25 +8,43 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created
 CREATE INDEX IF NOT EXISTS idx_room_messages_room_thread 
   ON room_messages(room_id, thread_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_room_participants_room_active 
-  ON room_participants(room_id, joined_at DESC) 
-  WHERE left_at IS NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'room_participants' AND column_name = 'left_at'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_room_participants_room_active 
+      ON room_participants(room_id, joined_at DESC) 
+      WHERE left_at IS NULL;
+  END IF;
+END
+$$;
 
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_updated 
   ON chat_sessions(user_id, updated_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_rooms_share_code_active 
-  ON rooms(share_code) 
-  WHERE expires_at > NOW();
+-- Avoid non-immutable predicate
+CREATE INDEX IF NOT EXISTS idx_rooms_share_code 
+  ON rooms(share_code);
 
 -- Optimize room lookup with composite index
 CREATE INDEX IF NOT EXISTS idx_rooms_share_code_expires 
   ON rooms(share_code, expires_at, max_participants);
 
 -- Add partial index for active room participants
-CREATE INDEX IF NOT EXISTS idx_room_participants_active 
-  ON room_participants(room_id, display_name, joined_at) 
-  WHERE left_at IS NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'room_participants' AND column_name = 'left_at'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_room_participants_active 
+      ON room_participants(room_id, display_name, joined_at) 
+      WHERE left_at IS NULL;
+  END IF;
+END
+$$;
 
 -- Optimize sidebar queries with user-specific indexes
 CREATE INDEX IF NOT EXISTS idx_user_documents_user_created 
@@ -71,7 +89,12 @@ BEGIN
   FROM rooms r
   INNER JOIN room_participants rp ON r.id = rp.room_id
   WHERE rp.user_id = user_id_param
-  AND rp.left_at IS NULL
+  AND (
+    NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'room_participants' AND column_name = 'left_at'
+    ) OR rp.left_at IS NULL
+  )
   AND r.expires_at > NOW()
   ORDER BY last_message_at DESC NULLS LAST;
 END;
@@ -135,13 +158,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- Add materialized view for frequently accessed room statistics
+-- Create a simple materialized view (idempotent on first creation)
 CREATE MATERIALIZED VIEW IF NOT EXISTS room_stats AS
 SELECT 
   r.id,
   r.share_code,
   r.name,
-  COUNT(DISTINCT rp.user_id) FILTER (WHERE rp.left_at IS NULL) as active_participants,
+  COUNT(DISTINCT rp.user_id) as active_participants,
   r.max_participants,
   MAX(rm.created_at) as last_message_at,
   COUNT(rm.id) as total_messages,
@@ -150,7 +173,6 @@ SELECT
 FROM rooms r
 LEFT JOIN room_participants rp ON r.id = rp.room_id
 LEFT JOIN room_messages rm ON r.id = rm.room_id
-WHERE r.expires_at > NOW()
 GROUP BY r.id, r.share_code, r.name, r.max_participants, r.expires_at, r.created_at;
 
 -- Create unique index on materialized view
@@ -191,8 +213,10 @@ CREATE TRIGGER room_participants_stats_refresh
 DROP POLICY IF EXISTS "Users can view their own chat messages" ON chat_messages;
 CREATE POLICY "Users can view their own chat messages" ON chat_messages
   FOR SELECT USING (
-    chat_session_id IN (
-      SELECT id FROM chat_sessions WHERE user_id = auth.uid()::text
+    EXISTS (
+      SELECT 1 FROM chat_sessions cs 
+      WHERE cs.id = chat_session_id 
+      AND cs.user_id = auth.uid()
     )
   );
 
@@ -200,9 +224,10 @@ CREATE POLICY "Users can view their own chat messages" ON chat_messages
 DROP POLICY IF EXISTS "Users can view messages in rooms they've joined" ON room_messages;
 CREATE POLICY "Users can view messages in rooms they've joined" ON room_messages
   FOR SELECT USING (
-    room_id IN (
-      SELECT room_id FROM room_participants 
-      WHERE user_id = auth.uid()::text AND left_at IS NULL
+    EXISTS (
+      SELECT 1 FROM room_participants rp 
+      WHERE rp.room_id = room_id 
+      AND rp.user_id = auth.uid()
     )
   );
 
@@ -210,9 +235,10 @@ CREATE POLICY "Users can view messages in rooms they've joined" ON room_messages
 DROP POLICY IF EXISTS "Users can view participants in rooms they've joined" ON room_participants;
 CREATE POLICY "Users can view participants in rooms they've joined" ON room_participants
   FOR SELECT USING (
-    room_id IN (
-      SELECT room_id FROM room_participants rp2
-      WHERE rp2.user_id = auth.uid()::text AND rp2.left_at IS NULL
+    EXISTS (
+      SELECT 1 FROM room_participants rp2
+      WHERE rp2.room_id = room_participants.room_id
+      AND rp2.user_id = auth.uid()
     )
   );
 

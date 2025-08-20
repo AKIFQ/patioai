@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { PerformanceMonitor } from '@/lib/monitoring/performanceMonitor';
 
 export async function GET(request: NextRequest) {

@@ -29,12 +29,12 @@ interface DashboardData {
     };
     performance: any;
   };
-  alerts: Array<{
+  alerts: {
     type: string;
     category: string;
     message: string;
     timestamp: string;
-  }>;
+  }[];
 }
 
 export default function MonitoringDashboard() {
@@ -84,13 +84,13 @@ export default function MonitoringDashboard() {
   const getStatusEmoji = (status: string) => {
     switch (status) {
       case 'healthy':
-        return '✅';
+return '';
       case 'warning':
-        return '⚠️';
+return '';
       case 'critical':
-        return '🚨';
+return '';
       default:
-        return '⚪';
+return '';
     }
   };
 
@@ -108,7 +108,7 @@ export default function MonitoringDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
         <span className="ml-2">Loading dashboard...</span>
       </div>
     );
@@ -119,7 +119,7 @@ export default function MonitoringDashboard() {
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
-            <span className="text-red-400 mr-2">⚠️</span>
+<span className="text-red-400 mr-2"></span>
             <div>
               <h3 className="text-sm font-medium text-red-800">Error loading dashboard</h3>
               <div className="mt-2 text-sm text-red-700">{error}</div>
@@ -146,7 +146,7 @@ export default function MonitoringDashboard() {
             onClick={fetchData}
             className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
           >
-            <span>🔄</span>
+<span></span>
             Refresh
           </button>
         </div>
@@ -174,7 +174,7 @@ export default function MonitoringDashboard() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm font-medium text-gray-500 mb-2">Active Connections</div>
           <div className="flex items-center gap-2">
-            <span className="text-2xl">👥</span>
+<span className="text-2xl"></span>
             <span className="text-2xl font-bold text-gray-900">
               {data.metrics.socket.activeConnections}
             </span>
@@ -203,7 +203,7 @@ export default function MonitoringDashboard() {
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">
-                      {alert.type === 'critical' ? '🚨' : alert.type === 'warning' ? '⚠️' : 'ℹ️'}
+{alert.type === 'critical' ? '' : alert.type === 'warning' ? '' : 'ℹ️'}
                     </span>
                     <span className="font-medium">{alert.message}</span>
                   </div>

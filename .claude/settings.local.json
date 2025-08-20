@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)",
+      "WebSearch",
+      "Bash(grep:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
+}

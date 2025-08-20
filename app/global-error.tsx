@@ -51,7 +51,6 @@ export default function GlobalError({ error }: GlobalErrorProps) {
               onClick={() => window.location.reload()}
               className="w-full"
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
               Try again
             </Button>
 
