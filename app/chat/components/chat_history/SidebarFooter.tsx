@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Settings, User, LogOut, Palette } from 'lucide-react';
+import { Settings, User, LogOut, Palette, CreditCard } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -103,7 +104,20 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           variant="ghost"
           className="w-full justify-start gap-3 h-12 px-3 touch-manipulation"
           style={{ minHeight: '44px' }}
+          asChild
         >
+          <Link href="/account">
+            <CreditCard className="h-4 w-4" />
+            <span className="text-sm">Account Settings</span>
+          </Link>
+        </Button>
+        
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-3 h-12 px-3 touch-manipulation"
+          style={{ minHeight: '44px' }}
+        >
+          <User className="h-4 w-4" />
           <span className="text-sm">Profile Settings</span>
         </Button>
         
@@ -186,7 +200,15 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           
           <DropdownMenuSeparator />
           
+          <DropdownMenuItem className="gap-2" asChild>
+            <Link href="/account">
+              <CreditCard className="h-4 w-4" />
+              Account Settings
+            </Link>
+          </DropdownMenuItem>
+          
           <DropdownMenuItem className="gap-2">
+            <User className="h-4 w-4" />
             Profile Settings
           </DropdownMenuItem>
           
