@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/server/supabase';
 import { createAdminClient } from '@/lib/server/admin';
+import { userTierService } from '@/lib/ai/userTierService';
+import { tierRateLimiter } from '@/lib/limits/rateLimiter';
+import { getTierLimits } from '@/lib/limits/tierLimits';
+import { memoryProtection } from '@/lib/monitoring/memoryProtection';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +14,14 @@ const supabaseAdmin = createAdminClient();
 
 export async function POST(req: NextRequest) {
   try {
+    // Check memory protection circuit breaker FIRST
+    if (memoryProtection.shouldBlockOperation()) {
+      return NextResponse.json(
+        { error: 'System under high load. Please try again in a few moments.' },
+        { status: 503 }
+      );
+    }
+
     // Check for Llama Cloud API key
     if (!process.env.LLAMA_CLOUD_API_KEY) {
       console.error('LLAMA_CLOUD_API_KEY is not configured');
@@ -26,6 +38,22 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    const userId = session.id;
+
+    // Get user tier and check file upload rate limits
+    const userSubscription = await userTierService.getUserTier(userId);
+    const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, 'file_uploads');
+    
+    if (!limiterCheck.allowed) {
+      return NextResponse.json(
+        { error: limiterCheck.reason || 'File upload rate limit exceeded. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
+    // Get tier limits for file size validation
+    const tierLimits = getTierLimits(userSubscription.tier as any);
 
     const { uploadedFiles } = await req.json();
 
@@ -47,6 +75,17 @@ export async function POST(req: NextRequest) {
             file: file.name,
             status: 'error',
             message: 'Download failed'
+          });
+          continue;
+        }
+
+        // Check file size against tier limit
+        const fileSizeMB = data.size / (1024 * 1024);
+        if (fileSizeMB > tierLimits.fileSizeMB!) {
+          results.push({
+            file: file.name,
+            status: 'error',
+            message: `File too large. Maximum ${tierLimits.fileSizeMB}MB allowed for ${userSubscription.tier} tier. File size: ${fileSizeMB.toFixed(2)}MB.`
           });
           continue;
         }
@@ -85,6 +124,16 @@ export async function POST(req: NextRequest) {
           status: 'error',
           message: 'Processing failed'
         });
+      }
+    }
+
+    // Increment file upload counter for each successful upload
+    const successfulUploads = results.filter(r => r.status === 'success').length;
+    if (successfulUploads > 0) {
+      try {
+        await tierRateLimiter.increment(userId, userSubscription.tier as any, 'file_uploads', successfulUploads);
+      } catch (error) {
+        console.warn('Failed to increment file upload counter:', error);
       }
     }
 

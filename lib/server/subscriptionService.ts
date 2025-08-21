@@ -3,7 +3,7 @@ import { cache } from 'react';
 import { createServerSupabaseClient } from '@/lib/server/server';
 import { getUserInfo } from '@/lib/server/supabase';
 import { userTierService } from '@/lib/ai/userTierService';
-import type { SubscriptionTier } from '@/lib/stripe/config';
+import type { SubscriptionTier } from '@/lib/stripe/server-config';
 
 export interface UserSubscriptionInfo {
   id: string;

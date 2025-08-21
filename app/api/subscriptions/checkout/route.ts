@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createCheckoutSession } from '@/lib/stripe/subscriptions';
-import type { SubscriptionTier } from '@/lib/stripe/config';
+import type { SubscriptionTier } from '@/lib/stripe/server-config';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

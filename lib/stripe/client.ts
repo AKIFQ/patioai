@@ -1,5 +1,5 @@
-import { getStripe } from './config';
-import type { SubscriptionTier } from './config';
+import { getStripe } from './client-config';
+import type { SubscriptionTier } from './client-config';
 
 /**
  * Client-side utility functions for Stripe integration
@@ -99,9 +99,8 @@ export const TIER_PRICING = {
     displayPrice: 'Free',
     features: [
       'Auto model selection',
-      'Gemini 2.0 Flash',
-      'DeepSeek R1 (opt-in reasoning)',
-      '2,000 reasoning msgs/mo',
+      'Smart routing between models',
+      'Basic AI models',
       '400 AI requests/month',
       '3 concurrent rooms',
       '5MB file uploads',
@@ -124,8 +123,8 @@ export const TIER_PRICING = {
     displayPrice: '$50/month',
     features: [
       'Everything in Basic',
-      'Claude 4 & GPT-4o access',
-      'O1-Preview reasoning',
+      'Premium AI models',
+      'Advanced reasoning models',
       '4,000 requests/month',
       '15 concurrent rooms',
       '50MB file uploads',

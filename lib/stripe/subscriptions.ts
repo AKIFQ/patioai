@@ -1,5 +1,5 @@
-import { stripe, STRIPE_CONFIG, getPriceIdForTier } from './config';
-import type { SubscriptionTier } from './config';
+import { stripe, STRIPE_CONFIG, getPriceIdForTier } from './server-config';
+import type { SubscriptionTier } from './server-config';
 import Stripe from 'stripe';
 
 export interface CreateCheckoutSessionParams {
@@ -44,7 +44,8 @@ export async function createCheckoutSession({
   const customer = await createOrRetrieveCustomer(userId, userEmail);
 
   const session = await stripe.checkout.sessions.create({
-    ...STRIPE_CONFIG,
+    mode: 'subscription',
+    payment_method_types: ['card'],
     customer: customer.id,
     line_items: [
       {
@@ -194,6 +195,6 @@ export async function createCustomerPortalSession(
  * Helper to get tier from price ID (imported from config but re-exported for convenience)
  */
 function getTierFromPriceId(priceId: string): SubscriptionTier {
-  const { getTierFromPriceId: configGetTier } = require('./config');
+  const { getTierFromPriceId: configGetTier } = require('./server-config');
   return configGetTier(priceId);
 }

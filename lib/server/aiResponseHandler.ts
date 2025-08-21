@@ -4,6 +4,10 @@ import { RoomPromptEngine } from '../ai/roomPromptEngine';
 import { ContextManager } from '../ai/contextManager';
 import { ModelRouter } from '../ai/modelRouter';
 import { openRouterService } from '../ai/openRouterService';
+import { userTierService } from '../ai/userTierService';
+import { tierRateLimiter } from '../limits/rateLimiter';
+import { getTierLimits } from '../limits/tierLimits';
+import { withMemoryProtection, memoryProtection } from '../monitoring/memoryProtection';
 
 interface AIResponseConfig {
   triggerWords: string[];
@@ -26,6 +30,11 @@ export class AIResponseHandler {
   private contextManager: ContextManager;
   private modelRouter: ModelRouter;
   private activeStreams: Map<string, AbortController> = new Map();
+
+  // Simple token estimation (roughly 4 characters per token)
+  private estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4);
+  }
 
   constructor(io: SocketIOServer, config: Partial<AIResponseConfig> = {}) {
     this.io = io;
@@ -236,6 +245,7 @@ this.io.to(`room:${shareCode}`).emit('user-typing', {
     prompt: string,
     roomName: string,
     participants: string[],
+    userId: string,
     modelId = 'gpt-4o',
     chatHistory: { role: 'user' | 'assistant', content: string }[] = [],
     reasoningMode = false
@@ -245,6 +255,56 @@ this.io.to(`room:${shareCode}`).emit('user-typing', {
     let fullReasoning = '';
     
     try {
+      // Check memory protection circuit breaker FIRST
+      if (memoryProtection.shouldBlockOperation()) {
+        this.io.to(`room:${shareCode}`).emit('ai-error', { 
+          error: 'System under high load. Please try again in a few moments.',
+          threadId,
+          systemOverload: true
+        });
+        return;
+      }
+
+      // Get user tier and check rate limits BEFORE processing
+      const userSubscription = await userTierService.getUserTier(userId);
+      const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, 'ai_requests');
+      
+      if (!limiterCheck.allowed) {
+        // Rate limit exceeded - notify user
+        this.io.to(`room:${shareCode}`).emit('ai-error', { 
+          error: limiterCheck.reason || 'Rate limit exceeded. Please try again later.',
+          threadId,
+          rateLimited: true
+        });
+        return;
+      }
+
+      // Check context window limits based on user tier
+      const tierLimits = getTierLimits(userSubscription.tier as any);
+      const currentPromptTokens = this.estimateTokens(prompt);
+      const historyTokens = chatHistory.reduce((total, msg) => total + this.estimateTokens(msg.content), 0);
+      const totalInputTokens = currentPromptTokens + historyTokens;
+
+      // Check per-message input token limit
+      if (currentPromptTokens > tierLimits.perMessageInputTokens!) {
+        this.io.to(`room:${shareCode}`).emit('ai-error', { 
+          error: `Message too long. Maximum ${tierLimits.perMessageInputTokens!.toLocaleString()} tokens allowed per message for ${userSubscription.tier} tier. Your message: ${currentPromptTokens.toLocaleString()} tokens.`,
+          threadId,
+          tokenLimitExceeded: true
+        });
+        return;
+      }
+
+      // Check total context window limit
+      if (totalInputTokens > tierLimits.contextWindowTokens!) {
+        this.io.to(`room:${shareCode}`).emit('ai-error', { 
+          error: `Context too large. Maximum ${tierLimits.contextWindowTokens!.toLocaleString()} tokens allowed for ${userSubscription.tier} tier. Current context: ${totalInputTokens.toLocaleString()} tokens.`,
+          threadId,
+          contextLimitExceeded: true
+        });
+        return;
+      }
+
       // Starting AI stream
       this.io.to(`room:${shareCode}`).emit('ai-stream-start', { threadId, timestamp: Date.now(), modelId });
 
@@ -736,6 +796,20 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
         modelUsed: routedModelId,
         usage: usageTotals
       });
+
+      // Track usage for room chat (same as personal chat)
+      const totalTokens = usageTotals.totalTokens || 0;
+      const estimatedCost = totalTokens * 0.00001; // Rough estimate
+      
+      try {
+        // Update user usage tracking
+        await userTierService.updateUsage(userId, totalTokens, estimatedCost, routedModelId, 'room');
+        await tierRateLimiter.increment(userId, userSubscription.tier as any, 'ai_requests', 1);
+        
+        console.log(`🏠 Room usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost for user ${userId}`);
+      } catch (error) {
+        console.error('Error tracking room chat usage:', error);
+      }
 
       // CRITICAL FIX: Save AI message to database AND broadcast to all users
       try {

@@ -98,6 +98,31 @@ export async function POST(
           { status: 429 }
         );
       }
+
+      // Enforce concurrent room limit for anonymous users (1 room max)
+      const { getClientIP, getAnonymousUserId } = await import('@/lib/security/anonymousRateLimit');
+      const ip = getClientIP(req);
+      const anonymousUserId = getAnonymousUserId(ip);
+
+      // Check how many rooms this anonymous user is currently in (by IP)
+      const { data: currentRooms, error: roomCheckError } = await supabase
+        .from('room_participants')
+        .select('room_id, rooms!inner(share_code)')
+        .like('session_id', `anon_${anonymousUserId.split('_')[1]}%`) // Match session IDs starting with anon_{hashed_ip}
+        .neq('room_id', room.id); // Exclude current room (in case of rejoining)
+
+      if (roomCheckError) {
+        console.error('Error checking anonymous user room count:', roomCheckError);
+      } else if (currentRooms && currentRooms.length >= 1) {
+        // Anonymous users can only be in 1 room at a time
+        return NextResponse.json(
+          { 
+            error: 'Anonymous users can only join one room at a time. Please leave your current room first.',
+            currentRoomCount: currentRooms.length
+          },
+          { status: 409 }
+        );
+      }
     }
 
     // ATOMIC OPERATION: Use upsert with capacity check and removal validation

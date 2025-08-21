@@ -42,7 +42,7 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
             <div>
               <h3 className="text-lg font-medium">Usage Overview</h3>
               <p className="text-sm text-muted-foreground/80">
-                Current month usage statistics
+                Current day usage statistics
               </p>
             </div>
           </div>
@@ -83,7 +83,7 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Monthly Cost</span>
+                  <span className="text-sm font-medium">Daily Cost</span>
                 </div>
                 <span className="text-sm text-muted-foreground">
                   ${usage.cost_spent.toFixed(2)} / ${usage.hard_limit.toFixed(2)}
@@ -114,13 +114,13 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
               <div className="space-y-1 text-sm text-amber-800">
                 {usagePercentage >= 75 && (
                   <p>
-                    You've used {usagePercentage}% of your monthly AI requests. 
+                    You've used {usagePercentage}% of your daily AI requests. 
                     {usagePercentage >= 90 && ' Consider upgrading to avoid service interruption.'}
                   </p>
                 )}
                 {costPercentage >= 75 && (
                   <p>
-                    You've spent {costPercentage}% of your monthly budget. 
+                    You've spent {costPercentage}% of your daily budget. 
                     {costPercentage >= 90 && ' You may be charged overage fees.'}
                   </p>
                 )}
@@ -149,9 +149,9 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
                 )}
               </div>
               <ul className="space-y-1 text-xs text-muted-foreground">
-                <li>• 400 AI requests/month</li>
-                <li>• Gemini 2.0 Flash</li>
-                <li>• DeepSeek R1 reasoning</li>
+                <li>• 25 AI requests/day</li>
+                <li>• Basic AI models</li>
+                <li>• Smart routing</li>
                 <li>• 3 concurrent rooms</li>
               </ul>
             </div>
@@ -170,8 +170,8 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
                 )}
               </div>
               <ul className="space-y-1 text-xs text-muted-foreground">
-                <li>• 1,500 AI requests/month</li>
-                <li>• Same models as Free</li>
+                <li>• 80 AI requests/day</li>
+                <li>• Enhanced model access</li>
                 <li>• 5 concurrent rooms</li>
                 <li>• Priority support</li>
               </ul>
@@ -191,8 +191,8 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
                 )}
               </div>
               <ul className="space-y-1 text-xs text-muted-foreground">
-                <li>• 4,000 AI requests/month</li>
-                <li>• Claude 4 & GPT-4o</li>
+                <li>• 200 AI requests/day</li>
+                <li>• Premium AI models</li>
                 <li>• 15 concurrent rooms</li>
                 <li>• Enterprise features</li>
               </ul>

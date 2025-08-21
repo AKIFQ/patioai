@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { stripe, STRIPE_WEBHOOK_SECRET, getTierFromPriceId } from '@/lib/stripe/config';
+import { stripe, STRIPE_WEBHOOK_SECRET, getTierFromPriceId } from '@/lib/stripe/server-config';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(

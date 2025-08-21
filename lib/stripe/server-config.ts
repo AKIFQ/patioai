@@ -15,6 +15,19 @@ export const STRIPE_PRICE_IDS = {
 // Webhook endpoint secret
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET!;
 
+// Stripe configuration constants
+export const STRIPE_CONFIG = {
+  currency: 'usd',
+  billing_cycle: 'month',
+  trial_period_days: 0,
+  allow_promotion_codes: true,
+  automatic_tax: {
+    enabled: false, // Enable this when you're ready for tax collection
+  },
+  payment_method_types: ['card'],
+  mode: 'subscription' as const,
+};
+
 // Validate required environment variables
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('STRIPE_SECRET_KEY is required');

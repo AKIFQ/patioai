@@ -228,7 +228,7 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
                   <h4 className="text-lg font-medium">Premium Plan</h4>
                   <p className="text-2xl font-medium text-amber-700">$50/month</p>
                   <p className="text-sm text-muted-foreground/80">
-                    Claude 4 & GPT-4o access + enterprise features
+                    Premium AI models + enterprise features
                   </p>
                 </div>
 
