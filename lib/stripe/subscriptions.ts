@@ -55,10 +55,6 @@ export async function createCheckoutSession({
     ],
     success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: cancelUrl,
-    metadata: {
-      userId,
-      tier,
-    },
     allow_promotion_codes: true,
     billing_address_collection: 'auto',
     customer_update: {
@@ -77,9 +73,9 @@ export async function createOrRetrieveCustomer(
   userId: string,
   email: string
 ): Promise<Stripe.Customer> {
-  // First, try to find existing customer by metadata
+  // First, try to find existing customer by email
   const existingCustomers = await stripe.customers.list({
-    metadata: { userId },
+    email: email,
     limit: 1,
   });
 
@@ -90,9 +86,7 @@ export async function createOrRetrieveCustomer(
   // Create new customer
   const customer = await stripe.customers.create({
     email,
-    metadata: {
-      userId,
-    },
+    name: `User ${userId}`, // Store userId in name for now
   });
 
   return customer;
