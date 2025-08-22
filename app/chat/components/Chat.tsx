@@ -513,13 +513,30 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorInstance = error instanceof Error ? error : new Error(errorMessage);
 
-      logger.chatError(messageId, errorInstance, {
-        roomContext: roomContext?.shareCode,
-        messagePreview: message.substring(0, 50)
-      });
+      // Log the error with detailed context
+      if (typeof logger?.chatError === 'function') {
+        logger.chatError(messageId, errorInstance, {
+          roomContext: roomContext?.shareCode || 'no-room',
+          messagePreview: message && typeof message === 'string' ? message.substring(0, 50) : 'No message content',
+          errorType: error.constructor.name,
+          errorStack: error instanceof Error ? error.stack : undefined
+        });
+      } else {
+        // Fallback logging if logger.chatError is not available
+        console.error(`Chat error [${messageId}]:`, errorInstance, {
+          roomContext: roomContext?.shareCode || 'no-room',
+          messagePreview: message && typeof message === 'string' ? message.substring(0, 50) : 'No message content',
+          errorType: error.constructor.name
+        });
+      }
 
-      // Use atomic state manager to handle error
-      finishSubmission(messageId, errorMessage);
+      try {
+        // Use atomic state manager to handle error
+        await finishSubmission(messageId, errorMessage);
+      } catch (finishError) {
+        // If finishSubmission fails, log it but don't crash
+        console.warn('Error calling finishSubmission:', finishError);
+      }
 
       if (roomContext) {
         toast.error('Failed to send message. Please try again.');
@@ -529,9 +546,16 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
         setIsRoomLoading(false);
       }
 
-      // Ensure submission is marked as finished (success case)
-      if (!submissionState.errors.length) {
-        finishSubmission(messageId);
+      // Only call finishSubmission if it hasn't been called in the catch block
+      // This prevents double-calling and ensures proper error state
+      try {
+        const hasError = submissionState?.errors?.some(err => err && err.includes(messageId)) || false;
+        if (!hasError) {
+          await finishSubmission(messageId);
+        }
+      } catch (finallyError) {
+        // If there's an error in the finally block, log it but don't crash
+        console.warn('Error in finally block:', finallyError);
       }
     }
   }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, setMessages, stableChatId, startSubmission, finishSubmission, submissionState.errors.length]);

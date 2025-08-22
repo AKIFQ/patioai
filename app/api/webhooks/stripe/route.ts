@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { stripe, STRIPE_WEBHOOK_SECRET, getTierFromPriceId } from '@/lib/stripe/server-config';
+import { syncStripeSubscriptionToDatabase } from '@/lib/stripe/subscriptions';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -30,7 +31,8 @@ async function buffer(readable: ReadableStream<Uint8Array>) {
 
 export async function POST(req: NextRequest) {
   const body = await buffer(req.body!);
-  const sig = headers().get('stripe-signature');
+  const headersList = await headers();
+  const sig = headersList.get('stripe-signature');
 
   if (!sig) {
     return NextResponse.json({ error: 'No signature' }, { status: 400 });
@@ -46,6 +48,21 @@ export async function POST(req: NextRequest) {
   }
 
   console.log(`Processing webhook event: ${event.type}`);
+
+  // Define allowed event types for security (based on t3dotgg recommendations)
+  const allowedEventTypes = [
+    'checkout.session.completed',
+    'customer.subscription.created',
+    'customer.subscription.updated',
+    'customer.subscription.deleted',
+    'invoice.payment_succeeded',
+    'invoice.payment_failed',
+  ];
+
+  if (!allowedEventTypes.includes(event.type)) {
+    console.log(`Ignoring unhandled event type: ${event.type}`);
+    return NextResponse.json({ received: true });
+  }
 
   try {
     switch (event.type) {
@@ -72,191 +89,204 @@ export async function POST(req: NextRequest) {
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object as Stripe.Invoice);
         break;
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error('Error processing webhook:', error);
+    // Return 500 to trigger Stripe retry
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-  const { userId, tier } = session.metadata || {};
-  
-  if (!userId || !tier) {
-    console.error('Missing metadata in checkout session:', session.id);
-    return;
+  try {
+    const { user_id: userId } = session.metadata || {};
+    const customerId = session.customer as string;
+    
+    // Validate customer ID is string (t3dotgg recommendation)
+    if (!customerId || typeof customerId !== 'string') {
+      console.error('Invalid customer ID in checkout session:', session.id);
+      return;
+    }
+
+    if (!userId) {
+      console.error('Missing user_id in checkout session metadata:', session.id);
+      return;
+    }
+
+    console.log(`Checkout completed for user ${userId}, customer: ${customerId}`);
+
+    // Use centralized sync function (t3dotgg best practice)
+    await syncStripeSubscriptionToDatabase(userId, customerId);
+    
+    console.log(`Successfully synced checkout data for user ${userId}`);
+  } catch (error) {
+    console.error('Error handling checkout completion:', error);
+    throw error; // Re-throw to trigger Stripe retry
   }
-
-  console.log(`Checkout completed for user ${userId}, tier: ${tier}`);
-
-  // Update user's tier in the database
-  await updateUserTier(userId, tier as 'basic' | 'premium', session.customer as string);
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
-  const customerId = subscription.customer as string;
-  const priceId = subscription.items.data[0]?.price.id;
-  const tier = getTierFromPriceId(priceId);
+  try {
+    const customerId = subscription.customer as string;
+    
+    // Validate customer ID is string (t3dotgg recommendation)
+    if (!customerId || typeof customerId !== 'string') {
+      console.error('Invalid customer ID in subscription:', subscription.id);
+      return;
+    }
 
-  console.log(`Subscription created for customer ${customerId}, tier: ${tier}`);
+    console.log(`Subscription created for customer ${customerId}`);
 
-  // Find user by customer ID and update their tier
-  const { data: users } = await supabase
-    .from('users')
-    .select('id')
-    .eq('stripe_customer_id', customerId)
-    .limit(1);
+    // Find user by customer ID
+    const { data: users } = await supabase
+      .from('users')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .limit(1);
 
-  if (users && users.length > 0) {
-    await updateUserTier(users[0].id, tier as 'basic' | 'premium', customerId, subscription.id);
+    if (users && users.length > 0) {
+      // Use centralized sync function
+      await syncStripeSubscriptionToDatabase(users[0].id, customerId);
+      console.log(`Successfully synced subscription creation for user ${users[0].id}`);
+    } else {
+      console.error(`No user found for customer ID: ${customerId}`);
+    }
+  } catch (error) {
+    console.error('Error handling subscription creation:', error);
+    throw error;
   }
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  const customerId = subscription.customer as string;
-  const priceId = subscription.items.data[0]?.price.id;
-  const tier = getTierFromPriceId(priceId);
-
-  console.log(`Subscription updated for customer ${customerId}, tier: ${tier}, status: ${subscription.status}`);
-
-  // Find user by customer ID
-  const { data: users } = await supabase
-    .from('users')
-    .select('id')
-    .eq('stripe_customer_id', customerId)
-    .limit(1);
-
-  if (users && users.length > 0) {
-    const userId = users[0].id;
+  try {
+    const customerId = subscription.customer as string;
     
-    // If subscription is cancelled or past due, potentially downgrade
-    if (subscription.status === 'canceled' || subscription.cancel_at_period_end) {
-      // Keep the tier until the period ends, but mark as cancelled
-      await updateUserSubscriptionStatus(userId, 'cancelled');
-    } else if (subscription.status === 'active') {
-      // Update tier and mark as active
-      await updateUserTier(userId, tier as 'basic' | 'premium', customerId, subscription.id);
-      await updateUserSubscriptionStatus(userId, 'active');
+    // Validate customer ID is string (t3dotgg recommendation)
+    if (!customerId || typeof customerId !== 'string') {
+      console.error('Invalid customer ID in subscription update:', subscription.id);
+      return;
     }
+
+    console.log(`Subscription updated for customer ${customerId}, status: ${subscription.status}`);
+
+    // Find user by customer ID
+    const { data: users } = await supabase
+      .from('users')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .limit(1);
+
+    if (users && users.length > 0) {
+      // Use centralized sync function - it handles all status changes
+      await syncStripeSubscriptionToDatabase(users[0].id, customerId);
+      console.log(`Successfully synced subscription update for user ${users[0].id}`);
+    } else {
+      console.error(`No user found for customer ID: ${customerId}`);
+    }
+  } catch (error) {
+    console.error('Error handling subscription update:', error);
+    throw error;
   }
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  const customerId = subscription.customer as string;
+  try {
+    const customerId = subscription.customer as string;
+    
+    // Validate customer ID is string (t3dotgg recommendation)
+    if (!customerId || typeof customerId !== 'string') {
+      console.error('Invalid customer ID in subscription deletion:', subscription.id);
+      return;
+    }
 
-  console.log(`Subscription deleted for customer ${customerId}`);
+    console.log(`Subscription deleted for customer ${customerId}`);
 
-  // Find user by customer ID and downgrade to free
-  const { data: users } = await supabase
-    .from('users')
-    .select('id')
-    .eq('stripe_customer_id', customerId)
-    .limit(1);
+    // Find user by customer ID
+    const { data: users } = await supabase
+      .from('users')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .limit(1);
 
-  if (users && users.length > 0) {
-    await updateUserTier(users[0].id, 'free', customerId, null);
+    if (users && users.length > 0) {
+      // Use centralized sync function - it will set tier to 'free' when no active subscription
+      await syncStripeSubscriptionToDatabase(users[0].id, customerId);
+      console.log(`Successfully synced subscription deletion for user ${users[0].id}`);
+    } else {
+      console.error(`No user found for customer ID: ${customerId}`);
+    }
+  } catch (error) {
+    console.error('Error handling subscription deletion:', error);
+    throw error;
   }
 }
 
 async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
-  const customerId = invoice.customer as string;
-  console.log(`Payment succeeded for customer ${customerId}, amount: ${invoice.amount_paid}`);
+  try {
+    const customerId = invoice.customer as string;
+    
+    // Validate customer ID is string (t3dotgg recommendation)
+    if (!customerId || typeof customerId !== 'string') {
+      console.error('Invalid customer ID in payment success:', invoice.id);
+      return;
+    }
 
-  // Log successful payment, reset any failed payment flags
-  await logPaymentEvent(customerId, 'succeeded', invoice.amount_paid || 0);
+    console.log(`Payment succeeded for customer ${customerId}, amount: ${invoice.amount_paid}`);
+
+    // Find user by customer ID and sync subscription state
+    const { data: users } = await supabase
+      .from('users')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .limit(1);
+
+    if (users && users.length > 0) {
+      // Use centralized sync function to ensure subscription state is current
+      await syncStripeSubscriptionToDatabase(users[0].id, customerId);
+      console.log(`Successfully synced subscription after payment success for user ${users[0].id}`);
+    } else {
+      console.error(`No user found for customer ID: ${customerId}`);
+    }
+  } catch (error) {
+    console.error('Error handling payment success:', error);
+    throw error;
+  }
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  const customerId = invoice.customer as string;
-  console.log(`Payment failed for customer ${customerId}, amount: ${invoice.amount_due}`);
-
-  // Log failed payment, potentially send notification
-  await logPaymentEvent(customerId, 'failed', invoice.amount_due || 0);
-}
-
-async function updateUserTier(
-  userId: string, 
-  tier: 'free' | 'basic' | 'premium', 
-  customerId: string,
-  subscriptionId?: string | null
-) {
-  // Update user's tier in the users table
-  const updates: any = {
-    subscription_tier: tier,
-    stripe_customer_id: customerId,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (subscriptionId) {
-    updates.stripe_subscription_id = subscriptionId;
-  }
-
-  const { error: userError } = await supabase
-    .from('users')
-    .update(updates)
-    .eq('id', userId);
-
-  if (userError) {
-    console.error('Error updating user tier:', userError);
-    return;
-  }
-
-  // Also update or create entry in user_tiers table
-  const { error: tierError } = await supabase
-    .from('user_tiers')
-    .upsert({
-      user_id: userId,
-      tier: tier,
-      updated_at: new Date().toISOString(),
-    });
-
-  if (tierError) {
-    console.error('Error updating user_tiers:', tierError);
-  }
-
-  console.log(`Updated user ${userId} to tier ${tier}`);
-}
-
-async function updateUserSubscriptionStatus(userId: string, status: 'active' | 'cancelled') {
-  const { error } = await supabase
-    .from('users')
-    .update({
-      subscription_status: status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', userId);
-
-  if (error) {
-    console.error('Error updating subscription status:', error);
-  }
-}
-
-async function logPaymentEvent(customerId: string, status: 'succeeded' | 'failed', amount: number) {
-  // Find user by customer ID
-  const { data: users } = await supabase
-    .from('users')
-    .select('id')
-    .eq('stripe_customer_id', customerId)
-    .limit(1);
-
-  if (users && users.length > 0) {
-    const { error } = await supabase
-      .from('payment_events')
-      .insert({
-        user_id: users[0].id,
-        stripe_customer_id: customerId,
-        event_type: status,
-        amount: amount,
-        created_at: new Date().toISOString(),
-      });
-
-    if (error) {
-      console.error('Error logging payment event:', error);
+  try {
+    const customerId = invoice.customer as string;
+    
+    // Validate customer ID is string (t3dotgg recommendation)
+    if (!customerId || typeof customerId !== 'string') {
+      console.error('Invalid customer ID in payment failure:', invoice.id);
+      return;
     }
+
+    console.log(`Payment failed for customer ${customerId}, amount: ${invoice.amount_due}`);
+
+    // Find user by customer ID and sync subscription state
+    // Note: For failed payments, the subscription status in Stripe will reflect the failure
+    const { data: users } = await supabase
+      .from('users')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .limit(1);
+
+    if (users && users.length > 0) {
+      // Use centralized sync function to ensure subscription state reflects payment failure
+      await syncStripeSubscriptionToDatabase(users[0].id, customerId);
+      console.log(`Successfully synced subscription after payment failure for user ${users[0].id}`);
+    } else {
+      console.error(`No user found for customer ID: ${customerId}`);
+    }
+  } catch (error) {
+    console.error('Error handling payment failure:', error);
+    throw error;
   }
 }
+
+// All helper functions now use centralized syncStripeSubscriptionToDatabase approach
+// This follows t3dotgg best practices for maintaining single source of truth

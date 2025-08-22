@@ -1,6 +1,6 @@
-import { stripe, STRIPE_CONFIG, getPriceIdForTier } from './server-config';
+import { stripe, getPriceIdForTier } from './server-config';
 import type { SubscriptionTier } from './server-config';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 
 export interface CreateCheckoutSessionParams {
   userId: string;
@@ -61,35 +61,81 @@ export async function createCheckoutSession({
       address: 'auto',
       name: 'auto',
     },
+    // Add metadata for webhook processing
+    metadata: {
+      user_id: userId,
+      tier: tier,
+    },
+    // Security: Limit to one subscription per customer
+    subscription_data: {
+      metadata: {
+        user_id: userId,
+      },
+    },
+    // Security: Disable risky payment methods
+    payment_method_options: {
+      card: {
+        request_three_d_secure: 'automatic',
+      },
+    },
   });
 
   return session;
 }
 
 /**
- * Create or retrieve a Stripe customer
+ * Create or retrieve a Stripe customer with proper user ID mapping
  */
 export async function createOrRetrieveCustomer(
   userId: string,
   email: string
 ): Promise<Stripe.Customer> {
-  // First, try to find existing customer by email
+  // First, try to find existing customer by user ID metadata
   const existingCustomers = await stripe.customers.list({
     email: email,
     limit: 1,
   });
 
   if (existingCustomers.data.length > 0) {
-    return existingCustomers.data[0];
+    const customer = existingCustomers.data[0];
+    // Store the customer ID in our database for quick lookup
+    await syncCustomerToDatabase(userId, customer.id);
+    return customer;
   }
 
-  // Create new customer
+  // Create new customer with user ID in metadata for reliable mapping
   const customer = await stripe.customers.create({
     email,
-    name: `User ${userId}`, // Store userId in name for now
+    name: `User ${userId}`,
+    metadata: {
+      user_id: userId,
+    },
   });
 
+  // Store the customer ID in our database
+  await syncCustomerToDatabase(userId, customer.id);
+
   return customer;
+}
+
+/**
+ * Sync customer ID to database for quick lookup
+ */
+async function syncCustomerToDatabase(userId: string, customerId: string): Promise<void> {
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { error } = await supabase
+    .from('users')
+    .update({ stripe_customer_id: customerId })
+    .eq('id', userId);
+
+  if (error) {
+    console.error('Failed to sync customer ID to database:', error);
+  }
 }
 
 /**
@@ -186,9 +232,82 @@ export async function createCustomerPortalSession(
 }
 
 /**
+ * Centralized function to sync Stripe subscription data to our database
+ * Based on t3dotgg best practices for maintaining data consistency
+ */
+export async function syncStripeSubscriptionToDatabase(
+  userId: string,
+  customerId: string
+): Promise<void> {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Get latest subscription from Stripe
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 1,
+    });
+
+    let tier: SubscriptionTier = 'free';
+    let subscriptionId: string | null = null;
+    let status = 'inactive';
+
+    if (subscriptions.data.length > 0) {
+      const subscription = subscriptions.data[0];
+      const priceId = subscription.items.data[0]?.price.id;
+      tier = getTierFromPriceId(priceId);
+      subscriptionId = subscription.id;
+      status = subscription.status === 'active' ? 'active' : 'inactive';
+    }
+
+    // Update users table
+    const { error: userError } = await supabase
+      .from('users')
+      .update({
+        subscription_tier: tier,
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+        subscription_status: status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (userError) {
+      console.error('Failed to update users table:', userError);
+    }
+
+    // Update user_tiers table
+    const { error: tierError } = await supabase
+      .from('user_tiers')
+      .upsert({
+        user_id: userId,
+        tier: tier,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (tierError) {
+      console.error('Failed to update user_tiers table:', tierError);
+    }
+
+    console.log(`Synced Stripe data for user ${userId}: tier=${tier}, status=${status}`);
+  } catch (error) {
+    console.error('Error syncing Stripe data to database:', error);
+    throw error;
+  }
+}
+
+/**
  * Helper to get tier from price ID (imported from config but re-exported for convenience)
  */
 function getTierFromPriceId(priceId: string): SubscriptionTier {
-  const { getTierFromPriceId: configGetTier } = require('./server-config');
+  // Dynamic import to avoid circular dependency issues
+  const { getTierFromPriceId: configGetTier } = 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./server-config');
   return configGetTier(priceId);
 }

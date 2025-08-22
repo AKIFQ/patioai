@@ -13,6 +13,7 @@ interface JoinRoomRequest {
   displayName: string;
   sessionId: string;
   password?: string;
+  previousSessionId?: string; // For identity migration: anonymous → authenticated
 }
 
 export async function POST(
@@ -22,7 +23,7 @@ export async function POST(
   try {
     const { shareCode } = await params;
     const body: JoinRoomRequest = await req.json();
-    const { displayName, sessionId, password } = body;
+    const { displayName, sessionId, password, previousSessionId } = body;
 
     // Validate input
     if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0) {
@@ -133,7 +134,8 @@ export async function POST(
         p_session_id: sessionId,
         p_display_name: displayName.trim(),
         p_user_id: userId,
-        p_password: password || null
+        p_password: password || null,
+        p_previous_session_id: previousSessionId || null
       });
 
     if (upsertError) {
@@ -209,7 +211,7 @@ export async function POST(
     }
 
     // Return room access and info
-    return NextResponse.json({
+    const response: any = {
       room: {
         id: room.id,
         name: room.name,
@@ -225,7 +227,15 @@ export async function POST(
       },
       participants: updatedParticipants || [],
       participantCount: updatedParticipants?.length || 0
-    });
+    };
+
+    // Include migration information if identity migration occurred
+    if (result && result.migration) {
+      response.migration = result.migration;
+      console.log('Identity migration completed:', result.migration);
+    }
+
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Error in room join:', error);
