@@ -66,7 +66,7 @@ export default function ExpiredRoomModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+              <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-muted-foreground font-medium">
             <Clock className="h-4 w-4" />

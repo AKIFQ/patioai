@@ -1043,7 +1043,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
       )}
 
       {/* Mobile Header with Hamburger Menu */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border h-12 shadow-sm w-full md:hidden">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-14 shadow-sm w-full md:hidden">
         <div className="flex items-center justify-between w-full h-full px-4">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1052,7 +1052,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               variant="ghost"
               size="icon"
               onClick={openMobileSidebar}
-              className="h-8 w-8 text-foreground hover:bg-transparent transition-colors bg-transparent border-0 shadow-none flex-shrink-0"
+              className="h-9 w-9 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
               aria-label="Open sidebar"
             >
               <Menu className="h-5 w-5" />
@@ -1063,19 +1063,19 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               <Image
                 src="/icons/icon-512x512.png"
                 alt="PatioAI"
-                width={20}
-                height={20}
-                className="rounded-sm"
+                width={24}
+                height={24}
+                className="rounded-md"
               />
             </div>
 
             {/* Room Name */}
-            <h1 className="text-base font-medium tracking-tight truncate">
+            <h1 className="text-lg font-semibold tracking-tight truncate text-foreground">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
             </h1>
           </div>
 
-          {/* Right side - Activity Indicators */}
+          {/* Right side - Activity Indicators + New Chat Button */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Mobile cross-thread activity indicators */}
             {roomContext && crossThreadActivities.some(activity =>
@@ -1088,10 +1088,23 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                   currentUser={roomContext.displayName}
                 />
               )}
-          </div>
 
-          {/* Right side - New Chat Button + compact settings (mobile only) */}
-          <div className="flex items-center gap-2">
+            {/* New Chat Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNewChat}
+              disabled={isCreatingNewChat}
+              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors rounded-lg"
+            >
+              {isCreatingNewChat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+            </Button>
+
+            {/* Room Settings (if in room) */}
             {roomContext && (
               <RoomSettingsModal
                 roomContext={roomContext}
@@ -1100,19 +1113,6 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                 onRoomUpdate={() => router.refresh()}
               />
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleNewChat}
-              disabled={isCreatingNewChat}
-              className="h-8 px-2 text-sm font-medium hover:bg-muted/50 transition-colors"
-            >
-              {isCreatingNewChat ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-            </Button>
           </div>
         </div>
       </div>
@@ -1200,15 +1200,43 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
       <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
         {/* Use realtime messages for room chats, regular messages for individual chats */}
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
-          <div className="flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4">
+          <div className="flex-1 flex flex-col justify-center items-center text-center px-4 sm:px-6 md:px-8">
             {roomContext ? (
-              <h2 className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
-                Welcome to {roomContext.roomName} — let's collaborate!
-              </h2>
+              <div className="flex flex-col items-center gap-4 max-w-sm">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <Image
+                    src="/icons/icon-512x512.png"
+                    alt="PatioAI"
+                    width={32}
+                    height={32}
+                    className="rounded-full"
+                  />
+                </div>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-foreground">
+                  Welcome to {roomContext.roomName}
+                </h2>
+                <p className="text-sm sm:text-base text-muted-foreground text-center">
+                  Let's collaborate! Start a conversation with your team.
+                </p>
+              </div>
             ) : (
-              <h2 className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
-                Ready to chat? Ask me anything!
-              </h2>
+              <div className="flex flex-col items-center gap-4 max-w-sm">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <Image
+                    src="/icons/icon-512x512.png"
+                    alt="PatioAI"
+                    width={32}
+                    height={32}
+                    className="rounded-full"
+                  />
+                </div>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-foreground">
+                  Ready to chat?
+                </h2>
+                <p className="text-sm sm:text-base text-muted-foreground text-center">
+                  Ask me anything! I'm here to help with your questions and tasks.
+                </p>
+              </div>
             )}
           </div>
         ) : (
@@ -1229,7 +1257,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         )}
       </div>
 
-      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4 bg-transparent">
+      <div className="sticky bottom-0 w-full z-5 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator
