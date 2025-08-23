@@ -8,6 +8,7 @@ import { userTierService } from '../ai/userTierService';
 import { tierRateLimiter } from '../limits/rateLimiter';
 import { getTierLimits } from '../limits/tierLimits';
 import { withMemoryProtection, memoryProtection } from '../monitoring/memoryProtection';
+import { roomTierService } from '../rooms/roomTierService';
 
 interface AIResponseConfig {
   triggerWords: string[];
@@ -265,9 +266,27 @@ this.io.to(`room:${shareCode}`).emit('user-typing', {
         return;
       }
 
-      // Get user tier and check rate limits BEFORE processing
+      // Check room-level AI limits FIRST (most restrictive)
+      console.log(`🔍 Checking room AI limits for ${shareCode} (reasoning: ${reasoningMode})`);
+      const roomLimitCheck = await roomTierService.checkRoomAILimits(shareCode, threadId, reasoningMode);
+      
+      if (!roomLimitCheck.allowed) {
+        console.log(`❌ Room AI limit exceeded:`, roomLimitCheck);
+        this.io.to(`room:${shareCode}`).emit('ai-error', { 
+          error: `Room ${reasoningMode ? 'reasoning' : 'AI'} response limit exceeded (${roomLimitCheck.currentUsage}/${roomLimitCheck.limit}). Resets ${roomLimitCheck.resetTime ? new Date(roomLimitCheck.resetTime).toLocaleTimeString() : 'soon'}.`,
+          threadId,
+          roomLimitExceeded: true,
+          limitType: 'room',
+          currentUsage: roomLimitCheck.currentUsage,
+          limit: roomLimitCheck.limit,
+          resetTime: roomLimitCheck.resetTime
+        });
+        return;
+      }
+
+      // Get user tier and check individual user rate limits
       const userSubscription = await userTierService.getUserTier(userId);
-      const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, 'ai_requests');
+      const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, reasoningMode ? 'reasoning_messages' : 'ai_requests');
       
       if (!limiterCheck.allowed) {
         // Rate limit exceeded - notify user
@@ -804,9 +823,17 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
       try {
         // Update user usage tracking
         await userTierService.updateUsage(userId, totalTokens, estimatedCost, routedModelId, 'room');
-        await tierRateLimiter.increment(userId, userSubscription.tier as any, 'ai_requests', 1);
+        await tierRateLimiter.increment(userId, userSubscription.tier as any, reasoningMode ? 'reasoning_messages' : 'ai_requests', 1);
         
         console.log(`🏠 Room usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost for user ${userId}`);
+        
+        // Increment room-level AI usage counter
+        const roomIncrementResult = await roomTierService.incrementRoomAIUsage(shareCode, reasoningMode);
+        if (roomIncrementResult.success) {
+          console.log(`🏠 Room ${reasoningMode ? 'reasoning' : 'AI'} usage incremented for ${shareCode}`);
+        } else {
+          console.warn(`Failed to increment room ${reasoningMode ? 'reasoning' : 'AI'} usage:`, roomIncrementResult.error);
+        }
       } catch (error) {
         console.error('Error tracking room chat usage:', error);
       }

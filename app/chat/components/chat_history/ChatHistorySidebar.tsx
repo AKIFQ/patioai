@@ -532,6 +532,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 height={24}
                 priority
                 className="opacity-90"
+                style={{ width: 'auto', height: 'auto' }}
               />
             </div>
             <Button

@@ -118,8 +118,8 @@ export function useChatSubmissionState() {
 
       const now = Date.now();
       
-      // Prevent rapid-fire submissions (debounce) - increased to 2 seconds for AI operations
-      if (now - currentState.lastSubmissionTime < 2000) {
+      // Prevent rapid-fire submissions (debounce) - 1 second for AI operations
+      if (now - currentState.lastSubmissionTime < 1000) {
         throw new Error('Please wait before sending another message');
       }
 
