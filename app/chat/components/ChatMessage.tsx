@@ -158,8 +158,8 @@ const ChatMessage = memo(({
                      shadow-[0_2px_12px_color-mix(in_srgb,var(--primary)_20%,transparent)]
                      hover:shadow-[0_4px_16px_color-mix(in_srgb,var(--primary)_25%,transparent)]`
                   : message.role === 'assistant'
-                    ? `bg-[#FFFFE0] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] text-foreground rounded-bl-lg
-                       border border-[#E6E6CC]/60 dark:border-[var(--forest-600)]/40 backdrop-blur-sm
+                    ? `bg-[#FFFFE0] dark:bg-[var(--forest-950)] text-foreground rounded-bl-lg
+                       border border-[#E6E6CC]/60 dark:border-0 backdrop-blur-sm
                        shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_8%,transparent)]
                        hover:shadow-[0_4px_12px_color-mix(in_srgb,var(--foreground)_12%,transparent)]`
                     : `bg-gradient-to-br from-[var(--cream-600)] to-[var(--cream-600)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] text-foreground rounded-bl-lg

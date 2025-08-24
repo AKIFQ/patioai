@@ -107,6 +107,8 @@
   --forest-600: #2B4A43;  /* Lighter surface */
   --forest-500: #324F47;  /* Elevated elements */
   --forest-400: #3A584E;  /* Lightest shade */
+  --forest-950: #0F1F1B;  /* Extra dark for sidebar */
+  --forest-920: #152722;  /* Very dark for chat background */
   
   /* Base Cream for text */
   --cream-base: #FFFFF0;
@@ -116,7 +118,7 @@
   --cream-faint: rgba(255, 255, 240, 0.3);
   
   /* Modern Design Tokens */
-  --background: var(--forest-700);
+  --background: var(--forest-920);
   --foreground: var(--cream-base);
   --card: var(--forest-600);
   --card-foreground: var(--cream-base);
@@ -137,7 +139,7 @@
   --ring: var(--cream-subtle);
   
   /* Sidebar Monochromatic */
-  --sidebar: var(--forest-900);
+  --sidebar: var(--forest-950);
   --sidebar-foreground: var(--cream-base);
   --sidebar-primary: var(--cream-base);
   --sidebar-primary-foreground: var(--forest-700);
@@ -147,11 +149,11 @@
   --sidebar-ring: var(--cream-subtle);
   
   /* Elevation System */
-  --elevation-0: var(--forest-700);
-  --elevation-1: var(--forest-600);
-  --elevation-2: var(--forest-500);
-  --elevation-3: var(--forest-400);
-  --elevation-4: var(--forest-800);
+  --elevation-0: var(--forest-800);
+  --elevation-1: var(--forest-700);
+  --elevation-2: var(--forest-600);
+  --elevation-3: var(--forest-500);
+  --elevation-4: var(--forest-400);
   --elevation-5: var(--forest-900);
 }
 
