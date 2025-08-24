@@ -2,6 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
+import { roomTierService } from '@/lib/rooms/roomTierService';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -329,6 +330,40 @@ console.log(` [${requestId}] Room chat API received:`, {
       });
     }
 
+    // Check room-level message limits BEFORE saving message
+    console.log(`[${requestId}] Checking room message limits for ${shareCode}`);
+    const roomMessageLimitCheck = await roomTierService.checkRoomMessageLimits(shareCode);
+    
+    if (!roomMessageLimitCheck.allowed) {
+      console.log(`[${requestId}] Room message limit exceeded:`, roomMessageLimitCheck);
+      return new NextResponse(JSON.stringify({ 
+        error: 'ROOM_MESSAGE_LIMIT_EXCEEDED',
+        reason: roomMessageLimitCheck.reason,
+        currentUsage: roomMessageLimitCheck.currentUsage,
+        limit: roomMessageLimitCheck.limit,
+        resetTime: roomMessageLimitCheck.resetTime
+      }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Check thread message limits
+    console.log(`[${requestId}] Checking thread message limits for ${threadId}`);
+    const threadLimitCheck = await roomTierService.checkThreadMessageLimit(shareCode, threadId);
+    
+    if (!threadLimitCheck.allowed) {
+      console.log(`[${requestId}] Thread message limit exceeded:`, threadLimitCheck);
+      return new NextResponse(JSON.stringify({ 
+        error: 'THREAD_MESSAGE_LIMIT_EXCEEDED',
+        messageCount: threadLimitCheck.messageCount,
+        limit: threadLimitCheck.limit
+      }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // Save user message to thread
 console.log(` [${requestId}] Saving user message: "${message.substring(0, 50)}" (triggerAI: ${triggerAI})`);
     const messageSaved = await saveRoomMessage(room.id, shareCode, threadId, displayName, message, false, undefined, undefined, room.name);
@@ -340,6 +375,19 @@ console.log(` [${requestId}] Failed to save user message`);
       });
     }
 console.log(` [${requestId}] User message saved successfully`);
+
+    // Increment room message usage counter after successful save
+    try {
+      const incrementResult = await roomTierService.incrementRoomMessageUsage(shareCode);
+      if (!incrementResult.success) {
+        console.warn(`[${requestId}] Failed to increment room message usage:`, incrementResult.error);
+      } else {
+        console.log(`[${requestId}] Room message usage incremented successfully`);
+      }
+    } catch (error) {
+      console.warn(`[${requestId}] Error incrementing room message usage:`, error);
+      // Don't fail the request if usage increment fails
+    }
 
     // Room chats always use triggerAI: false and handle AI via Socket.IO streaming
     // Return success after saving user message

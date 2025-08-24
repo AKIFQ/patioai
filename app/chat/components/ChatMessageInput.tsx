@@ -51,11 +51,12 @@ const FilePreview = React.memo(
     return (
       <div className="group/thumbnail relative">
         <div
-          className="rounded-lg overflow-hidden border-0.5 border-border-300/25 shadow-sm shadow-always-black/5 can-focus-within rounded-lg cursor-pointer hover:border-border-200/50 hover:shadow-always-black/10"
+          className="rounded-xl overflow-hidden border-0 shadow-elevation-1 hover:shadow-elevation-2 
+                     cursor-pointer transition-smooth bg-[var(--elevation-1)]"
           style={{ width: 140, height: 140, minWidth: 140, minHeight: 140 }}
         >
           <div
-            className="relative bg-bg-000"
+            className="relative bg-[var(--elevation-0)]"
             style={{ width: '100%', height: '100%' }}
           >
             {previewUrl && file.type === 'application/pdf' ? (
@@ -71,8 +72,8 @@ const FilePreview = React.memo(
                 }}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-                <FileIcon className="w-12 h-12 text-gray-400" />
+              <div className="w-full h-full flex items-center justify-center bg-[var(--elevation-2)]">
+                <FileIcon className="w-12 h-12 text-muted-foreground" />
               </div>
             )}
           </div>
@@ -82,8 +83,8 @@ const FilePreview = React.memo(
                 className="flex flex-row gap-1 shrink min-w-0"
                 style={{ opacity: 1 }}
               >
-                <div className="min-w-0 overflow-hidden h-[18px] flex flex-row items-center justify-center gap-0.5 px-1 border-0.5 border-border-300/25 shadow-sm rounded bg-bg-000/70 backdrop-blur-sm font-medium">
-                  <p className="uppercase truncate font-styrene text-text-300 text-[11px] leading-[13px] overflow-hidden">
+                <div className="min-w-0 overflow-hidden h-[18px] flex flex-row items-center justify-center gap-0.5 px-2 border-0 shadow-elevation-1 rounded-full bg-[var(--elevation-2)] backdrop-blur-sm font-medium">
+                  <p className="uppercase truncate text-caption text-muted-foreground text-[10px] leading-[12px] overflow-hidden">
                     pdf
                   </p>
                 </div>
@@ -96,7 +97,11 @@ const FilePreview = React.memo(
           variant="ghost"
           size="sm"
           onClick={onRemove}
-          className="transition-all hover:bg-bg-000/50 text-text-500 hover:text-text-200 group-focus-within/thumbnail:opacity-100 group-hover/thumbnail:opacity-100 opacity-0 w-5 h-5 absolute -top-2 -left-2 rounded-full border-0.5 border-border-300/25 bg-bg-000/90 backdrop-blur-sm flex items-center justify-center"
+          className="transition-smooth hover:bg-destructive/20 text-muted-foreground hover:text-destructive 
+                     group-focus-within/thumbnail:opacity-100 group-hover/thumbnail:opacity-100 opacity-0 
+                     w-6 h-6 absolute -top-2 -left-2 rounded-full border-0 
+                     bg-[var(--elevation-2)] backdrop-blur-sm flex items-center justify-center
+                     shadow-elevation-1 hover:shadow-elevation-2 hover:scale-105"
         >
           <X className="w-3 h-3" />
         </Button>
@@ -412,7 +417,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative w-full mb-1 rounded-2xl sm:rounded-xl overflow-hidden border border-border/40 shadow-sm flex flex-col transition-all duration-200 hover:border-border/60 focus-within:border-border/60 bg-background/80 backdrop-blur-md"
+        className="relative w-full mb-2 rounded-2xl sm:rounded-xl overflow-hidden border-0 
+                   shadow-elevation-2 hover:shadow-elevation-3 focus-within:shadow-elevation-4
+                   flex flex-col transition-smooth 
+                   bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
       >
         <input
           type="file"
@@ -429,12 +437,15 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
           disabled={isLoading}
-          className="w-full pt-4 pb-2 sm:pt-3 sm:pb-1.5 min-h-0 max-h-40 resize-none border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none bg-transparent text-base sm:text-sm"
+          className="w-full pt-5 pb-3 sm:pt-4 sm:pb-2 px-4 sm:px-3 min-h-0 max-h-40 resize-none 
+                     border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none 
+                     bg-transparent text-body sm:text-body placeholder:text-muted-foreground/60
+                     placeholder:font-medium"
           rows={1}
         />
 
         {/* Bottom controls row with buttons */}
-        <div className="flex px-3 sm:px-2.5 pb-2 pt-2 sm:pb-1 sm:pt-1.5 items-center gap-2 sm:gap-1.5 justify-between min-w-0">
+        <div className="flex px-4 sm:px-3 pb-3 pt-2 sm:pb-2 sm:pt-1.5 items-center gap-3 sm:gap-2 justify-between min-w-0">
           <div className="flex items-center gap-2 sm:gap-1.5 min-w-0 overflow-hidden">
             {/* Plus menu with Attach and Web search toggle */}
             <DropdownMenu>
@@ -443,15 +454,17 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 sm:h-7 w-8 sm:w-7 cursor-pointer text-xs rounded-lg sm:rounded-md flex items-center justify-center border border-border/40 bg-background/60 hover:bg-background/80 transition-colors flex-shrink-0"
+                  className="h-8 w-8 cursor-pointer rounded-full flex items-center justify-center 
+                             bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)] 
+                             transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
+                             hover:scale-105 active:scale-95 flex-shrink-0"
                   disabled={isLoading}
                   aria-label="More tools"
                 >
-                  <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                  <span className="hidden sm:inline">More</span>
+                  <Plus className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 border border-border/40 bg-background/90 backdrop-blur-md">
+              <DropdownMenuContent className="w-56 border-0 bg-[var(--elevation-2)] backdrop-blur-md shadow-elevation-3 rounded-xl">
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs">
                   <Paperclip className="h-3.5 w-3.5 mr-2" /> Attach file
                 </DropdownMenuItem>
@@ -557,10 +570,13 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     size="icon"
                     variant="ghost"
                     onClick={onStopAI}
-                    className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-colors border border-red-500/30 rounded-lg cursor-pointer group flex-shrink-0"
+                    className="h-8 w-8 rounded-full flex items-center justify-center 
+                               bg-destructive/10 hover:bg-destructive/20 
+                               transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
+                               hover:scale-105 active:scale-95 flex-shrink-0 group"
                     title="Stop AI response"
                   >
-                    <Square className="text-red-500 w-5 h-5 sm:w-4 sm:h-4 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                    <Square className="text-destructive w-4 h-4 group-hover:scale-105 transition-transform" />
                   </Button>
                 ) : (
                   <Button
@@ -569,10 +585,14 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     variant="ghost"
                     onClick={handlePromptSubmit}
                     disabled={!input.trim() && attachedFiles.length === 0}
-                    className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group flex-shrink-0"
+                    className="h-8 w-8 rounded-full flex items-center justify-center 
+                               bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40
+                               hover:from-amber-200 hover:to-orange-200 dark:hover:from-amber-800/50 dark:hover:to-orange-800/50
+                               transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
+                               hover:scale-105 active:scale-95 flex-shrink-0 group disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Send with AI response (Shift + Enter)"
                   >
-                    <Zap className="text-amber-500 w-5 h-5 sm:w-4 sm:h-4 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+                    <Zap className="text-amber-600 dark:text-amber-400 w-4 h-4 group-hover:scale-105 transition-transform" />
                   </Button>
                 )}
               </>
@@ -580,11 +600,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
 
             {/* Send button or spinner with matched sizing */}
             {isLoading ? (
-              <div className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background flex-shrink-0">
-                {/* Loading indicator */}
-                <div className="flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 sm:w-4 sm:h-4 md:w-6 md:h-6 text-primary animate-spin" />
-                </div>
+              <div className="h-8 w-8 rounded-full flex items-center justify-center 
+                             bg-[var(--elevation-3)] shadow-elevation-1 
+                             flex-shrink-0 animate-pulse">
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
               </div>
             ) : (
               <Button
@@ -593,10 +612,15 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                 size="icon"
                 variant="ghost"
                 disabled={!input.trim() && attachedFiles.length === 0}
-                className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-border/40 rounded-lg cursor-pointer flex-shrink-0"
+                className="h-8 w-8 rounded-full flex items-center justify-center 
+                           bg-gradient-to-br from-primary to-primary/90
+                           hover:from-primary/90 hover:to-primary/80
+                           transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
+                           hover:scale-105 active:scale-95 flex-shrink-0 group 
+                           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
               >
-                <Send className="text-primary w-5 h-5 sm:w-4 sm:h-4 md:w-6 md:h-6" />
+                <Send className="text-primary-foreground w-4 h-4 group-hover:scale-105 transition-transform" />
               </Button>
             )}
           </div>
@@ -604,8 +628,8 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
 
         {/* File previews section with clear visual separation */}
         {attachedFiles.length > 0 && (
-          <div className="overflow-hidden border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl">
-            <div className="flex flex-row overflow-x-auto gap-3 sm:gap-2 px-4 sm:px-3.5 py-3 sm:py-2.5">
+          <div className="overflow-hidden bg-[var(--elevation-3)] rounded-b-2xl backdrop-blur-sm">
+            <div className="flex flex-row overflow-x-auto gap-3 sm:gap-2 px-4 sm:px-3.5 py-3 sm:py-2.5 scrollbar-hide">
               {attachedFiles.map((file, index) => (
                 <FilePreview
                   key={file.name + index}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,6 +38,7 @@ interface CreateRoomModalProps {
 }
 
 export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: CreateRoomModalProps) {
+  const router = useRouter();
   const [roomName, setRoomName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createdRoom, setCreatedRoom] = useState<{ room: Room; shareableLink: string } | null>(null);
@@ -76,6 +78,27 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
       toast.error(error instanceof Error ? error.message : 'Failed to create room');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleJoinRoom = async (room: Room) => {
+    try {
+      // Join the room by navigating to it
+      // Generate a random display name or use stored user info
+      const storedDisplayName = localStorage.getItem('displayName');
+      const displayName = storedDisplayName || 'Anonymous';
+      const sessionId = `auth_${Date.now()}`;
+      
+      // Navigate to the room
+      router.push(`/chat/room/${room.shareCode}?displayName=${encodeURIComponent(displayName)}&sessionId=${encodeURIComponent(sessionId)}`);
+      
+      // Close modal and notify parent
+      handleClose();
+      
+      toast.success('Joined room successfully!');
+    } catch (error) {
+      console.error('Error joining room:', error);
+      toast.error('Failed to join room');
     }
   };
 
@@ -355,12 +378,18 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
               </div>
 
               <DialogFooter className="gap-2">
+                <Button 
+                  onClick={() => handleJoinRoom(createdRoom.room)}
+                  className="flex-1 bg-green-500 hover:bg-green-600"
+                >
+                  Join Room
+                </Button>
                 <Button
                   onClick={() => setShowShareModal(true)}
                   className="flex-1 bg-amber-500 hover:bg-amber-600"
                 >
                   <Share2 className="h-4 w-4 mr-2" />
-                  Share Room
+                  Share
                 </Button>
                 <Button onClick={handleClose} variant="outline">
                   Done
