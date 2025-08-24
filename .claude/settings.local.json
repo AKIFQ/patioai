@@ -5,7 +5,8 @@
       "Bash(npm run lint)",
       "Bash(npm run build:*)",
       "WebSearch",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm run dev:*)"
     ],
     "defaultMode": "acceptEdits"
   }

@@ -341,7 +341,7 @@ console.error('Error getting room participants:', error);
         callback({ success: true, message: 'AI invocation started' });
 
         // Cast to any to avoid potential type mismatches if typings lag behind implementation
-        (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, modelId || 'gpt-4o', chatHistory || [], reasoningMode || false);
+        (aiHandler as any).streamAIResponse(shareCode, threadId, prompt, roomName, participants, socket.userId, modelId || 'gpt-4o', chatHistory || [], reasoningMode || false);
       } catch (error) {
 console.error('Error invoking AI stream:', error);
 

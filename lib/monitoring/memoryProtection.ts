@@ -6,9 +6,9 @@ export class MemoryProtection {
   private protectionInterval: NodeJS.Timeout | null = null;
   
   // Emergency thresholds - more conservative
-  private readonly EMERGENCY_THRESHOLD = 900; // 900MB - emergency mode
-  private readonly CRITICAL_THRESHOLD = 768;  // 768MB - aggressive cleanup
-  private readonly EMERGENCY_DURATION = 60000; // 1 minute emergency mode
+  private readonly EMERGENCY_THRESHOLD = 3072; // 3GB - emergency mode (was 900MB)
+  private readonly CRITICAL_THRESHOLD = 2560;  // 2.5GB - aggressive cleanup (was 768MB)
+  private readonly EMERGENCY_DURATION = 120000; // 2 minutes emergency mode (was 1 minute)
 
   private constructor() {
     this.startProtectionMonitoring();

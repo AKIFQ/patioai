@@ -283,13 +283,44 @@ console.log(` [${requestId}] Room chat API received:`, {
       });
     }
 
-    // Simplified: Just check if display name is in the room
-    const { data: participant } = await supabase
-      .from('room_participants')
-      .select('display_name')
-      .eq('room_id', room.id)
-      .eq('display_name', displayName)
-      .single();
+    // Enhanced participant verification: Check both by user_id (if authenticated) and display name
+    let participant = null;
+    
+    // Try to get user session for authenticated users
+    try {
+      const { getSession } = await import('@/lib/server/supabase');
+      const session = await getSession();
+      
+      if (session?.id) {
+        // For authenticated users, check by user_id first
+        const { data: authParticipant } = await supabase
+          .from('room_participants')
+          .select('*')
+          .eq('room_id', room.id)
+          .eq('user_id', session.id)
+          .single();
+          
+        if (authParticipant) {
+          participant = authParticipant;
+          console.log(`User ${session.id} found by user_id, registered as: ${authParticipant.display_name}, requesting as: ${displayName}`);
+        }
+      }
+    } catch (sessionError) {
+      // Session lookup failed, will fall back to display name check
+      console.log('Session lookup failed, using display name check');
+    }
+    
+    // If not found by user_id, fall back to display name check (for anonymous users)
+    if (!participant) {
+      const { data: nameParticipant } = await supabase
+        .from('room_participants')
+        .select('*')
+        .eq('room_id', room.id)
+        .eq('display_name', displayName)
+        .single();
+        
+      participant = nameParticipant;
+    }
 
     if (!participant) {
       return new NextResponse('Not a participant in this room', {

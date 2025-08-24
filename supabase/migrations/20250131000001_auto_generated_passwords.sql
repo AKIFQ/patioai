@@ -3,8 +3,8 @@
 
 -- Add password generation timestamp and expiry fields
 ALTER TABLE "public"."rooms" 
-ADD COLUMN "password_generated_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN "password_expires_at" timestamp with time zone DEFAULT (CURRENT_TIMESTAMP + interval '36 hours');
+ADD COLUMN IF NOT EXISTS "password_generated_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN IF NOT EXISTS "password_expires_at" timestamp with time zone DEFAULT (CURRENT_TIMESTAMP + interval '36 hours');
 
 -- Add comment to explain the new fields
 COMMENT ON COLUMN "public"."rooms"."password_generated_at" IS 'Timestamp when the current password was generated';
@@ -218,7 +218,8 @@ BEGIN
 END;
 $$;
 
--- Create the trigger on the rooms table
+-- Create the trigger on the rooms table (drop and recreate to handle updates)
+DROP TRIGGER IF EXISTS "auto_generate_room_password_trigger" ON "public"."rooms";
 CREATE TRIGGER "auto_generate_room_password_trigger"
     BEFORE INSERT ON "public"."rooms"
     FOR EACH ROW

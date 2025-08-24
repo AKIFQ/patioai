@@ -2,7 +2,7 @@
 
 ## Color Palette
 **Brand Colors Only - No Blue**
-- Primary: Amber (`amber-500`, `amber-600`, `amber-50`)
+- Primary: Amber (`amber-500`, `amber-600`, `amber-50`) all shades of amber 
 - Success: Green (`green-500`, `green-600`, `green-50`) 
 - Danger: Red (`red-500`, `red-600`, `red-50`)
 - Neutral: Gray (`gray-500`, `gray-600`, `gray-50`, `muted-foreground`)
@@ -36,3 +36,42 @@
 - Circular backgrounds for app icons: `w-8 h-8 rounded-full bg-white`
 - No lock icons, shields, or security decorations
 - Modern social media icons in clean circular containers
+
+Minimalist Modern UI Style Guide
+Use this text to explain the design approach to any LLM:
+
+Design Philosophy: "Clean Minimalism with Purposeful Elements"
+
+Create interfaces that are visually clean, functionally focused, and aesthetically modern. Follow these principles:
+
+Visual Hierarchy:
+
+Use subtle typography weights (font-medium, not font-bold)
+Implement proper spacing with consistent gaps (gap-2, gap-3)
+Apply muted colors for secondary information (text-muted-foreground/80)
+Center content with max-width containers for better focus
+Interactive Elements:
+
+Use ghost/outline button variants for secondary actions
+Implement smooth transitions and hover states
+Keep button sizes compact (size="sm", h-8)
+Hide non-essential text on mobile (hidden sm:inline)
+Modern Aesthetics:
+
+Apply subtle backdrop blur effects (backdrop-blur-md)
+Use semi-transparent backgrounds (bg-background/80)
+Add gentle border opacity (border-border/40)
+Include purposeful micro-animations (animate-pulse for status)
+Content Strategy:
+
+Show only essential information
+Remove redundant labels and verbose text
+Use contextual indicators (colored dots, simple counters)
+Prioritize scannable, digestible content
+Responsive Design:
+
+Hide secondary details on smaller screens
+Maintain functionality across all device sizes
+Use flexible layouts with proper breakpoints
+Ensure touch-friendly interaction areas
+Key Principle: Every element should serve a clear purpose. If it doesn't add functional or aesthetic value, remove it. The interface should feel spacious, intentional, and effortless to use.
