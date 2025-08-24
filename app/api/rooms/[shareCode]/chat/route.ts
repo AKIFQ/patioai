@@ -2,6 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
+import { roomTierService } from '@/lib/rooms/roomTierService';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -283,17 +284,82 @@ console.log(` [${requestId}] Room chat API received:`, {
       });
     }
 
-    // Simplified: Just check if display name is in the room
-    const { data: participant } = await supabase
-      .from('room_participants')
-      .select('display_name')
-      .eq('room_id', room.id)
-      .eq('display_name', displayName)
-      .single();
+    // Enhanced participant verification: Check both by user_id (if authenticated) and display name
+    let participant = null;
+    
+    // Try to get user session for authenticated users
+    try {
+      const { getSession } = await import('@/lib/server/supabase');
+      const session = await getSession();
+      
+      if (session?.id) {
+        // For authenticated users, check by user_id first
+        const { data: authParticipant } = await supabase
+          .from('room_participants')
+          .select('*')
+          .eq('room_id', room.id)
+          .eq('user_id', session.id)
+          .single();
+          
+        if (authParticipant) {
+          participant = authParticipant;
+          console.log(`User ${session.id} found by user_id, registered as: ${authParticipant.display_name}, requesting as: ${displayName}`);
+        }
+      }
+    } catch (sessionError) {
+      // Session lookup failed, will fall back to display name check
+      console.log('Session lookup failed, using display name check');
+    }
+    
+    // If not found by user_id, fall back to display name check (for anonymous users)
+    if (!participant) {
+      const { data: nameParticipant } = await supabase
+        .from('room_participants')
+        .select('*')
+        .eq('room_id', room.id)
+        .eq('display_name', displayName)
+        .single();
+        
+      participant = nameParticipant;
+    }
 
     if (!participant) {
       return new NextResponse('Not a participant in this room', {
         status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Check room-level message limits BEFORE saving message
+    console.log(`[${requestId}] Checking room message limits for ${shareCode}`);
+    const roomMessageLimitCheck = await roomTierService.checkRoomMessageLimits(shareCode);
+    
+    if (!roomMessageLimitCheck.allowed) {
+      console.log(`[${requestId}] Room message limit exceeded:`, roomMessageLimitCheck);
+      return new NextResponse(JSON.stringify({ 
+        error: 'ROOM_MESSAGE_LIMIT_EXCEEDED',
+        reason: roomMessageLimitCheck.reason,
+        currentUsage: roomMessageLimitCheck.currentUsage,
+        limit: roomMessageLimitCheck.limit,
+        resetTime: roomMessageLimitCheck.resetTime
+      }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Check thread message limits
+    console.log(`[${requestId}] Checking thread message limits for ${threadId}`);
+    const threadLimitCheck = await roomTierService.checkThreadMessageLimit(shareCode, threadId);
+    
+    if (!threadLimitCheck.allowed) {
+      console.log(`[${requestId}] Thread message limit exceeded:`, threadLimitCheck);
+      return new NextResponse(JSON.stringify({ 
+        error: 'THREAD_MESSAGE_LIMIT_EXCEEDED',
+        messageCount: threadLimitCheck.messageCount,
+        limit: threadLimitCheck.limit
+      }), {
+        status: 429,
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -309,6 +375,19 @@ console.log(` [${requestId}] Failed to save user message`);
       });
     }
 console.log(` [${requestId}] User message saved successfully`);
+
+    // Increment room message usage counter after successful save
+    try {
+      const incrementResult = await roomTierService.incrementRoomMessageUsage(shareCode);
+      if (!incrementResult.success) {
+        console.warn(`[${requestId}] Failed to increment room message usage:`, incrementResult.error);
+      } else {
+        console.log(`[${requestId}] Room message usage incremented successfully`);
+      }
+    } catch (error) {
+      console.warn(`[${requestId}] Error incrementing room message usage:`, error);
+      // Don't fail the request if usage increment fails
+    }
 
     // Room chats always use triggerAI: false and handle AI via Socket.IO streaming
     // Return success after saving user message

@@ -29,6 +29,28 @@ interface RoomSocketHookProps {
     activeUsers: string[];
     typingUsers: string[];
   }[]) => void;
+  // Error handling callbacks
+  onAIError?: (error: AIErrorPayload) => void;
+  onRoomLimitReached?: (limitType: 'messages' | 'ai_responses' | 'threads', details: RoomLimitDetails) => void;
+}
+
+interface AIErrorPayload {
+  threadId?: string;
+  error: string;
+  details?: string;
+  timestamp?: number;
+  roomLimitExceeded?: boolean;
+  limitType?: 'room' | 'user';
+  currentUsage?: number;
+  limit?: number;
+  resetTime?: Date;
+}
+
+interface RoomLimitDetails {
+  currentUsage: number;
+  limit: number;
+  resetTime?: Date;
+  reason?: string;
 }
 
 export function useRoomSocket({
@@ -45,7 +67,9 @@ export function useRoomSocket({
   onReasoningChunk,
   onReasoningEnd,
   onContentStart,
-  onCrossThreadActivity
+  onCrossThreadActivity,
+  onAIError,
+  onRoomLimitReached
 }: RoomSocketHookProps) {
   const { socket, isConnected } = useSocket(displayName);
   const [connectionStatus, setConnectionStatus] = useState<string>('DISCONNECTED');
@@ -431,15 +455,28 @@ if (process.env.NODE_ENV === 'development') console.info(' ai-stream-end', { mod
         addTrackedListener('ai-stream-end', aiStreamEndHandler);
         
         // AI Error handling - crucial for fixing stuck "thinking" state
-        const aiErrorHandler = (payload: { threadId?: string; error: string; details?: string; timestamp?: number }) => {
+        const aiErrorHandler = (payload: AIErrorPayload) => {
           const threadId = payload.threadId || chatSessionId || '';
           if (chatSessionId && threadId !== chatSessionId) return;
           
-console.error(' AI Error received:', payload);
+console.error('🔥 AI Error received:', payload);
           setIsAIStreaming(false); // Stop the thinking state
           
-          // You can add additional error handling here, like showing a toast notification
-          // or calling an onError callback if needed
+          // Call the error callback if provided
+          if (onAIError) {
+            onAIError(payload);
+          }
+          
+          // Handle room limit reached specifically
+          if (payload.roomLimitExceeded && onRoomLimitReached) {
+            const limitType = payload.error.includes('reasoning') ? 'ai_responses' : 'ai_responses';
+            onRoomLimitReached(limitType, {
+              currentUsage: payload.currentUsage || 0,
+              limit: payload.limit || 0,
+              resetTime: payload.resetTime,
+              reason: payload.error
+            });
+          }
         };
         addTrackedListener('ai-error', aiErrorHandler);
 

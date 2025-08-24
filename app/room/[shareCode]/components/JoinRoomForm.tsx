@@ -153,16 +153,43 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
       // Use authenticated session ID if user is authenticated
       const finalSessionId = isAuthenticated ? `auth_${sessionId}` : sessionId;
       
+      // Detect identity migration: check if user was previously anonymous in this session
+      let previousSessionId = null;
+      if (isAuthenticated) {
+        // Check if there's a stored anonymous session for this room
+        const anonymousSessionKey = `anonymous_session_${shareCode}`;
+        const storedAnonymousSession = localStorage.getItem(anonymousSessionKey);
+        if (storedAnonymousSession && storedAnonymousSession !== finalSessionId) {
+          previousSessionId = storedAnonymousSession;
+          console.log('Identity migration detected:', { 
+            from: storedAnonymousSession, 
+            to: finalSessionId, 
+            displayName: displayName.trim() 
+          });
+        }
+      } else {
+        // Store anonymous session for potential future migration
+        const anonymousSessionKey = `anonymous_session_${shareCode}`;
+        localStorage.setItem(anonymousSessionKey, finalSessionId);
+      }
+      
+      const requestBody: any = { 
+        displayName: displayName.trim(),
+        sessionId: finalSessionId,
+        password: password.trim() || null
+      };
+      
+      // Include previous session ID for identity migration
+      if (previousSessionId) {
+        requestBody.previousSessionId = previousSessionId;
+      }
+      
       const response = await fetch(`/api/rooms/${shareCode}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          displayName: displayName.trim(),
-          sessionId: finalSessionId,
-          password: password.trim() || null
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -178,7 +205,16 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
       const data = await response.json();
       setRoomInfo(data);
       setHasJoined(true);
-      toast.success('Successfully joined the room!');
+      
+      // Handle identity migration response
+      if (data.migration) {
+        toast.success(`Welcome back! Your identity has been migrated from "${data.migration.from_display_name}" to "${data.migration.to_display_name}"`);
+        // Clean up the stored anonymous session since migration is complete
+        const anonymousSessionKey = `anonymous_session_${shareCode}`;
+        localStorage.removeItem(anonymousSessionKey);
+      } else {
+        toast.success('Successfully joined the room!');
+      }
       
       // Store display name for this session (only for non-authenticated users)
       if (!isAuthenticated) {

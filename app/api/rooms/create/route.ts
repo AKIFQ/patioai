@@ -16,7 +16,7 @@ function generateShareCode(): string {
   return randomBytes(6).toString('hex').toUpperCase(); // 12-character hex (48-bit)
 }
 
-async function getUserTier(userId: string): Promise<'free' | 'pro'> {
+async function getUserTier(userId: string): Promise<'free' | 'basic' | 'premium'> {
   const { data, error } = await supabase
     .from('user_tiers')
     .select('tier')
@@ -28,7 +28,7 @@ async function getUserTier(userId: string): Promise<'free' | 'pro'> {
     return 'free';
   }
   
-  return data.tier as 'free' | 'pro';
+  return data.tier as 'free' | 'basic' | 'premium';
 }
 
 export async function POST(req: NextRequest) {
@@ -72,17 +72,25 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const maxRooms = userTier === 'pro' ? 50 : 10;
-    if (existingRooms && existingRooms.length >= maxRooms) {
+    // Define tier-based room limits
+    const tierLimits = {
+      free: { maxRooms: 10, maxParticipants: 3, expirationDays: 7 },
+      basic: { maxRooms: 25, maxParticipants: 8, expirationDays: 14 },
+      premium: { maxRooms: 100, maxParticipants: 25, expirationDays: 30 }
+    };
+    
+    const currentTierLimits = tierLimits[userTier];
+    
+    if (existingRooms && existingRooms.length >= currentTierLimits.maxRooms) {
       return NextResponse.json(
-        { error: `Room limit reached (${maxRooms} active rooms maximum for ${userTier} tier)` },
+        { error: `Room limit reached (${currentTierLimits.maxRooms} active rooms maximum for ${userTier} tier)` },
         { status: 409 }
       );
     }
     
     // Set tier-based limits
-    const maxParticipants = userTier === 'pro' ? 20 : 5;
-    const expirationDays = userTier === 'pro' ? 30 : 7;
+    const maxParticipants = currentTierLimits.maxParticipants;
+    const expirationDays = currentTierLimits.expirationDays;
     
     // Generate unique share code
     let shareCode = generateShareCode();

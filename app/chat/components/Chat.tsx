@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import RoomSettingsModal from './RoomSettingsModal';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
+import RoomRateLimitHandler from './RoomRateLimitHandler';
 import CrossThreadActivity from './CrossThreadActivity';
 import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
@@ -342,13 +343,18 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
           });
 
           if (!response.ok) {
+            // Check for room rate limiting errors first
+            const rateLimitHandled = await handleRoomRateLimitError(response.clone());
+            if (rateLimitHandled) {
+              return; // Error was handled with toast notification
+            }
+            
             // Check if this is a "removed from room" error
             if (response.status === 403) {
               try {
                 const errorData = await response.json();
                 if (errorData.error === 'REMOVED_FROM_ROOM') {
                   // Show removal UI modal instead of redirecting
-                  // Debug logging removed
                   setRemovalRoomName(errorData.roomName || roomContext.roomName);
                   setShowRemovalUI(true);
                   return;
@@ -428,13 +434,18 @@ throw new Error(`API call failed: ${response.status}`);
           });
 
           if (!response.ok) {
+            // Check for room rate limiting errors first
+            const rateLimitHandled = await handleRoomRateLimitError(response.clone());
+            if (rateLimitHandled) {
+              return; // Error was handled with toast notification
+            }
+            
             // Check if this is a "removed from room" error
             if (response.status === 403) {
               try {
                 const errorData = await response.json();
                 if (errorData.error === 'REMOVED_FROM_ROOM') {
                   // Show removal UI modal instead of redirecting
-                  // Debug logging removed
                   setRemovalRoomName(errorData.roomName || roomContext.roomName);
                   setShowRemovalUI(true);
                   return;
@@ -513,25 +524,64 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorInstance = error instanceof Error ? error : new Error(errorMessage);
 
-      logger.chatError(messageId, errorInstance, {
-        roomContext: roomContext?.shareCode,
-        messagePreview: message.substring(0, 50)
-      });
+      // Log the error with detailed context
+      if (typeof logger?.chatError === 'function') {
+        logger.chatError(messageId, errorInstance, {
+          roomContext: roomContext?.shareCode || 'no-room',
+          messagePreview: message && typeof message === 'string' ? message.substring(0, 50) : 'No message content',
+          errorType: error.constructor.name,
+          errorStack: error instanceof Error ? error.stack : undefined
+        });
+      } else {
+        // Fallback logging if logger.chatError is not available
+        console.error(`Chat error [${messageId}]:`, errorInstance, {
+          roomContext: roomContext?.shareCode || 'no-room',
+          messagePreview: message && typeof message === 'string' ? message.substring(0, 50) : 'No message content',
+          errorType: error.constructor.name
+        });
+      }
 
-      // Use atomic state manager to handle error
-      finishSubmission(messageId, errorMessage);
+      try {
+        // Check for room rate limiting errors
+        if (error instanceof Error && error.message.includes('API call failed: 429')) {
+          // This is a rate limit error - the response should have been handled above
+          // Just finish the submission without additional error toast
+          await finishSubmission(messageId, 'Rate limit reached');
+          return;
+        }
+        
+        // Use atomic state manager to handle error
+        await finishSubmission(messageId, errorMessage);
+      } catch (finishError) {
+        // If finishSubmission fails, log it but don't crash
+        console.warn('Error calling finishSubmission:', finishError);
+      }
 
       if (roomContext) {
-        toast.error('Failed to send message. Please try again.');
+        // Check for specific rate limiting errors and provide professional messages
+        if (error instanceof Error && error.message.includes('Please wait before sending another message')) {
+          toast.error('Please slow down - wait a moment before sending another message');
+        } else if (error instanceof Error && error.message.includes('Submission already in progress')) {
+          toast.error('Message is already being sent - please wait');
+        } else {
+          toast.error('Failed to send message. Please try again.');
+        }
       }
     } finally {
       if (roomContext) {
         setIsRoomLoading(false);
       }
 
-      // Ensure submission is marked as finished (success case)
-      if (!submissionState.errors.length) {
-        finishSubmission(messageId);
+      // Only call finishSubmission if it hasn't been called in the catch block
+      // This prevents double-calling and ensures proper error state
+      try {
+        const hasError = submissionState?.errors?.some(err => err && err.includes(messageId)) || false;
+        if (!hasError) {
+          await finishSubmission(messageId);
+        }
+      } catch (finallyError) {
+        // If there's an error in the finally block, log it but don't crash
+        console.warn('Error in finally block:', finallyError);
       }
     }
   }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, setMessages, stableChatId, startSubmission, finishSubmission, submissionState.errors.length]);
@@ -704,6 +754,117 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     // Page reload should only happen for the specific user being removed
   }, []);
 
+  // Room rate limiting error handlers
+  const handleAIError = useCallback((error: any) => {
+    console.log('🚨 AI Error in Chat:', error);
+    
+    if (error.roomLimitExceeded) {
+      const resetTime = error.resetTime ? new Date(error.resetTime).toLocaleTimeString() : 'soon';
+      
+      if (error.error.includes('reasoning')) {
+        toast.error(`Room reasoning limit reached (${error.currentUsage}/${error.limit}). Resets at ${resetTime}.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+      } else {
+        toast.error(`Room AI response limit reached (${error.currentUsage}/${error.limit}). Resets at ${resetTime}.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+      }
+    } else {
+      // Handle other AI errors
+      toast.error(error.error || 'AI response failed. Please try again.');
+    }
+  }, [router]);
+
+  const handleRoomLimitReached = useCallback((limitType: 'messages' | 'ai_responses' | 'threads', details: any) => {
+    console.log('🚨 Room Limit Reached in Chat:', limitType, details);
+    
+    const resetTime = details.resetTime ? new Date(details.resetTime).toLocaleTimeString() : 'soon';
+    
+    switch (limitType) {
+      case 'messages':
+        toast.error(`Room message limit reached (${details.currentUsage}/${details.limit}). Resets at ${resetTime}.`, {
+          duration: 6000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+        break;
+        
+      case 'ai_responses':
+        toast.error(`Room AI response limit reached (${details.currentUsage}/${details.limit}). Resets at ${resetTime}.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+        break;
+        
+      case 'threads':
+        toast.warning(`Room thread limit reached (${details.currentUsage}/${details.limit}). Consider upgrading for more threads.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+        break;
+    }
+  }, [router]);
+
+  // Helper function to handle room rate limiting errors
+  const handleRoomRateLimitError = useCallback(async (response: Response): Promise<boolean> => {
+    if (response.status === 429) {
+      try {
+        const errorData = await response.json();
+        
+        if (errorData.error === 'ROOM_MESSAGE_LIMIT_EXCEEDED') {
+          const resetTime = errorData.resetTime ? new Date(errorData.resetTime).toLocaleTimeString() : 'soon';
+          toast.error(`Room message limit reached (${errorData.currentUsage}/${errorData.limit}). Resets at ${resetTime}.`, {
+            duration: 6000,
+            action: {
+              label: 'Upgrade Room',
+              onClick: () => router.push('/account')
+            }
+          });
+          return true; // Error handled
+        }
+        
+        if (errorData.error === 'THREAD_MESSAGE_LIMIT_EXCEEDED') {
+          toast.warning(`Thread limit reached (${errorData.messageCount}/${errorData.limit} messages). Consider starting a new thread for better AI responses.`, {
+            duration: 8000,
+            action: {
+              label: 'New Thread',
+              onClick: () => {
+                // Create new thread within the same room (same logic as handleNewChat)
+                const newThreadId = crypto.randomUUID();
+                const currentParams = new URLSearchParams(window.location.search);
+                currentParams.set('threadId', newThreadId);
+                currentParams.delete('chatSession');
+                const newUrl = `/chat/room/${roomContext?.shareCode}?${currentParams.toString()}`;
+                router.replace(newUrl);
+              }
+            }
+          });
+          return true; // Error handled
+        }
+      } catch (parseError) {
+        console.warn('Could not parse rate limit error response:', parseError);
+      }
+    }
+    return false; // Error not handled
+  }, [router, roomContext?.shareCode]);
+
   // Memoize realtime hook props to prevent unnecessary re-initializations
   const realtimeProps = useMemo(() => {
     if (!roomContext) return null;
@@ -721,7 +882,9 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
       onReasoningChunk: handleReasoningChunk,
       onReasoningEnd: handleReasoningEnd,
       onContentStart: handleContentStart,
-      onCrossThreadActivity: handleCrossThreadActivity
+      onCrossThreadActivity: handleCrossThreadActivity,
+      onAIError: handleAIError,
+      onRoomLimitReached: handleRoomLimitReached
     };
   }, [
     roomContext?.shareCode,
@@ -737,7 +900,10 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     handleReasoningChunk,
     handleReasoningEnd,
     handleContentStart,
-    handleCrossThreadActivity
+    handleCrossThreadActivity,
+    handleAIError,
+    handleRoomLimitReached,
+    handleRoomRateLimitError
   ]);
 
   // Initialize real-time hook with safe fallbacks

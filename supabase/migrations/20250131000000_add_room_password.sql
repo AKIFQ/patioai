@@ -2,7 +2,7 @@
 -- This makes password protection mandatory for all rooms
 
 ALTER TABLE "public"."rooms" 
-ADD COLUMN "password" text NOT NULL;
+ADD COLUMN IF NOT EXISTS "password" text NOT NULL;
 
 -- Add comment to explain the field
 COMMENT ON COLUMN "public"."rooms"."password" IS 'Required password for room access. All rooms must be password protected.';
