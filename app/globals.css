@@ -55,7 +55,7 @@
   --forest-faint: rgba(38, 65, 60, 0.2);
   
   /* Modern Design Tokens */
-  --background: var(--base-cream);
+  --background: var(--cream-100);
   --foreground: var(--forest-base);
   --card: var(--cream-100);
   --card-foreground: var(--forest-base);
@@ -76,7 +76,7 @@
   --ring: var(--forest-subtle);
   
   /* Sidebar Monochromatic */
-  --sidebar: var(--cream-300);
+  --sidebar: #FFFFE0;
   --sidebar-foreground: var(--forest-base);
   --sidebar-primary: var(--forest-base);
   --sidebar-primary-foreground: var(--base-cream);
@@ -86,7 +86,7 @@
   --sidebar-ring: var(--forest-subtle);
   
   /* Elevation System */
-  --elevation-0: var(--base-cream);
+  --elevation-0: var(--cream-100);
   --elevation-1: var(--cream-100);
   --elevation-2: var(--cream-200);
   --elevation-3: var(--cream-300);

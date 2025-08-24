@@ -152,18 +152,18 @@ const ChatMessage = memo(({
             <div 
               className={`
                 rounded-2xl transition-smooth shadow-elevation-1 hover:shadow-elevation-2
-                ${isMobile ? 'px-4 py-3 text-body' : 'px-3.5 py-2.5 text-small'}
+                ${isMobile ? 'px-3.5 py-2.5 text-body' : 'px-3 py-2 text-small'}
                 ${isUserMessage
                   ? `bg-primary text-primary-foreground rounded-br-lg 
                      shadow-[0_2px_12px_color-mix(in_srgb,var(--primary)_20%,transparent)]
                      hover:shadow-[0_4px_16px_color-mix(in_srgb,var(--primary)_25%,transparent)]`
                   : message.role === 'assistant'
                     ? `bg-[#FFFFE0] dark:bg-[var(--forest-950)] text-foreground rounded-bl-lg
-                       border border-[#E6E6CC]/60 dark:border-0 backdrop-blur-sm
+                       border border-[#E5E5E5] dark:border-0 backdrop-blur-sm
                        shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_8%,transparent)]
                        hover:shadow-[0_4px_12px_color-mix(in_srgb,var(--foreground)_12%,transparent)]`
-                    : `bg-gradient-to-br from-[var(--cream-600)] to-[var(--cream-600)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] text-foreground rounded-bl-lg
-                       border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] dark:border-0 backdrop-blur-sm
+                    : `bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] text-foreground rounded-bl-lg
+                       border border-[#E5E5E5] dark:border-0 backdrop-blur-sm
                        shadow-[0_1px_6px_color-mix(in_srgb,var(--foreground)_6%,transparent)]
                        hover:shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_10%,transparent)]`
                 }

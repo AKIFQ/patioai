@@ -420,7 +420,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
         className="relative w-full mb-2 rounded-2xl sm:rounded-xl overflow-hidden border-0 
                    shadow-elevation-2 hover:shadow-elevation-3 focus-within:shadow-elevation-4
                    flex flex-col transition-smooth 
-                   bg-gradient-to-br from-[var(--cream-600)] to-[var(--cream-600)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
+                   bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
       >
         <input
           type="file"

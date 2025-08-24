@@ -536,7 +536,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 width={100}
                 height={24}
                 priority
-                className="opacity-90"
+                className="opacity-90 dark:filter-none filter-[brightness(0.7)]"
                 style={{ width: 'auto', height: 'auto' }}
               />
             </div>
@@ -973,7 +973,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                   width={100}
                   height={24}
                   priority
-                  className="opacity-90"
+                  className="opacity-90 dark:filter-none filter-[brightness(0.7)]"
                 />
               </div>
               <Button
