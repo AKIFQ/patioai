@@ -52,7 +52,7 @@ const FilePreview = React.memo(
       <div className="group/thumbnail relative">
         <div
           className="rounded-lg overflow-hidden border-0.5 border-border-300/25 shadow-sm shadow-always-black/5 can-focus-within rounded-lg cursor-pointer hover:border-border-200/50 hover:shadow-always-black/10"
-          style={{ width: 120, height: 120, minWidth: 120, minHeight: 120 }}
+          style={{ width: 140, height: 140, minWidth: 140, minHeight: 140 }}
         >
           <div
             className="relative bg-bg-000"
@@ -412,7 +412,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative w-full mb-1 rounded-2xl overflow-hidden border border-border/40 shadow-sm flex flex-col transition-all duration-200 hover:border-border/60 focus-within:border-border/60 bg-background/80 backdrop-blur-md"
+        className="relative w-full mb-1 rounded-2xl sm:rounded-xl overflow-hidden border border-border/40 shadow-sm flex flex-col transition-all duration-200 hover:border-border/60 focus-within:border-border/60 bg-background/80 backdrop-blur-md"
       >
         <input
           type="file"
@@ -429,13 +429,13 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
           disabled={isLoading}
-          className="w-full pt-3 pb-1.5 min-h-0 max-h-40 resize-none border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none bg-transparent"
+          className="w-full pt-4 pb-2 sm:pt-3 sm:pb-1.5 min-h-0 max-h-40 resize-none border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none bg-transparent text-base sm:text-sm"
           rows={1}
         />
 
         {/* Bottom controls row with buttons */}
-        <div className="flex px-2 sm:px-2.5 pb-1 pt-1.5 items-center gap-1.5 sm:gap-2 justify-between min-w-0">
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
+        <div className="flex px-3 sm:px-2.5 pb-2 pt-2 sm:pb-1 sm:pt-1.5 items-center gap-2 sm:gap-1.5 justify-between min-w-0">
+          <div className="flex items-center gap-2 sm:gap-1.5 min-w-0 overflow-hidden">
             {/* Plus menu with Attach and Web search toggle */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -443,11 +443,11 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 sm:h-8 cursor-pointer text-xs rounded-md flex items-center gap-1.5 border border-border/40 bg-background/60 hover:bg-background/80 transition-colors flex-shrink-0"
+                  className="h-8 sm:h-7 w-8 sm:w-7 cursor-pointer text-xs rounded-lg sm:rounded-md flex items-center justify-center border border-border/40 bg-background/60 hover:bg-background/80 transition-colors flex-shrink-0"
                   disabled={isLoading}
                   aria-label="More tools"
                 >
-                  <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                   <span className="hidden sm:inline">More</span>
                 </Button>
               </DropdownMenuTrigger>
@@ -547,7 +547,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-1.5 flex-shrink-0">
             {/* Prompt button or Stop button */}
             {!isLoading && (
               <>
@@ -557,10 +557,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     size="icon"
                     variant="ghost"
                     onClick={onStopAI}
-                    className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-colors border border-red-500/30 rounded-lg cursor-pointer group flex-shrink-0"
+                    className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-colors border border-red-500/30 rounded-lg cursor-pointer group flex-shrink-0"
                     title="Stop AI response"
                   >
-                    <Square className="text-red-500 w-4 h-4 sm:w-5 sm:h-5 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                    <Square className="text-red-500 w-5 h-5 sm:w-4 sm:h-4 group-hover:text-red-600 dark:group-hover:text-red-400" />
                   </Button>
                 ) : (
                   <Button
@@ -569,10 +569,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     variant="ghost"
                     onClick={handlePromptSubmit}
                     disabled={!input.trim() && attachedFiles.length === 0}
-                    className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group flex-shrink-0"
+                    className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors border border-amber-500/30 rounded-lg cursor-pointer group flex-shrink-0"
                     title="Send with AI response (Shift + Enter)"
                   >
-                    <Zap className="text-amber-500 w-4 h-4 sm:w-5 sm:h-5 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+                    <Zap className="text-amber-500 w-5 h-5 sm:w-4 sm:h-4 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
                   </Button>
                 )}
               </>
@@ -580,10 +580,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
 
             {/* Send button or spinner with matched sizing */}
             {isLoading ? (
-              <div className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background flex-shrink-0">
+              <div className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 flex items-center justify-center border border-primary/30 cursor-pointer relative group rounded-lg bg-background flex-shrink-0">
                 {/* Loading indicator */}
                 <div className="flex items-center justify-center">
-                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary animate-spin" />
+                  <Loader2 className="w-5 h-5 sm:w-4 sm:h-4 md:w-6 md:h-6 text-primary animate-spin" />
                 </div>
               </div>
             ) : (
@@ -593,10 +593,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                 size="icon"
                 variant="ghost"
                 disabled={!input.trim() && attachedFiles.length === 0}
-                className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-border/40 rounded-lg cursor-pointer flex-shrink-0"
+                className="h-8 w-8 sm:h-7 sm:w-7 md:h-10 md:w-10 hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors border border-border/40 rounded-lg cursor-pointer flex-shrink-0"
                 title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
               >
-                <Send className="text-primary w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                <Send className="text-primary w-5 h-5 sm:w-4 sm:h-4 md:w-6 md:h-6" />
               </Button>
             )}
           </div>
@@ -605,7 +605,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
         {/* File previews section with clear visual separation */}
         {attachedFiles.length > 0 && (
           <div className="overflow-hidden border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl">
-            <div className="flex flex-row overflow-x-auto gap-2 sm:gap-3 px-3 sm:px-3.5 py-2 sm:py-2.5">
+            <div className="flex flex-row overflow-x-auto gap-3 sm:gap-2 px-4 sm:px-3.5 py-3 sm:py-2.5">
               {attachedFiles.map((file, index) => (
                 <FilePreview
                   key={file.name + index}

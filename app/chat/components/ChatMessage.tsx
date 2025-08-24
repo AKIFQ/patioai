@@ -5,7 +5,7 @@ import { type Message } from '@ai-sdk/react';
 import { Button } from '@/components/ui/button';
 import { Copy, Check, User, Bot } from 'lucide-react';
 import Image from 'next/image';
-import { SmartAvatar } from '@/components/ui/Avatar';
+import { SmartAvatar } from '@/components/ui/avatar';
 import MemoizedMarkdown from './tools/MemoizedMarkdown';
 import SourceView from './tools/SourceView';
 import StreamingReasoningUI from './StreamingReasoningUI';
@@ -15,6 +15,7 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // Enhanced message interface for room chats with reasoning support
 interface EnhancedMessage extends Message {
@@ -45,6 +46,7 @@ const ChatMessage = memo(({
   isReasoningComplete = false
 }: ChatMessageProps) => {
   const [isCopied, setIsCopied] = useState(false);
+  const isMobile = useIsMobile();
 
   const handleCopy = useCallback((content: string) => {
     window.navigator.clipboard.writeText(content);
@@ -101,23 +103,23 @@ const ChatMessage = memo(({
   const reasoningParts: any[] = [];
 
   return (
-    <li key={message.id} className="mb-2.5 last:mb-1 group" data-message-id={message.id} style={{ listStyle: 'none', paddingLeft: 0, marginLeft: 0 }}>
-      <div className={`flex gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'} items-end`} role={message.role}>
+    <li key={message.id} className={`mb-3 sm:mb-2.5 last:mb-2 sm:last:mb-1 group ${isMobile ? 'px-2' : ''}`} data-message-id={message.id} style={{ listStyle: 'none', paddingLeft: 0, marginLeft: 0 }}>
+      <div className={`flex gap-2 sm:gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'} items-end`} role={message.role}>
         {/* Avatar - only show on left side for non-current-user messages */}
         {!isUserMessage && (
-          <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center overflow-hidden">
+          <div className={`flex-shrink-0 ${isMobile ? 'w-8 h-8' : 'w-6 h-6'} rounded-full flex items-center justify-center overflow-hidden`}>
             {message.role === 'assistant' ? (
               <Image
                 src="/icons/icon-512x512.png"
                 alt="AI Assistant"
-                width={24}
-                height={24}
+                width={isMobile ? 32 : 24}
+                height={isMobile ? 32 : 24}
                 className="rounded-full"
               />
             ) : (
               <SmartAvatar 
                 user={{ id: message.senderName || 'other-user', email: `${message.senderName || 'other'}@example.com` }} 
-                size={24} 
+                size={isMobile ? 32 : 24} 
                 style="thumbs"
                 className="flex-shrink-0"
               />
@@ -126,7 +128,7 @@ const ChatMessage = memo(({
         )}
 
         {/* Message Content with Copy Button */}
-        <div className={`flex items-start gap-1 ${isUserMessage ? 'max-w-[90%] sm:max-w-[85%] md:max-w-[80%]' : 'max-w-[95%] sm:max-w-[90%] md:max-w-[85%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex items-start gap-2 sm:gap-1 ${isUserMessage ? 'max-w-[85%] sm:max-w-[85%] md:max-w-[80%]' : 'max-w-[90%] sm:max-w-[90%] md:max-w-[85%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 
@@ -148,17 +150,17 @@ const ChatMessage = memo(({
             )}
 
             <div 
-              className={`rounded-xl px-3 py-1.5 text-sm ${isUserMessage
-                ? 'bg-primary text-primary-foreground rounded-br-sm'
+              className={`rounded-2xl sm:rounded-xl ${isMobile ? 'px-4 py-3 text-base' : 'px-3 py-1.5 text-sm'} ${isUserMessage
+                ? 'bg-primary text-primary-foreground rounded-br-md sm:rounded-br-sm'
                 : message.role === 'assistant'
-                  ? 'bg-amber-50 dark:bg-amber-950/30 text-foreground rounded-bl-sm border border-amber-200 dark:border-amber-800/50'
-                  : 'bg-muted text-foreground rounded-bl-sm border border-border/50'
+                  ? 'bg-amber-50 dark:bg-amber-950/30 text-foreground rounded-bl-md sm:rounded-bl-sm border border-amber-200 dark:border-amber-800/50'
+                  : 'bg-muted text-foreground rounded-bl-md sm:rounded-bl-sm border border-border/50'
                 }`}
               data-message-content={message.id}
             >
               {/* Render text parts first (main message content) */}
               {textParts.length > 0 ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1">
+                <div className={`prose ${isMobile ? 'prose-base' : 'prose-sm'} max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1`}>
                   {textParts.map((part, partIndex) => (
                     <MemoizedMarkdown
                       key={`text-${partIndex}`}
@@ -188,8 +190,6 @@ const ChatMessage = memo(({
                 ))}
             </div>
 
-
-
             {/* Sources (only for assistant messages) - temporarily disabled due to type issues */}
             {false && !isUserMessage && (
               <div className="mt-1">
@@ -202,14 +202,14 @@ const ChatMessage = memo(({
           <div className="flex items-center">
             <Button
               variant="ghost"
-              size="sm"
+              size={isMobile ? "default" : "sm"}
               onClick={() => handleCopy(cleanContent || '')}
-              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"
+              className={`${isMobile ? 'h-8 w-8' : 'h-6 w-6'} p-0 opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity`}
             >
               {isCopied ? (
-                <Check className="w-3 h-3" />
+                <Check className={`${isMobile ? 'w-4 h-4' : 'w-3 h-3'}`} />
               ) : (
-                <Copy className="w-3 h-3" />
+                <Copy className={`${isMobile ? 'w-4 h-4' : 'w-3 h-3'}`} />
               )}
             </Button>
           </div>
@@ -219,7 +219,7 @@ const ChatMessage = memo(({
         {isUserMessage && (
           <SmartAvatar 
             user={{ id: 'user', email: 'user@example.com' }} 
-            size={24} 
+            size={isMobile ? 32 : 24} 
             style="thumbs"
             className="flex-shrink-0"
           />
@@ -228,11 +228,11 @@ const ChatMessage = memo(({
 
       {/* Sender name and timestamp - positioned below with proper indentation */}
       {isRoomChat && message.senderName && message.senderName !== 'AI Assistant' && !isUserMessage && (
-        <div className={`flex items-center gap-1.5 mt-0.5 ${isUserMessage ? 'justify-end pr-8' : 'justify-start pl-8'}`}>
-          <span className="text-[10px] font-medium text-muted-foreground/80">
+        <div className={`flex items-center gap-2 sm:gap-1.5 mt-1 sm:mt-0.5 ${isUserMessage ? 'justify-end pr-10 sm:pr-8' : 'justify-start pl-10 sm:pl-8'}`}>
+          <span className={`${isMobile ? 'text-xs' : 'text-[10px]'} font-medium text-muted-foreground/80`}>
             {message.senderName}
           </span>
-          <span className="text-[9px] text-muted-foreground/60">
+          <span className={`${isMobile ? 'text-xs' : 'text-[9px]'} text-muted-foreground/60`}>
             {message.createdAt
               ? new Date(message.createdAt).toLocaleTimeString([], {
                   hour: '2-digit',
