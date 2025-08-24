@@ -103,7 +103,7 @@ const ChatMessage = memo(({
   const reasoningParts: any[] = [];
 
   return (
-    <li key={message.id} className={`mb-3 sm:mb-2.5 last:mb-2 sm:last:mb-1 group ${isMobile ? 'px-2' : ''}`} data-message-id={message.id} style={{ listStyle: 'none', paddingLeft: 0, marginLeft: 0 }}>
+    <li key={message.id} className={`mb-6 sm:mb-4 last:mb-4 sm:last:mb-3 group ${isMobile ? 'px-3' : 'px-1'}`} data-message-id={message.id} style={{ listStyle: 'none', paddingLeft: 0, marginLeft: 0 }}>
       <div className={`flex gap-2 sm:gap-2 ${isUserMessage ? 'justify-end' : 'justify-start'} items-end`} role={message.role}>
         {/* Avatar - only show on left side for non-current-user messages */}
         {!isUserMessage && (
@@ -128,7 +128,7 @@ const ChatMessage = memo(({
         )}
 
         {/* Message Content with Copy Button */}
-        <div className={`flex items-start gap-2 sm:gap-1 ${isUserMessage ? 'max-w-[85%] sm:max-w-[85%] md:max-w-[80%]' : 'max-w-[90%] sm:max-w-[90%] md:max-w-[85%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex items-start gap-2 sm:gap-1 ${isUserMessage ? 'max-w-[72%] sm:max-w-[70%] md:max-w-[65%]' : 'max-w-[78%] sm:max-w-[76%] md:max-w-[70%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 
@@ -150,17 +150,29 @@ const ChatMessage = memo(({
             )}
 
             <div 
-              className={`rounded-2xl sm:rounded-xl ${isMobile ? 'px-4 py-3 text-base' : 'px-3 py-1.5 text-sm'} ${isUserMessage
-                ? 'bg-primary text-primary-foreground rounded-br-md sm:rounded-br-sm'
-                : message.role === 'assistant'
-                  ? 'bg-amber-50 dark:bg-amber-950/30 text-foreground rounded-bl-md sm:rounded-bl-sm border border-amber-200 dark:border-amber-800/50'
-                  : 'bg-muted text-foreground rounded-bl-md sm:rounded-bl-sm border border-border/50'
-                }`}
+              className={`
+                rounded-2xl transition-smooth shadow-elevation-1 hover:shadow-elevation-2
+                ${isMobile ? 'px-4 py-3 text-body' : 'px-3.5 py-2.5 text-small'}
+                ${isUserMessage
+                  ? `bg-primary text-primary-foreground rounded-br-lg 
+                     shadow-[0_2px_12px_color-mix(in_srgb,var(--primary)_20%,transparent)]
+                     hover:shadow-[0_4px_16px_color-mix(in_srgb,var(--primary)_25%,transparent)]`
+                  : message.role === 'assistant'
+                    ? `bg-[#FFFFE0] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] text-foreground rounded-bl-lg
+                       border border-[#E6E6CC]/60 dark:border-[var(--forest-600)]/40 backdrop-blur-sm
+                       shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_8%,transparent)]
+                       hover:shadow-[0_4px_12px_color-mix(in_srgb,var(--foreground)_12%,transparent)]`
+                    : `bg-gradient-to-br from-[var(--cream-600)] to-[var(--cream-600)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] text-foreground rounded-bl-lg
+                       border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] dark:border-0 backdrop-blur-sm
+                       shadow-[0_1px_6px_color-mix(in_srgb,var(--foreground)_6%,transparent)]
+                       hover:shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_10%,transparent)]`
+                }
+              `}
               data-message-content={message.id}
             >
               {/* Render text parts first (main message content) */}
               {textParts.length > 0 ? (
-                <div className={`prose ${isMobile ? 'prose-base' : 'prose-sm'} max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1`}>
+                <div className={`prose ${isMobile ? 'prose-base' : 'prose-sm'} max-w-none dark:prose-invert prose-p:my-1 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1`}>
                   {textParts.map((part, partIndex) => (
                     <MemoizedMarkdown
                       key={`text-${partIndex}`}
@@ -198,13 +210,20 @@ const ChatMessage = memo(({
             )}
           </div>
 
-          {/* Copy button - positioned to the side of the message bubble */}
+          {/* Modern floating copy button */}
           <div className="flex items-center">
             <Button
               variant="ghost"
               size={isMobile ? "default" : "sm"}
               onClick={() => handleCopy(cleanContent || '')}
-              className={`${isMobile ? 'h-8 w-8' : 'h-6 w-6'} p-0 opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity`}
+              className={`
+                ${isMobile ? 'h-8 w-8' : 'h-6 w-6'} p-0 rounded-full
+                opacity-0 group-hover:opacity-80 hover:opacity-100 
+                transition-all duration-200 hover:scale-105
+                bg-[var(--elevation-3)] hover:bg-[var(--elevation-4)]
+                shadow-elevation-1 hover:shadow-elevation-2
+                border-0 backdrop-blur-sm
+              `}
             >
               {isCopied ? (
                 <Check className={`${isMobile ? 'w-4 h-4' : 'w-3 h-3'}`} />
@@ -226,13 +245,14 @@ const ChatMessage = memo(({
         )}
       </div>
 
-      {/* Sender name and timestamp - positioned below with proper indentation */}
+      {/* Enhanced sender name and timestamp with modern typography */}
       {isRoomChat && message.senderName && message.senderName !== 'AI Assistant' && !isUserMessage && (
-        <div className={`flex items-center gap-2 sm:gap-1.5 mt-1 sm:mt-0.5 ${isUserMessage ? 'justify-end pr-10 sm:pr-8' : 'justify-start pl-10 sm:pl-8'}`}>
-          <span className={`${isMobile ? 'text-xs' : 'text-[10px]'} font-medium text-muted-foreground/80`}>
+        <div className={`flex items-center gap-2 sm:gap-1.5 mt-1.5 sm:mt-1 ${isUserMessage ? 'justify-end pr-10 sm:pr-8' : 'justify-start pl-10 sm:pl-8'}`}>
+          <span className={`text-[10px] font-semibold uppercase tracking-wide text-gradient opacity-90`}>
             {message.senderName}
           </span>
-          <span className={`${isMobile ? 'text-xs' : 'text-[9px]'} text-muted-foreground/60`}>
+          <div className="w-1 h-1 rounded-full bg-muted-foreground/40"></div>
+          <span className={`text-[10px] text-muted-foreground/70 tracking-wider`}>
             {message.createdAt
               ? new Date(message.createdAt).toLocaleTimeString([], {
                   hour: '2-digit',

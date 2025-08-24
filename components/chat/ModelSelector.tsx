@@ -48,16 +48,16 @@ export function ModelSelector({
 
   const getCostBadge = (model: ModelInfo) => {
     const colors = {
-      free: 'bg-green-100 text-green-800',
-      'ultra-low': 'bg-blue-100 text-blue-800',
-      low: 'bg-yellow-100 text-yellow-800',
-      medium: 'bg-orange-100 text-orange-800',
-      high: 'bg-red-100 text-red-800',
-      premium: 'bg-purple-100 text-purple-800'
+      free: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+      'ultra-low': 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300',
+      low: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+      medium: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
+      high: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
+      premium: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
     };
 
     return (
-      <Badge className={colors[model.costTier]}>
+      <Badge className={`${colors[model.costTier]} border-0 shadow-elevation-1 rounded-full text-xs font-medium`}>
         {model.costTier === 'free' ? 'Free' : `$${model.inputCost.toFixed(4)}/1K`}
       </Badge>
     );
@@ -68,12 +68,14 @@ export function ModelSelector({
     return (
       <div className="flex items-center gap-2">
         <Select value="auto" onValueChange={() => {}}>
-          <SelectTrigger className="h-8 px-2 text-xs rounded-md border border-border/40 bg-background/60 hover:bg-background/80 w-28">
+          <SelectTrigger className="h-8 px-3 text-xs rounded-full border-0 
+                                            bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)]
+                                            transition-smooth shadow-elevation-1 hover:shadow-elevation-2 w-20">
             <SelectValue>
               <span className="text-xs">Auto</span>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="w-40">
+          <SelectContent className="w-40 border-0 bg-[var(--elevation-2)] backdrop-blur-md shadow-elevation-3 rounded-xl">
             <SelectItem value="auto">
               <span className="text-sm">Auto</span>
             </SelectItem>
@@ -91,7 +93,8 @@ export function ModelSelector({
   return (
     <>
       <Select value={currentModelKey} onValueChange={handleModelSelect}>
-        <SelectTrigger className="w-64">
+        <SelectTrigger className="w-64 border-0 bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)]
+                                   transition-smooth shadow-elevation-1 hover:shadow-elevation-2 rounded-xl h-8">
           <SelectValue>
             {availableModels[currentModelKey] && (
               <div className="flex items-center gap-2">
@@ -101,7 +104,7 @@ export function ModelSelector({
             )}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="border-0 bg-[var(--elevation-2)] backdrop-blur-md shadow-elevation-3 rounded-xl">
           {Object.entries(availableModels).map(([key, model]) => (
             <SelectItem key={key} value={key}>
               <div className="flex items-center gap-2 w-full">
@@ -121,7 +124,8 @@ export function ModelSelector({
           {/* Show premium models as disabled options for basic users */}
           {userTier === 'basic' && (
             <>
-              <div className="px-2 py-1 text-xs font-medium text-muted-foreground border-t">
+              <div className="px-3 py-2 text-xs font-medium text-muted-foreground 
+                             bg-[var(--elevation-3)] border-0 rounded-lg mx-1 my-1">
                 Premium Models (Upgrade Required)
               </div>
               {Object.entries(MODEL_TIERS.premium.models).map(([key, model]) => (

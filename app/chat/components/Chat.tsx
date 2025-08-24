@@ -36,7 +36,7 @@ import CrossThreadActivity from './CrossThreadActivity';
 import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
-import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
+import { useSidebar } from '@/components/ui/sidebar';
 import { useReasoningStream } from '../hooks/useReasoningStream';
 import { useChatSubmissionState } from '@/lib/client/atomicStateManager';
 import { logger } from '@/lib/utils/logger';
@@ -87,7 +87,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const param = useParams();
   const router = useRouter();
   const currentChatId = param.id as string;
-  const { open: openMobileSidebar, close: closeMobileSidebar, isOpen: isMobileSidebarOpen } = useMobileSidebar();
+  const { toggleSidebar, isMobile, openMobile, setOpenMobile } = useSidebar();
   const touchAreaRef = useRef<HTMLDivElement | null>(null);
   const [swipeProgress, setSwipeProgress] = useState(0); // 0-1 for animation progress
   const [isSwipeActive, setIsSwipeActive] = useState(false);
@@ -1078,9 +1078,9 @@ console.error('Error creating new chat:', error);
       // Detect swipe zones
       const isLeftEdge = startX <= EDGE_ZONE;
       const isRightEdge = startX >= window.innerWidth - EDGE_ZONE;
-      const canOpenFromLeft = isLeftEdge && !isMobileSidebarOpen;
-      const canCloseFromRight = isRightEdge && isMobileSidebarOpen;
-      const canCloseFromAnywhere = isMobileSidebarOpen && startX <= MAX_SWIPE_DISTANCE;
+      const canOpenFromLeft = isLeftEdge && !(isMobile && openMobile);
+      const canCloseFromRight = isRightEdge && (isMobile && openMobile);
+      const canCloseFromAnywhere = (isMobile && openMobile) && startX <= MAX_SWIPE_DISTANCE;
 
       if (canOpenFromLeft || canCloseFromRight || canCloseFromAnywhere) {
         isTracking = true;
@@ -1143,10 +1143,10 @@ console.error('Error creating new chat:', error);
 
       if (swipeDirection === 'open' && deltaX > SWIPE_THRESHOLD) {
         shouldTrigger = true;
-        openMobileSidebar();
+        if (isMobile) setOpenMobile(true);
       } else if (swipeDirection === 'close' && Math.abs(deltaX) > SWIPE_THRESHOLD) {
         shouldTrigger = true;
-        closeMobileSidebar();
+        if (isMobile) setOpenMobile(false);
       }
 
       // Smooth animation to final state
@@ -1154,7 +1154,7 @@ console.error('Error creating new chat:', error);
         setSwipeProgress(swipeDirection === 'open' ? 1 : 0);
       } else {
         // Snap back to original state
-        setSwipeProgress(isMobileSidebarOpen ? 1 : 0);
+        setSwipeProgress((isMobile && openMobile) ? 1 : 0);
       }
 
       // Reset state
@@ -1178,7 +1178,7 @@ console.error('Error creating new chat:', error);
       el.removeEventListener('touchmove', onTouchMove as any);
       el.removeEventListener('touchend', onTouchEnd as any);
     };
-  }, [openMobileSidebar, closeMobileSidebar, isMobileSidebarOpen]);
+  }, [isMobile, openMobile, setOpenMobile]);
 
   return (
     <div ref={touchAreaRef} className="flex h-full w-full flex-col relative">
@@ -1213,9 +1213,9 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             <Button
               variant="ghost"
               size="icon"
-              onClick={openMobileSidebar}
+              onClick={toggleSidebar}
               className="h-9 w-9 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
-              aria-label="Open sidebar"
+              aria-label="Toggle sidebar"
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -1364,21 +1364,21 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
           <div className="flex-1 flex flex-col justify-center items-center text-center px-4 sm:px-6 md:px-8">
             {roomContext ? (
-              <div className="flex flex-col items-center gap-4 max-w-sm">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-4 max-w-md">
+                <div className="flex items-center gap-3">
                   <Image
                     src="/icons/icon-512x512.png"
                     alt="PatioAI"
-                    width={32}
-                    height={32}
-                    className="rounded-full"
+                    width={48}
+                    height={48}
+                    className="drop-shadow-lg"
                   />
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gradient">
+                    Hey {userData?.full_name?.split(' ')[0] || 'there'}, welcome to {roomContext.roomName}
+                  </h1>
                 </div>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-foreground">
-                  Welcome to {roomContext.roomName}
-                </h2>
                 <p className="text-sm sm:text-base text-muted-foreground text-center">
-                  Let's collaborate! Start a conversation with your team.
+                  Invite people by sharing the room link and have a blast!
                 </p>
               </div>
             ) : (
@@ -1406,7 +1406,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             <VirtualizedMessageList
               messages={roomContext ? displayMessages : messages}
               height={0} // Will be calculated by the flexible container using CSS
-              itemHeight={88}
+              itemHeight={64}
               currentUserDisplayName={roomContext?.displayName}
               showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
               isRoomChat={!!roomContext}
