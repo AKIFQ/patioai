@@ -1,12 +1,13 @@
 'use client';
 
-import React, { memo, useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import React, { memo, useRef, useEffect, useState, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type Message } from '@ai-sdk/react';
 import ChatMessage from './ChatMessage';
 import AILoadingMessage from './AILoadingMessage';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import ScrollToBottomButton from './ScrollToBottomButton';
+import LoadMoreMessagesButton from './LoadMoreMessagesButton';
 
 interface VirtualizedMessageListProps {
   messages: Message[];
@@ -19,6 +20,11 @@ interface VirtualizedMessageListProps {
   streamingReasoning?: string; // Current streaming reasoning text
   isReasoningStreaming?: boolean; // Whether reasoning is currently streaming
   isReasoningComplete?: boolean; // Whether reasoning is complete
+  // Pagination props
+  hasMoreMessages?: boolean; // Whether there are more messages to load
+  isLoadingMore?: boolean; // Whether currently loading more messages
+  onLoadMore?: () => void; // Callback to load more messages
+  totalDisplayed?: number; // Total number of messages currently displayed
 }
 
 interface MessageItemData {
@@ -41,7 +47,12 @@ const VirtualizedMessageList = memo(({
   streamingMessageId,
   streamingReasoning,
   isReasoningStreaming = false,
-  isReasoningComplete = false
+  isReasoningComplete = false,
+  // Pagination props
+  hasMoreMessages = false,
+  isLoadingMore = false,
+  onLoadMore,
+  totalDisplayed = 0
 }: VirtualizedMessageListProps) => {
   const parentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -77,7 +88,7 @@ const VirtualizedMessageList = memo(({
   const effectiveHeight = actualHeight;
   
   // For non-virtualized lists (< 50 messages) - raised threshold
-  const { scrollRef, isAtBottom: nonVirtualizedAtBottom, isAutoScrolling: nonVirtualizedAutoScrolling, scrollToBottom, enableAutoScroll: enableNonVirtualizedAutoScroll } = useAutoScroll({
+  const { scrollRef, isAtBottom, isAutoScrolling, scrollToBottom, enableAutoScroll: enableNonVirtualizedAutoScroll } = useAutoScroll({
     threshold: 15, // Slightly increased for more comfortable spacing
     resumeDelay: 1500,
     enabled: true
@@ -93,12 +104,45 @@ const VirtualizedMessageList = memo(({
     measureElement: (element) => element?.getBoundingClientRect().height ?? itemHeight,
   });
 
-  // Auto-scroll state management
-  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
-  const [isAtBottom, setIsAtBottom] = useState(true);
+  // Auto-scroll state management for virtualized list
+  const [virtualizedIsAutoScrolling, setVirtualizedIsAutoScrolling] = useState(true);
+  const [virtualizedIsAtBottom, setVirtualizedIsAtBottom] = useState(true);
+  
+  // Scroll position tracking for "load more" button visibility
+  const [isAtTop, setIsAtTop] = useState(true);
   
   // Determine which rendering mode to use
-  const isVirtualized = messages.length >= 50; // Raised from 20 to 50
+  const isVirtualized = messages.length >= 20;
+  
+  // Track scroll position for both virtualized and non-virtualized lists
+  useEffect(() => {
+    const scrollElement = isVirtualized ? parentRef.current : scrollRef.current;
+    if (!scrollElement) return;
+    
+    const handleScroll = () => {
+      const scrollTop = scrollElement.scrollTop;
+      const isScrolledToTop = scrollTop <= 5; // Small tolerance for floating point precision
+      setIsAtTop(isScrolledToTop);
+    };
+    
+    scrollElement.addEventListener('scroll', handleScroll);
+    // Initial check
+    handleScroll();
+    
+    return () => scrollElement.removeEventListener('scroll', handleScroll);
+  }, [isVirtualized, messages.length]); // Re-run when virtualization mode changes
+  
+  // Reset to top when new messages are loaded (from pagination)
+  useEffect(() => {
+    if (messages.length > 0) {
+      // When messages change, check if we're at the top
+      const scrollElement = isVirtualized ? parentRef.current : scrollRef.current;
+      if (scrollElement) {
+        const scrollTop = scrollElement.scrollTop;
+        setIsAtTop(scrollTop <= 5);
+      }
+    }
+  }, [messages.length, isVirtualized]);
   
   // TanStack auto-scroll functions
   const scrollToBottomVirtual = useCallback(() => {
@@ -108,17 +152,17 @@ const VirtualizedMessageList = memo(({
   }, [virtualizer, messages.length]);
 
   const enableVirtualAutoScroll = useCallback(() => {
-    setIsAutoScrolling(true);
+    setVirtualizedIsAutoScrolling(true);
   }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messages.length > 0 && isAutoScrolling) {
+    if (messages.length > 0) {
       const timeoutId = setTimeout(() => {
-        if (isVirtualized) {
+        if (isVirtualized && virtualizedIsAutoScrolling) {
           // For TanStack virtualized list
           scrollToBottomVirtual();
-        } else {
+        } else if (!isVirtualized && isAutoScrolling) {
           // For non-virtualized list, use smooth scroll
           scrollToBottom();
         }
@@ -126,24 +170,15 @@ const VirtualizedMessageList = memo(({
 
       return () => clearTimeout(timeoutId);
     }
-  }, [messages.length, isAutoScrolling, isVirtualized, scrollToBottomVirtual, scrollToBottom]);
+  }, [messages.length, isAutoScrolling, virtualizedIsAutoScrolling, isVirtualized, scrollToBottomVirtual, scrollToBottom]);
 
-  const itemData = useMemo(() => ({
-    messages,
-    currentUserDisplayName,
-    isRoomChat,
-    streamingMessageId,
-    streamingReasoning,
-    isReasoningStreaming,
-    isReasoningComplete
-  }), [messages, currentUserDisplayName, isRoomChat, streamingMessageId, streamingReasoning, isReasoningStreaming, isReasoningComplete]);
 
-  // Don't virtualize if there are few messages - raised threshold to avoid gaps
-  if (messages.length < 50) {
+  // Don't virtualize if there are few messages
+  if (messages.length < 20) {
     return (
       <div 
         ref={containerRef}
-        className="flex-1 w-full min-w-0 px-2 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col overflow-hidden"
+        className="flex-1 w-full min-w-0 px-2 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col overflow-hidden relative"
         data-chat-container
       >
         <div 
@@ -151,6 +186,17 @@ const VirtualizedMessageList = memo(({
           className="flex-1 overflow-y-auto scrollbar-hide"
           style={{ height: height > 0 ? `${height}px` : '100%' }}
         >
+          {/* Load More Messages Button - Floating overlay at top */}
+          {hasMoreMessages && onLoadMore && isAtTop && (
+            <div className="sticky top-0 z-10 flex justify-center pt-2 pb-1">
+              <LoadMoreMessagesButton
+                isLoading={isLoadingMore}
+                hasMore={hasMoreMessages}
+                onLoadMore={onLoadMore}
+                totalDisplayed={totalDisplayed}
+              />
+            </div>
+          )}
           <ul className="w-full min-w-0 space-y-1 pb-4" style={{ listStyle: 'none', paddingLeft: 0 }}>
             {messages.map((message, index) => {
               // For room chats, check if the message is from the current user by comparing sender names
@@ -201,9 +247,20 @@ const VirtualizedMessageList = memo(({
     >
       <div
         ref={parentRef}
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto relative"
         style={{ height: effectiveHeight }}
       >
+        {/* Load More Messages Button - Floating overlay at top */}
+        {hasMoreMessages && onLoadMore && isAtTop && (
+          <div className="sticky top-0 z-10 flex justify-center pt-2 pb-1">
+            <LoadMoreMessagesButton
+              isLoading={isLoadingMore}
+              hasMore={hasMoreMessages}
+              onLoadMore={onLoadMore}
+              totalDisplayed={totalDisplayed}
+            />
+          </div>
+        )}
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,
@@ -267,12 +324,12 @@ const VirtualizedMessageList = memo(({
       
       {/* Scroll to bottom button for virtualized list */}
       <ScrollToBottomButton
-        show={!isAtBottom}
+        show={!virtualizedIsAtBottom}
         onClick={() => {
           scrollToBottomVirtual();
           enableVirtualAutoScroll();
         }}
-        hasNewMessages={!isAutoScrolling}
+        hasNewMessages={!virtualizedIsAutoScrolling}
       />
     </div>
   );

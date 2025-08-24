@@ -40,6 +40,7 @@ import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
 import { useReasoningStream } from '../hooks/useReasoningStream';
 import { useChatSubmissionState } from '@/lib/client/atomicStateManager';
 import { logger } from '@/lib/utils/logger';
+import { useChatPagination } from '../hooks/useChatPagination';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
@@ -118,8 +119,27 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [showRemovalUI, setShowRemovalUI] = useState(false);
   const [removalRoomName, setRemovalRoomName] = useState('');
 
+  // Use pagination hook for room chats, fallback to regular state for non-room chats
+  const roomPagination = useChatPagination({
+    shareCode: roomContext?.shareCode,
+    chatSessionId: roomContext?.chatSessionId,
+    isRoomChat: !!roomContext,
+    initialMessages: currentChat || [],
+    pageSize: 50
+  });
+
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
   const [isRoomLoading, setIsRoomLoading] = useState(false);
+
+  // Sync realtimeMessages with paginated messages for room chats
+  useEffect(() => {
+    if (roomContext && roomPagination.messages.length > 0) {
+      setRealtimeMessages(roomPagination.messages);
+    }
+  }, [roomContext, roomPagination.messages]);
+
+  // Use realtimeMessages for both room and non-room chats (pagination updates realtimeMessages)
+  const displayMessages = realtimeMessages;
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const streamingAssistantIdRef = useRef<string | null>(null);
 
@@ -283,17 +303,17 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
     // Early exit for maximum efficiency
     if (!roomContext || !isRoomLoading) return;
 
-    const messageCount = realtimeMessages.length;
+    const messageCount = displayMessages.length;
     if (messageCount === 0) return;
 
     // Only check the last message when count changes
-    const lastMessage = realtimeMessages[messageCount - 1];
+    const lastMessage = displayMessages[messageCount - 1];
     if (lastMessage?.role === 'assistant') {
       // Efficient timeout with cleanup
       const timeoutId = setTimeout(() => setIsRoomLoading(false), 2000);
       return () => clearTimeout(timeoutId);
     }
-  }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
+  }, [roomContext, isRoomLoading, displayMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput with atomic state management
   const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI = true, reasoningModeEnabled = false) => {
@@ -1384,7 +1404,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         ) : (
           <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
             <VirtualizedMessageList
-              messages={roomContext ? realtimeMessages : messages}
+              messages={roomContext ? displayMessages : messages}
               height={0} // Will be calculated by the flexible container using CSS
               itemHeight={88}
               currentUserDisplayName={roomContext?.displayName}
@@ -1394,6 +1414,11 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               streamingReasoning={roomContext ? roomReasoningState.reasoning : reasoningStream.streamingReasoning}
               isReasoningStreaming={roomContext ? roomReasoningState.isStreaming : status === 'streaming'}
               isReasoningComplete={roomContext ? roomReasoningState.isComplete : reasoningStream.isReasoningComplete}
+              // Pagination props for room chats
+              hasMoreMessages={roomContext ? roomPagination.hasMore : false}
+              isLoadingMore={roomContext ? roomPagination.isLoading : false}
+              onLoadMore={roomContext ? roomPagination.loadMore : undefined}
+              totalDisplayed={roomContext ? roomPagination.totalDisplayed : 0}
             />
           </div>
         )}
