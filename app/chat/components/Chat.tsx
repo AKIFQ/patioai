@@ -1369,9 +1369,9 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                   <Image
                     src="/icons/icon-512x512.png"
                     alt="PatioAI"
-                    width={48}
-                    height={48}
-                    className="drop-shadow-lg"
+                    width={40}
+                    height={40}
+                    className="drop-shadow-lg filter-[brightness(1.2)]"
                   />
                   <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gradient">
                     Hey {userData?.full_name?.split(' ')[0] || 'there'}, welcome to {roomContext.roomName}
@@ -1382,21 +1382,21 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-4 max-w-sm">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-4 max-w-md">
+                <div className="flex items-center gap-3">
                   <Image
                     src="/icons/icon-512x512.png"
                     alt="PatioAI"
-                    width={32}
-                    height={32}
-                    className="rounded-full"
+                    width={40}
+                    height={40}
+                    className="drop-shadow-lg filter-[brightness(1.2)]"
                   />
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gradient">
+                    Hey {userData?.full_name?.split(' ')[0] || 'there'}, let’s chat
+                  </h1>
                 </div>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-foreground">
-                  Ready to chat?
-                </h2>
                 <p className="text-sm sm:text-base text-muted-foreground text-center">
-                  Ask me anything! I'm here to help with your questions and tasks.
+                  Want to talk 1:1 before jumping into a room? No problem — you can create a room anytime.
                 </p>
               </div>
             )}

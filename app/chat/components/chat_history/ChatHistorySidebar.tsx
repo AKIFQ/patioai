@@ -154,13 +154,12 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   rooms = [],
   roomChatsData = []
 }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  
-  // Get mobile state and sidebar context
+  // Get mobile state and sidebar context (single source of truth)
   const isMobile = useIsMobile();
-  const { setOpen } = useSidebar();
-  // Mobile sidebar visibility (shared with hamburger button)
-  const { isOpen: isMobileSidebarOpen, close: closeMobileSidebar } = useMobileSidebar();
+  const { setOpen, openMobile, setOpenMobile, open, toggleSidebar: toggleSidebarCtx } = useSidebar();
+  // Use unified sidebar context for mobile open/close
+  const isMobileSidebarOpen = openMobile;
+  const closeMobileSidebar = useCallback(() => setOpenMobile(false), [setOpenMobile]);
   const router = useRouter();
   // Safe user params for links
   const safeUserId = userInfo?.id || 'anon';
@@ -173,14 +172,10 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
 
 
-  // Auto-collapse sidebar on mobile
+  // Auto-collapse sidebar on mobile only; don't force open on desktop
   useEffect(() => {
     if (isMobile) {
-      setSidebarOpen(false);
       setOpen(false);
-    } else {
-      setSidebarOpen(true);
-      setOpen(true);
     }
   }, [isMobile, setOpen]);
 
@@ -277,11 +272,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     };
   }, [mutateRoomChats]);
 
-  const toggleSidebar = () => {
-    const newState = !sidebarOpen;
-    setSidebarOpen(newState);
-    setOpen(newState);
-  };
+  const toggleSidebar = () => toggleSidebarCtx();
 
   const handleRoomSelect = () => {
     // Room selection is handled by navigation
@@ -430,7 +421,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   ) : null;
 
   // Minimized sidebar - Only show on desktop when collapsed
-  if (!sidebarOpen && !isMobile) {
+  if (!open && !isMobile) {
     return (
       <div className="h-full border-r-0 shadow-elevation-1 w-[50px] flex-shrink-0 bg-sidebar flex flex-col items-center py-3 hidden md:flex transform transition-smooth">
         <TooltipProvider>
@@ -440,7 +431,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={toggleSidebar}
-                className="h-8 w-8 mb-3 rounded-full bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)] transition-smooth hover:scale-105 active:scale-95 shadow-elevation-1 hover:shadow-elevation-2 border-0"
+                className="h-8 w-8 mb-3 rounded-full transition-smooth hover:scale-105 active:scale-95"
                 aria-label="Open sidebar"
               >
                 <Menu size={16} />
@@ -494,7 +485,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSidebarOpen(true)}
+                onClick={() => setOpen(true)}
                 className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
                 aria-label="Chat mode"
               >
@@ -543,10 +534,14 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={toggleSidebar}
-              className="h-7 w-7 rounded-full bg-[var(--elevation-1)] hover:bg-[var(--elevation-2)] 
-                         text-muted-foreground/70 hover:text-foreground transition-smooth 
-                         hover:scale-105 active:scale-95 shadow-elevation-1 hover:shadow-elevation-2 border-0"
+              onClick={() => {
+                if (isMobile) {
+                  setOpenMobile(false);
+                } else {
+                  toggleSidebar();
+                }
+              }}
+              className="h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground transition-smooth hover:scale-105 active:scale-95"
               aria-label="Close sidebar"
             >
               <PanelLeftIcon size={14} />
@@ -804,7 +799,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
   rooms = [],
   roomChatsData = []
 }) => {
-  const { isOpen, close } = useMobileSidebar();
+  const { setOpenMobile } = useSidebar();
   const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
 
   const params = useParams();
@@ -822,7 +817,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
   }, [close]);
 
   const handleCloseSidebar = () => {
-    close();
+    setOpenMobile(false);
   };
 
   const handleRoomCreated = useCallback(() => {
@@ -961,7 +956,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
     <>
 
 
-      <Sheet open={isOpen} onOpenChange={handleCloseSidebar}>
+      <Sheet open={true} onOpenChange={handleCloseSidebar}>
         <SheetContent side="left" className="w-[280px] p-0">
           <div className="flex flex-col h-full">
             {/* Header */}
