@@ -1,6 +1,6 @@
 import React, { type ReactNode } from 'react';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Jomolhari } from 'next/font/google';
 import { getSession } from '@/lib/server/supabase';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
@@ -13,6 +13,12 @@ const inter = Inter({
   display: 'swap',
   adjustFontFallback: false,
   variable: '--font-Inter'
+});
+
+const jomolhari = Jomolhari({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap'
 });
 
 export const metadata: Metadata = {
@@ -83,7 +89,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </head>
-      <body className={`${inter.className} min-h-screen w-full overflow-x-hidden`}>
+      <body className={`${jomolhari.className} min-h-screen w-full overflow-x-hidden`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

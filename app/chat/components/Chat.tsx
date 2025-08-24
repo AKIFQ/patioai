@@ -1204,7 +1204,8 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         />
       )}
 
-      {/* Mobile Header with Hamburger Menu */}
+      {/* Mobile Header with Hamburger Menu - only for rooms */}
+      {roomContext && (
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-14 shadow-sm w-full md:hidden">
         <div className="flex items-center justify-between w-full h-full px-4">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
@@ -1278,9 +1279,11 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
           </div>
         </div>
       </div>
+      )}
 
-      {/* Desktop Chat Header */}
-      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-2 sm:py-3 md:py-4 flex-shrink-0 hidden md:block">
+      {/* Desktop Chat Header - only for rooms */}
+      {roomContext && (
+      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
@@ -1357,6 +1360,27 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
           </div>
         </div>
       </div>
+      )}
+
+      {/* Personal chat: floating New Chat button (top-right inside chat area) */}
+      {!roomContext && (
+        <div className="absolute top-2 right-3 md:top-4 md:right-6 z-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNewChat}
+            disabled={isCreatingNewChat}
+            className="h-8 px-3 text-sm font-medium hover:bg-muted/50 rounded-lg"
+            aria-label="New Chat"
+          >
+            {isCreatingNewChat ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Scrollable Chat Content */}
       <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
@@ -1402,7 +1426,10 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             )}
           </div>
         ) : (
-          <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
+          <div className={`flex-1 w-full min-w-0 flex flex-col overflow-hidden relative ${!roomContext ? 'pt-6 sm:pt-8' : ''}`}>
+            {!roomContext && (
+              <div className="pointer-events-none absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background via-background/70 to-transparent backdrop-blur-[2px] z-[1]" />
+            )}
             <VirtualizedMessageList
               messages={roomContext ? displayMessages : messages}
               height={0} // Will be calculated by the flexible container using CSS

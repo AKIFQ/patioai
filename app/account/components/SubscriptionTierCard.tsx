@@ -75,7 +75,7 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
   return (
     <div className="space-y-6">
       {/* Current Plan */}
-      <Card className="p-6">
+      <Card className="p-6 bg-[var(--elevation-1)] border-[var(--border)]">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             {getTierIcon(currentTier)}
@@ -134,7 +134,7 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
             <h4 className="text-sm font-medium text-muted-foreground">Included Features</h4>
             <div className="space-y-1">
               {TIER_PRICING[currentTier].features.map((feature, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
+                <div key={index} className="flex items-center gap-2 text-sm text-foreground/90">
                   <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
                   <span>{feature}</span>
                 </div>
@@ -218,7 +218,7 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
             )}
 
             {/* Premium Tier */}
-            <Card className="p-6 relative overflow-hidden border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
+            <Card className="p-6 relative overflow-hidden border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-50 dark:to-orange-50 dark:text-[var(--forest-920)]">
               <div className="absolute top-3 right-3">
                 <Crown className="h-5 w-5 text-amber-600" />
               </div>
@@ -226,16 +226,16 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
               <div className="space-y-4">
                 <div>
                   <h4 className="text-lg font-medium">Premium Plan</h4>
-                  <p className="text-2xl font-medium text-amber-700">$50/month</p>
-                  <p className="text-sm text-muted-foreground/80">
+                  <p className="text-2xl font-medium text-amber-600 dark:text-amber-400">$50/month</p>
+                  <p className="text-sm text-muted-foreground/90">
                     Premium AI models + enterprise features
                   </p>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1 text-foreground/90">
                   {TIER_PRICING.premium.features.slice(0, 4).map((feature, index) => (
                     <div key={index} className="flex items-center gap-2 text-sm">
-                      <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
                       <span>{feature}</span>
                     </div>
                   ))}
@@ -243,7 +243,7 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
 
                 <Button 
                   onClick={() => handleUpgrade('premium')}
-                  className="w-full bg-amber-600 hover:bg-amber-700"
+                  className="w-full bg-amber-600 hover:bg-amber-600/90 text-amber-50"
                   disabled={isUpgrading}
                 >
                   {isUpgrading ? (

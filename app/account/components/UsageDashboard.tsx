@@ -33,7 +33,7 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
   return (
     <div className="space-y-6">
       {/* Usage Overview */}
-      <Card className="p-6">
+      <Card className="p-6 bg-[var(--elevation-1)] border-[var(--border)]">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
@@ -71,7 +71,7 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
               className="h-2"
             />
             
-            <div className="flex justify-between text-xs text-muted-foreground/80">
+            <div className="flex justify-between text-xs text-muted-foreground/90">
               <span>{usagePercentage}% used</span>
               <span>{(usage.monthly_limit - usage.monthly_usage).toLocaleString()} remaining</span>
             </div>
@@ -95,7 +95,7 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
                 className="h-2"
               />
               
-              <div className="flex justify-between text-xs text-muted-foreground/80">
+              <div className="flex justify-between text-xs text-muted-foreground/90">
                 <span>{costPercentage}% of budget used</span>
                 <span>${(usage.hard_limit - usage.cost_spent).toFixed(2)} remaining</span>
               </div>
@@ -131,7 +131,7 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
       )}
 
       {/* Tier Comparison */}
-      <Card className="p-6">
+      <Card className="p-6 bg-[var(--elevation-1)] border-[var(--border)]">
         <h3 className="text-lg font-medium mb-4">Plan Comparison</h3>
         
         <div className="space-y-4">
@@ -139,8 +139,8 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
             {/* Free Tier */}
             <div className={`p-4 rounded-lg border ${
               subscriptionInfo.subscription_tier === 'free' 
-                ? 'bg-blue-50 border-blue-200' 
-                : 'bg-gray-50 border-gray-200'
+                ? 'bg-blue-50 dark:bg-[var(--elevation-2)] border-blue-200 dark:border-[var(--border)]' 
+                : 'bg-gray-50 dark:bg-[var(--elevation-2)] border-gray-200 dark:border-[var(--border)]'
             }`}>
               <div className="flex items-center gap-2 mb-2">
                 <h4 className="font-medium">Free</h4>
@@ -159,8 +159,8 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
             {/* Basic Tier */}
             <div className={`p-4 rounded-lg border ${
               subscriptionInfo.subscription_tier === 'basic' 
-                ? 'bg-amber-50 border-amber-200' 
-                : 'bg-gray-50 border-gray-200'
+                ? 'bg-amber-50 dark:bg-[var(--elevation-2)] border-amber-200 dark:border-[var(--border)]' 
+                : 'bg-gray-50 dark:bg-[var(--elevation-2)] border-gray-200 dark:border-[var(--border)]'
             }`}>
               <div className="flex items-center gap-2 mb-2">
                 <h4 className="font-medium">Basic</h4>
@@ -180,8 +180,8 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
             {/* Premium Tier */}
             <div className={`p-4 rounded-lg border ${
               subscriptionInfo.subscription_tier === 'premium' 
-                ? 'bg-amber-50 border-amber-200' 
-                : 'bg-gray-50 border-gray-200'
+                ? 'bg-amber-50 dark:bg-[var(--elevation-2)] border-amber-200 dark:border-[var(--border)]' 
+                : 'bg-gray-50 dark:bg-[var(--elevation-2)] border-gray-200 dark:border-[var(--border)]'
             }`}>
               <div className="flex items-center gap-2 mb-2">
                 <h4 className="font-medium">Premium</h4>
@@ -197,22 +197,6 @@ export default function UsageDashboard({ subscriptionInfo }: UsageDashboardProps
                 <li>• Enterprise features</li>
               </ul>
             </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Usage Tips */}
-      <Card className="p-6 bg-green-50 border-green-200">
-        <div className="flex items-start gap-3">
-          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <div className="space-y-2">
-            <h4 className="font-medium text-green-900">Usage Tips</h4>
-            <ul className="space-y-1 text-sm text-green-800">
-              <li>• Use "auto" model selection for optimal cost efficiency</li>
-              <li>• Enable reasoning mode only when needed for complex tasks</li>
-              <li>• Monitor your usage regularly to avoid unexpected charges</li>
-              <li>• Consider upgrading if you frequently hit usage limits</li>
-            </ul>
           </div>
         </div>
       </Card>

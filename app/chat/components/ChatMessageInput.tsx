@@ -242,23 +242,21 @@ const MessageInput = ({
   }, [roomContext, safeOnTyping]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle typing indicators
+    // Handle typing indicators only for room chats
     if (roomContext) {
       handleTyping();
     }
 
-    if (event.key === 'Enter' && event.shiftKey) {
-      // Trigger prompt action on Shift + Enter
+    if (event.key === 'Enter') {
       event.preventDefault();
-      handlePromptSubmit(event);
-    } else if (event.key === 'Enter') {
-      // Prevent default behavior and submit form on Enter only
-      event.preventDefault();
-      // Stop typing when sending message
-      if (roomContext) {
+      if (event.shiftKey || !roomContext) {
+        // Shift+Enter anywhere OR Enter in personal chat → Ask AI
+        handlePromptSubmit(event);
+      } else {
+        // Enter in room chat → regular send (no AI)
         safeOnTyping(false);
+        handleFormSubmit(event);
       }
-      handleFormSubmit(event);
     }
   };
 
@@ -599,29 +597,31 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
             )}
 
             {/* Send button or spinner with matched sizing */}
-            {isLoading ? (
-              <div className="h-8 w-8 rounded-full flex items-center justify-center 
-                             bg-[var(--elevation-3)] shadow-elevation-1 
-                             flex-shrink-0 animate-pulse">
-                <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              </div>
-            ) : (
-              <Button
-                ref={sendButtonRef}
-                type="submit"
-                size="icon"
-                variant="ghost"
-                disabled={!input.trim() && attachedFiles.length === 0}
-                className="h-8 w-8 rounded-full flex items-center justify-center 
-                           bg-gradient-to-br from-primary to-primary/90
-                           hover:from-primary/90 hover:to-primary/80
-                           transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
-                           hover:scale-105 active:scale-95 flex-shrink-0 group 
-                           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
-              >
-                <Send className="text-primary-foreground w-4 h-4 group-hover:scale-105 transition-transform" />
-              </Button>
+            {roomContext && (
+              isLoading ? (
+                <div className="h-8 w-8 rounded-full flex items-center justify-center 
+                               bg-[var(--elevation-3)] shadow-elevation-1 
+                               flex-shrink-0 animate-pulse">
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                </div>
+              ) : (
+                <Button
+                  ref={sendButtonRef}
+                  type="submit"
+                  size="icon"
+                  variant="ghost"
+                  disabled={!input.trim() && attachedFiles.length === 0}
+                  className="h-8 w-8 rounded-full flex items-center justify-center 
+                             bg-gradient-to-br from-primary to-primary/90
+                             hover:from-primary/90 hover:to-primary/80
+                             transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
+                             hover:scale-105 active:scale-95 flex-shrink-0 group 
+                             disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
+                >
+                  <Send className="text-primary-foreground w-4 h-4 group-hover:scale-105 transition-transform" />
+                </Button>
+              )
             )}
           </div>
         </div>

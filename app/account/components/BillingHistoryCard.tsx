@@ -72,7 +72,7 @@ export default function BillingHistoryCard({ subscriptionInfo }: BillingHistoryC
   return (
     <div className="space-y-6">
       {/* Billing History Overview */}
-      <Card className="p-6">
+      <Card className="p-6 bg-[var(--elevation-1)] border-[var(--border)]">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
@@ -115,7 +115,7 @@ export default function BillingHistoryCard({ subscriptionInfo }: BillingHistoryC
               {/* Recent Invoices */}
               <div className="space-y-3">
                 {mockBillingHistory.map((invoice, index) => (
-                  <div key={invoice.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div key={invoice.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[var(--elevation-2)] rounded-lg border dark:border-[var(--border)]">
                     <div className="flex items-center gap-3">
                       {getStatusIcon(invoice.status)}
                       <div>
@@ -209,14 +209,14 @@ export default function BillingHistoryCard({ subscriptionInfo }: BillingHistoryC
       </Card>
 
       {/* Billing Information */}
-      <Card className="p-6 bg-blue-50 border-blue-200">
+      <Card className="p-6 bg-[var(--elevation-1)] border-[var(--border)]">
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-            <Receipt className="h-4 w-4 text-blue-600" />
+          <div className="w-8 h-8 rounded-full bg-[var(--elevation-2)] flex items-center justify-center flex-shrink-0">
+            <Receipt className="h-4 w-4 text-foreground/70" />
           </div>
           <div className="space-y-2">
-            <h4 className="font-medium text-blue-900">Billing Information</h4>
-            <ul className="space-y-1 text-sm text-blue-800">
+            <h4 className="font-medium">Billing Information</h4>
+            <ul className="space-y-1 text-sm text-muted-foreground">
               <li>• All invoices are automatically generated and emailed to you</li>
               <li>• Downloads are available in PDF format through Stripe portal</li>
               <li>• Billing cycles run monthly from your subscription date</li>
