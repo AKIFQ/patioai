@@ -33,7 +33,6 @@ import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
 import RoomRateLimitHandler from './RoomRateLimitHandler';
 import CrossThreadActivity from './CrossThreadActivity';
-import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -610,26 +609,45 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 
   // Real-time functionality for room chats - memoized to prevent re-renders
   const handleNewMessage = useCallback((newMessage: EnhancedMessage) => {
-    // Debug logging removed
+    // If a temporary streaming assistant message exists, replace it in-place with the DB-backed message
+    const tempId = streamingAssistantIdRef.current;
+    if (tempId && newMessage.role === 'assistant') {
+      setRealtimeMessages(prev => {
+        const hasTemp = prev.some(m => m.id === tempId);
+        if (hasTemp) {
+          const updated = prev.map(m => (m.id === tempId ? { ...newMessage } as any : m));
+          // Clear streaming temp id after replacement
+          streamingAssistantIdRef.current = null;
+          setStreamingAssistantId(null);
+          // Initialize reasoning state for the finalized AI message
+          if (newMessage.reasoning) {
+            setReasoningStates(prevRs => ({
+              ...prevRs,
+              [newMessage.id]: { isOpen: true, hasStartedStreaming: false }
+            }));
+          }
+          return updated;
+        }
+        return [...prev, newMessage];
+      });
+
+      // Track processed message id
+      setProcessedMessageIds(prev => new Set(prev).add(newMessage.id));
+      return;
+    }
 
     // Use functional updates to avoid dependency on processedMessageIds
     setProcessedMessageIds(prevProcessed => {
-      // Check if we've already processed this message
       if (prevProcessed.has(newMessage.id)) {
-        // Debug logging removed
-        return prevProcessed; // Return same reference to avoid re-render
+        return prevProcessed;
       }
 
-      // Mark message as processed and update UI
       setRealtimeMessages(prevMessages => {
         const exists = prevMessages.find(msg => msg.id === newMessage.id);
         if (exists) {
-          // Debug logging removed
           return prevMessages;
         }
-        // Debug logging removed
 
-        // Initialize reasoning state for AI messages
         if (newMessage.role === 'assistant' && newMessage.reasoning) {
           setReasoningStates(prev => ({
             ...prev,
@@ -640,7 +658,6 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
         return [...prevMessages, newMessage];
       });
 
-      // Return new Set with the processed message ID
       return new Set(prevProcessed).add(newMessage.id);
     });
   }, []); // Empty dependency array - stable function
@@ -669,6 +686,8 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 const tempId = `ai-temp-${Date.now()}`;
     streamingAssistantIdRef.current = tempId;
     setStreamingAssistantId(tempId);
+    // Stop blue loader once streaming begins to avoid duplicate loaders
+    setIsRoomLoading(false);
     setRealtimeMessages(prev => ([
       ...prev,
       {
@@ -703,10 +722,8 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
 
-    // CRITICAL FIX: For room chats, don't create a temporary permanent message
-    // The database will send the real message via room-message-created event
-    // Just remove the streaming message and let the database message take over
-    setRealtimeMessages(prev => prev.filter(m => m.id !== currentId));
+    // Do not remove the temporary message here; it will be replaced in-place when
+    // the DB-backed 'room-message-created' event arrives
 
     // Clear reasoning state - the database message will have the final reasoning
     setRoomReasoningState(prev => ({
@@ -715,9 +732,7 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
       isComplete: true
     }));
 
-    // Clear streaming state
-    streamingAssistantIdRef.current = null;
-    setStreamingAssistantId(null);
+    // Keep streamingAssistantIdRef so handleNewMessage can replace it in-place
   }, [roomContext]);
 
   // New reasoning handlers for room chats
@@ -1364,6 +1379,17 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Personal chat: floating New Chat button (top-right inside chat area) */}
       {!roomContext && (
+        <>
+        {/* Mobile-only floating hamburger (no background) to toggle sidebar */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Toggle sidebar"
+          className="md:hidden absolute top-2 left-3 z-10 h-8 w-8 flex items-center justify-center"
+        >
+          <Menu className="h-5 w-5 text-foreground" />
+        </button>
+
         <div className="absolute top-2 right-3 md:top-4 md:right-6 z-10">
           <Button
             variant="ghost"
@@ -1380,6 +1406,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             )}
           </Button>
         </div>
+        </>
       )}
 
       {/* Scrollable Chat Content */}
@@ -1435,7 +1462,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               height={0} // Will be calculated by the flexible container using CSS
               itemHeight={64}
               currentUserDisplayName={roomContext?.displayName}
-              showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
+              showLoading={roomContext ? false : (status === 'streaming' || status === 'submitted')}
               isRoomChat={!!roomContext}
               streamingMessageId={(roomContext ? roomReasoningState.messageId : reasoningStream.streamingMessageId) || undefined}
               streamingReasoning={roomContext ? roomReasoningState.reasoning : reasoningStream.streamingReasoning}

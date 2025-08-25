@@ -4,7 +4,6 @@ import React, { memo, useRef, useEffect, useState, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type Message } from '@ai-sdk/react';
 import ChatMessage from './ChatMessage';
-import AILoadingMessage from './AILoadingMessage';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import ScrollToBottomButton from './ScrollToBottomButton';
 import LoadMoreMessagesButton from './LoadMoreMessagesButton';
@@ -123,6 +122,12 @@ const VirtualizedMessageList = memo(({
       const scrollTop = scrollElement.scrollTop;
       const isScrolledToTop = scrollTop <= 5; // Small tolerance for floating point precision
       setIsAtTop(isScrolledToTop);
+
+      // Also track bottom state for virtualized list so the down-arrow hides when at bottom
+      if (isVirtualized) {
+        const distanceFromBottom = scrollElement.scrollHeight - scrollTop - scrollElement.clientHeight;
+        setVirtualizedIsAtBottom(distanceFromBottom <= 8);
+      }
     };
     
     scrollElement.addEventListener('scroll', handleScroll);
@@ -153,6 +158,12 @@ const VirtualizedMessageList = memo(({
 
   const enableVirtualAutoScroll = useCallback(() => {
     setVirtualizedIsAutoScrolling(true);
+    // Immediately mark as at bottom after user requests scroll
+    const el = parentRef.current;
+    if (el) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setVirtualizedIsAtBottom(distanceFromBottom <= 8);
+    }
   }, []);
 
   // Auto-scroll to bottom when new messages arrive
@@ -171,6 +182,28 @@ const VirtualizedMessageList = memo(({
       return () => clearTimeout(timeoutId);
     }
   }, [messages.length, isAutoScrolling, virtualizedIsAutoScrolling, isVirtualized, scrollToBottomVirtual, scrollToBottom]);
+
+  // Ensure auto-scroll keeps following during streaming when message content grows
+  useEffect(() => {
+    if (!streamingMessageId) return;
+    const timeoutId = setTimeout(() => {
+      if (isVirtualized && virtualizedIsAutoScrolling) {
+        scrollToBottomVirtual();
+      } else if (!isVirtualized && isAutoScrolling) {
+        scrollToBottom();
+      }
+    }, 50);
+    return () => clearTimeout(timeoutId);
+  }, [messages, streamingMessageId, isReasoningStreaming, streamingReasoning, isVirtualized, virtualizedIsAutoScrolling, isAutoScrolling, scrollToBottomVirtual, scrollToBottom]);
+
+  // Recompute bottom state after message count changes (virtualized only)
+  useEffect(() => {
+    if (!isVirtualized) return;
+    const el = parentRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setVirtualizedIsAtBottom(distanceFromBottom <= 8);
+  }, [messages.length, isVirtualized]);
 
 
   // Don't virtualize if there are few messages
@@ -222,7 +255,7 @@ const VirtualizedMessageList = memo(({
                 />
               );
             })}
-            {showLoading && <AILoadingMessage showInline />}
+            {/* Loading placeholder removed: rely on in-message temporary assistant row */}
           </ul>
         </div>
         
@@ -307,18 +340,7 @@ const VirtualizedMessageList = memo(({
               </div>
             );
           })}
-          {showLoading && (
-            <div
-              style={{
-                position: 'absolute',
-                top: `${virtualizer.getTotalSize()}px`,
-                left: 0,
-                width: '100%'
-              }}
-            >
-              <AILoadingMessage showInline />
-            </div>
-          )}
+          {/* Loading placeholder removed: rely on in-message temporary assistant row */}
         </div>
       </div>
       
@@ -327,6 +349,14 @@ const VirtualizedMessageList = memo(({
         show={!virtualizedIsAtBottom}
         onClick={() => {
           scrollToBottomVirtual();
+          // After scrolling, recompute and hide the arrow
+          requestAnimationFrame(() => {
+            const el = parentRef.current;
+            if (el) {
+              const d = el.scrollHeight - el.scrollTop - el.clientHeight;
+              setVirtualizedIsAtBottom(d <= 8);
+            }
+          });
           enableVirtualAutoScroll();
         }}
         hasNewMessages={!virtualizedIsAutoScrolling}

@@ -243,9 +243,37 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
       .limit(1);
 
     if (users && users.length > 0) {
+      const userId = users[0].id;
+
+      // Log the payment event to database
+      const { error: logError } = await supabase
+        .rpc('log_payment_event', {
+          p_user_id: userId,
+          p_customer_id: customerId,
+          p_event_type: 'succeeded',
+          p_amount: invoice.amount_paid || 0,
+          p_invoice_id: invoice.id,
+          p_payment_intent_id: invoice.payment_intent as string || null,
+          p_metadata: {
+            subscription_id: invoice.subscription,
+            period_start: invoice.period_start ? new Date(invoice.period_start * 1000).toISOString() : null,
+            period_end: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
+            currency: invoice.currency,
+            hosted_invoice_url: invoice.hosted_invoice_url,
+            invoice_pdf: invoice.invoice_pdf,
+          }
+        });
+
+      if (logError) {
+        console.error('Failed to log payment event:', logError);
+        // Don't throw - continue with sync even if logging fails
+      } else {
+        console.log(`Payment event logged successfully for user ${userId}`);
+      }
+
       // Use centralized sync function to ensure subscription state is current
-      await syncStripeSubscriptionToDatabase(users[0].id, customerId);
-      console.log(`Successfully synced subscription after payment success for user ${users[0].id}`);
+      await syncStripeSubscriptionToDatabase(userId, customerId);
+      console.log(`Successfully synced subscription after payment success for user ${userId}`);
     } else {
       console.error(`No user found for customer ID: ${customerId}`);
     }
@@ -276,9 +304,37 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       .limit(1);
 
     if (users && users.length > 0) {
+      const userId = users[0].id;
+
+      // Log the failed payment event to database
+      const { error: logError } = await supabase
+        .rpc('log_payment_event', {
+          p_user_id: userId,
+          p_customer_id: customerId,
+          p_event_type: 'failed',
+          p_amount: invoice.amount_due || 0,
+          p_invoice_id: invoice.id,
+          p_payment_intent_id: invoice.payment_intent as string || null,
+          p_metadata: {
+            subscription_id: invoice.subscription,
+            failure_reason: invoice.last_finalization_error?.message || 'Unknown failure',
+            attempt_count: invoice.attempt_count || 1,
+            next_payment_attempt: invoice.next_payment_attempt ? new Date(invoice.next_payment_attempt * 1000).toISOString() : null,
+            currency: invoice.currency,
+            hosted_invoice_url: invoice.hosted_invoice_url,
+          }
+        });
+
+      if (logError) {
+        console.error('Failed to log payment failure event:', logError);
+        // Don't throw - continue with sync even if logging fails
+      } else {
+        console.log(`Payment failure event logged successfully for user ${userId}`);
+      }
+
       // Use centralized sync function to ensure subscription state reflects payment failure
-      await syncStripeSubscriptionToDatabase(users[0].id, customerId);
-      console.log(`Successfully synced subscription after payment failure for user ${users[0].id}`);
+      await syncStripeSubscriptionToDatabase(userId, customerId);
+      console.log(`Successfully synced subscription after payment failure for user ${userId}`);
     } else {
       console.error(`No user found for customer ID: ${customerId}`);
     }

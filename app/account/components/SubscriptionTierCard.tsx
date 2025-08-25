@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { ArrowUpRight, CheckCircle, Star, Zap, Crown, Loader2 } from 'lucide-react';
 import type { UserSubscriptionInfo } from '@/lib/server/subscriptionService';
 import { TIER_PRICING, redirectToCheckout, redirectToCustomerPortal } from '@/lib/stripe/client';
+import { useToast } from '@/components/ui/use-toast';
 
 interface SubscriptionTierCardProps {
   subscriptionInfo: UserSubscriptionInfo;
@@ -16,19 +17,34 @@ interface SubscriptionTierCardProps {
 export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionTierCardProps) {
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isManaging, setIsManaging] = useState(false);
+  const { toast } = useToast();
 
   const currentTier = subscriptionInfo.subscription_tier;
   
   const handleUpgrade = async (targetTier: 'basic' | 'premium') => {
     try {
       setIsUpgrading(true);
+      
+      // Show loading toast
+      toast({
+        title: "Redirecting to checkout...",
+        description: `Setting up your ${targetTier} subscription`,
+        variant: "default",
+      });
+
       await redirectToCheckout({
         tier: targetTier,
         userId: subscriptionInfo.id,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upgrade error:', error);
-      alert('Failed to start upgrade process. Please try again.');
+      
+      // Show error toast with specific message
+      toast({
+        title: "Upgrade Failed",
+        description: error.message || 'Failed to start upgrade process. Please try again.',
+        variant: "destructive",
+      });
     } finally {
       setIsUpgrading(false);
     }
@@ -37,10 +53,24 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
   const handleManageBilling = async () => {
     try {
       setIsManaging(true);
+
+      // Show loading toast
+      toast({
+        title: "Opening billing portal...",
+        description: "Redirecting you to manage your subscription",
+        variant: "default",
+      });
+
       await redirectToCustomerPortal(subscriptionInfo.id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Billing portal error:', error);
-      alert('Failed to open billing portal. Please try again.');
+      
+      // Show error toast
+      toast({
+        title: "Portal Access Failed",
+        description: error.message || 'Failed to open billing portal. Please try again.',
+        variant: "destructive",
+      });
     } finally {
       setIsManaging(false);
     }

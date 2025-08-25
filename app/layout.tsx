@@ -4,6 +4,7 @@ import { Inter, Jomolhari } from 'next/font/google';
 import { getSession } from '@/lib/server/supabase';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
+import { Toaster as ToastToaster } from '@/components/ui/toaster';
 import { MobileSidebarProvider } from '@/app/chat/components/chat_history/ChatHistorySidebar';
 
 import './globals.css';
@@ -99,6 +100,7 @@ export default function RootLayout({
           <MobileSidebarProvider>
             <main className="w-full min-w-0">{children}</main>
             <Toaster />
+            <ToastToaster />
           </MobileSidebarProvider>
         </ThemeProvider>
       </body>

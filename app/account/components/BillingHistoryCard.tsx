@@ -7,13 +7,18 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Receipt, Download, ExternalLink, AlertCircle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import type { UserSubscriptionInfo } from '@/lib/server/subscriptionService';
+import type { BillingHistoryItem } from './AccountSettingsContent';
 import { redirectToCustomerPortal } from '@/lib/stripe/client';
 
 interface BillingHistoryCardProps {
   subscriptionInfo: UserSubscriptionInfo;
+  billingHistory?: BillingHistoryItem[];
 }
 
-export default function BillingHistoryCard({ subscriptionInfo }: BillingHistoryCardProps) {
+export default function BillingHistoryCard({ 
+  subscriptionInfo, 
+  billingHistory = [] 
+}: BillingHistoryCardProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleViewInvoices = async () => {
@@ -31,17 +36,8 @@ export default function BillingHistoryCard({ subscriptionInfo }: BillingHistoryC
   const hasActiveSubscription = subscriptionInfo.subscription_tier !== 'free' && 
                                 subscriptionInfo.stripe_customer_id;
 
-  // Mock billing data based on subscription info
-  const mockBillingHistory = hasActiveSubscription ? [
-    {
-      id: 'inv_1',
-      date: subscriptionInfo.period_start || new Date().toISOString(),
-      amount: subscriptionInfo.subscription_tier === 'basic' ? 10 : 50,
-      status: 'paid',
-      description: `${subscriptionInfo.subscription_tier.charAt(0).toUpperCase() + subscriptionInfo.subscription_tier.slice(1)} Plan - Monthly`,
-      downloadUrl: '#'
-    }
-  ] : [];
+  // Use real billing history from database
+  const hasPaymentHistory = billingHistory && billingHistory.length > 0;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -59,13 +55,21 @@ export default function BillingHistoryCard({ subscriptionInfo }: BillingHistoryC
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid':
-        return 'bg-green-50 text-green-700 border-green-200';
+        return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800';
       case 'pending':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800';
       case 'failed':
-        return 'bg-red-50 text-red-700 border-red-200';
+        return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800';
+      case 'refunded':
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800';
       default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
+        return 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/50 dark:text-gray-300 dark:border-gray-700';
+    }
+  };
+
+  const handleDownloadInvoice = (downloadUrl: string | null | undefined) => {
+    if (downloadUrl) {
+      window.open(downloadUrl, '_blank');
     }
   };
 
@@ -110,40 +114,66 @@ export default function BillingHistoryCard({ subscriptionInfo }: BillingHistoryC
         </div>
 
         <div className="space-y-4">
-          {hasActiveSubscription ? (
+          {hasActiveSubscription || hasPaymentHistory ? (
             <>
               {/* Recent Invoices */}
               <div className="space-y-3">
-                {mockBillingHistory.map((invoice, index) => (
-                  <div key={invoice.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[var(--elevation-2)] rounded-lg border dark:border-[var(--border)]">
-                    <div className="flex items-center gap-3">
-                      {getStatusIcon(invoice.status)}
-                      <div>
-                        <p className="font-medium text-sm">{invoice.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(invoice.date).toLocaleDateString('en-US', {
-                            month: 'long',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </p>
+                {hasPaymentHistory ? (
+                  billingHistory.map((invoice) => (
+                    <div key={invoice.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[var(--elevation-2)] rounded-lg border dark:border-[var(--border)]">
+                      <div className="flex items-center gap-3">
+                        {getStatusIcon(invoice.status)}
+                        <div>
+                          <p className="font-medium text-sm">{invoice.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(invoice.date).toLocaleDateString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </p>
+                          {invoice.failureReason && invoice.status === 'failed' && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {invoice.failureReason}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="font-medium">${invoice.amount}</p>
-                        <Badge variant="outline" className={getStatusColor(invoice.status)}>
-                          {invoice.status}
-                        </Badge>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="font-medium">
+                            ${invoice.amount.toFixed(2)}
+                            <span className="text-xs text-muted-foreground ml-1 uppercase">
+                              {invoice.currency}
+                            </span>
+                          </p>
+                          <Badge variant="outline" className={getStatusColor(invoice.status)}>
+                            {invoice.status}
+                          </Badge>
+                        </div>
+                        {invoice.downloadUrl && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="gap-1"
+                            onClick={() => handleDownloadInvoice(invoice.downloadUrl)}
+                          >
+                            <Download className="h-3 w-3" />
+                            <span className="sr-only">Download</span>
+                          </Button>
+                        )}
                       </div>
-                      <Button variant="ghost" size="sm" className="gap-1">
-                        <Download className="h-3 w-3" />
-                        <span className="sr-only">Download</span>
-                      </Button>
                     </div>
+                  ))
+                ) : hasActiveSubscription ? (
+                  <div className="text-center py-4 space-y-2">
+                    <Clock className="h-8 w-8 mx-auto text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Payment history will appear here after your first payment
+                    </p>
                   </div>
-                ))}
+                ) : null}
               </div>
 
               <Separator />

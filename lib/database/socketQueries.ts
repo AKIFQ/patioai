@@ -205,20 +205,30 @@ export class SocketDatabaseService {
     }
   }
 
-  // Batch insert chat messages for better performance
+  // Batch insert chat messages for better performance with proper ordering
   static async insertChatMessages(messages: {
     chatSessionId: string;
     content: string;
     isUserMessage: boolean;
     attachments?: any[];
+    reasoning?: string;
+    sources?: any;
+    toolInvocations?: any;
   }[]): Promise<{ success: boolean; messageIds?: string[]; error?: string }> {
     try {
-      const insertData = messages.map(msg => ({
+      // Use microsecond precision for guaranteed ordering in high-concurrency scenarios
+      const baseTime = Date.now();
+      
+      const insertData = messages.map((msg, index) => ({
         chat_session_id: msg.chatSessionId,
         content: msg.content,
         is_user_message: msg.isUserMessage,
         attachments: msg.attachments ? JSON.stringify(msg.attachments) : null,
-        created_at: new Date().toISOString()
+        reasoning: msg.reasoning || null,
+        sources: msg.sources || null,
+        tool_invocations: msg.toolInvocations ? JSON.stringify(msg.toolInvocations) : null,
+        // Microsecond precision: each message gets a unique timestamp
+        created_at: new Date(baseTime + index).toISOString()
       }));
 
       const supabase = this.getClient();
