@@ -101,6 +101,39 @@ const formatted = this.formatMessage('debug', ` ${message}`, context);
     const formatted = this.formatMessage('debug', `💬 Chat submission: ${messageId}`, context);
     console.log(formatted);
   }
+
+  // Chat error events - CRITICAL for room chat functionality
+  chatError(messageId: string, error: Error, context?: LogContext): void {
+    const formatted = this.formatMessage('error', `💬 Chat error: ${messageId}`, context);
+    console.error(formatted, error.stack || '');
+    
+    // In production, you might want to send this to an error tracking service
+    if (!this.isDevelopment) {
+      // TODO: Send to error tracking service (Sentry, DataDog, etc.)
+      // this.trackError(error, context);
+    }
+  }
+
+  // Chat success events
+  chatSuccess(messageId: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+    const formatted = this.formatMessage('debug', `✅ Chat success: ${messageId}`, context);
+    console.log(formatted);
+  }
+
+  // Room-specific events
+  room(message: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+    const formatted = this.formatMessage('debug', `🏠 ${message}`, context);
+    console.log(formatted);
+  }
+
+  // Message processing events
+  messageProcess(messageId: string, context?: LogContext): void {
+    if (!this.isDevelopment) return;
+    const formatted = this.formatMessage('debug', `📝 Message processed: ${messageId}`, context);
+    console.log(formatted);
+  }
 }
 
 export const logger = new Logger();

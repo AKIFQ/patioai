@@ -31,14 +31,15 @@ import { toast } from 'sonner';
 import RoomSettingsModal from './RoomSettingsModal';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
+import RoomRateLimitHandler from './RoomRateLimitHandler';
 import CrossThreadActivity from './CrossThreadActivity';
-import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
-import { useMobileSidebar } from './chat_history/ChatHistorySidebar';
+import { useSidebar } from '@/components/ui/sidebar';
 import { useReasoningStream } from '../hooks/useReasoningStream';
 import { useChatSubmissionState } from '@/lib/client/atomicStateManager';
 import { logger } from '@/lib/utils/logger';
+import { useChatPagination } from '../hooks/useChatPagination';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
@@ -85,7 +86,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const param = useParams();
   const router = useRouter();
   const currentChatId = param.id as string;
-  const { open: openMobileSidebar, close: closeMobileSidebar, isOpen: isMobileSidebarOpen } = useMobileSidebar();
+  const { toggleSidebar, isMobile, openMobile, setOpenMobile } = useSidebar();
   const touchAreaRef = useRef<HTMLDivElement | null>(null);
   const [swipeProgress, setSwipeProgress] = useState(0); // 0-1 for animation progress
   const [isSwipeActive, setIsSwipeActive] = useState(false);
@@ -117,8 +118,27 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [showRemovalUI, setShowRemovalUI] = useState(false);
   const [removalRoomName, setRemovalRoomName] = useState('');
 
+  // Use pagination hook for room chats, fallback to regular state for non-room chats
+  const roomPagination = useChatPagination({
+    shareCode: roomContext?.shareCode,
+    chatSessionId: roomContext?.chatSessionId,
+    isRoomChat: !!roomContext,
+    initialMessages: currentChat || [],
+    pageSize: 50
+  });
+
   const [realtimeMessages, setRealtimeMessages] = useState<EnhancedMessage[]>(currentChat || []);
   const [isRoomLoading, setIsRoomLoading] = useState(false);
+
+  // Sync realtimeMessages with paginated messages for room chats
+  useEffect(() => {
+    if (roomContext && roomPagination.messages.length > 0) {
+      setRealtimeMessages(roomPagination.messages);
+    }
+  }, [roomContext, roomPagination.messages]);
+
+  // Use realtimeMessages for both room and non-room chats (pagination updates realtimeMessages)
+  const displayMessages = realtimeMessages;
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const streamingAssistantIdRef = useRef<string | null>(null);
 
@@ -282,17 +302,17 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
     // Early exit for maximum efficiency
     if (!roomContext || !isRoomLoading) return;
 
-    const messageCount = realtimeMessages.length;
+    const messageCount = displayMessages.length;
     if (messageCount === 0) return;
 
     // Only check the last message when count changes
-    const lastMessage = realtimeMessages[messageCount - 1];
+    const lastMessage = displayMessages[messageCount - 1];
     if (lastMessage?.role === 'assistant') {
       // Efficient timeout with cleanup
       const timeoutId = setTimeout(() => setIsRoomLoading(false), 2000);
       return () => clearTimeout(timeoutId);
     }
-  }, [roomContext, isRoomLoading, realtimeMessages.length]); // Only depend on length, not full array
+  }, [roomContext, isRoomLoading, displayMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput with atomic state management
   const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI = true, reasoningModeEnabled = false) => {
@@ -342,13 +362,18 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
           });
 
           if (!response.ok) {
+            // Check for room rate limiting errors first
+            const rateLimitHandled = await handleRoomRateLimitError(response.clone());
+            if (rateLimitHandled) {
+              return; // Error was handled with toast notification
+            }
+            
             // Check if this is a "removed from room" error
             if (response.status === 403) {
               try {
                 const errorData = await response.json();
                 if (errorData.error === 'REMOVED_FROM_ROOM') {
                   // Show removal UI modal instead of redirecting
-                  // Debug logging removed
                   setRemovalRoomName(errorData.roomName || roomContext.roomName);
                   setShowRemovalUI(true);
                   return;
@@ -428,13 +453,18 @@ throw new Error(`API call failed: ${response.status}`);
           });
 
           if (!response.ok) {
+            // Check for room rate limiting errors first
+            const rateLimitHandled = await handleRoomRateLimitError(response.clone());
+            if (rateLimitHandled) {
+              return; // Error was handled with toast notification
+            }
+            
             // Check if this is a "removed from room" error
             if (response.status === 403) {
               try {
                 const errorData = await response.json();
                 if (errorData.error === 'REMOVED_FROM_ROOM') {
                   // Show removal UI modal instead of redirecting
-                  // Debug logging removed
                   setRemovalRoomName(errorData.roomName || roomContext.roomName);
                   setShowRemovalUI(true);
                   return;
@@ -513,25 +543,64 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorInstance = error instanceof Error ? error : new Error(errorMessage);
 
-      logger.chatError(messageId, errorInstance, {
-        roomContext: roomContext?.shareCode,
-        messagePreview: message.substring(0, 50)
-      });
+      // Log the error with detailed context
+      if (typeof logger?.chatError === 'function') {
+        logger.chatError(messageId, errorInstance, {
+          roomContext: roomContext?.shareCode || 'no-room',
+          messagePreview: message && typeof message === 'string' ? message.substring(0, 50) : 'No message content',
+          errorType: error.constructor.name,
+          errorStack: error instanceof Error ? error.stack : undefined
+        });
+      } else {
+        // Fallback logging if logger.chatError is not available
+        console.error(`Chat error [${messageId}]:`, errorInstance, {
+          roomContext: roomContext?.shareCode || 'no-room',
+          messagePreview: message && typeof message === 'string' ? message.substring(0, 50) : 'No message content',
+          errorType: error.constructor.name
+        });
+      }
 
-      // Use atomic state manager to handle error
-      finishSubmission(messageId, errorMessage);
+      try {
+        // Check for room rate limiting errors
+        if (error instanceof Error && error.message.includes('API call failed: 429')) {
+          // This is a rate limit error - the response should have been handled above
+          // Just finish the submission without additional error toast
+          await finishSubmission(messageId, 'Rate limit reached');
+          return;
+        }
+        
+        // Use atomic state manager to handle error
+        await finishSubmission(messageId, errorMessage);
+      } catch (finishError) {
+        // If finishSubmission fails, log it but don't crash
+        console.warn('Error calling finishSubmission:', finishError);
+      }
 
       if (roomContext) {
-        toast.error('Failed to send message. Please try again.');
+        // Check for specific rate limiting errors and provide professional messages
+        if (error instanceof Error && error.message.includes('Please wait before sending another message')) {
+          toast.error('Please slow down - wait a moment before sending another message');
+        } else if (error instanceof Error && error.message.includes('Submission already in progress')) {
+          toast.error('Message is already being sent - please wait');
+        } else {
+          toast.error('Failed to send message. Please try again.');
+        }
       }
     } finally {
       if (roomContext) {
         setIsRoomLoading(false);
       }
 
-      // Ensure submission is marked as finished (success case)
-      if (!submissionState.errors.length) {
-        finishSubmission(messageId);
+      // Only call finishSubmission if it hasn't been called in the catch block
+      // This prevents double-calling and ensures proper error state
+      try {
+        const hasError = submissionState?.errors?.some(err => err && err.includes(messageId)) || false;
+        if (!hasError) {
+          await finishSubmission(messageId);
+        }
+      } catch (finallyError) {
+        // If there's an error in the finally block, log it but don't crash
+        console.warn('Error in finally block:', finallyError);
       }
     }
   }, [roomContext, apiEndpoint, realtimeMessages, optimisticOption, append, setMessages, stableChatId, startSubmission, finishSubmission, submissionState.errors.length]);
@@ -540,26 +609,45 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 
   // Real-time functionality for room chats - memoized to prevent re-renders
   const handleNewMessage = useCallback((newMessage: EnhancedMessage) => {
-    // Debug logging removed
+    // If a temporary streaming assistant message exists, replace it in-place with the DB-backed message
+    const tempId = streamingAssistantIdRef.current;
+    if (tempId && newMessage.role === 'assistant') {
+      setRealtimeMessages(prev => {
+        const hasTemp = prev.some(m => m.id === tempId);
+        if (hasTemp) {
+          const updated = prev.map(m => (m.id === tempId ? { ...newMessage } as any : m));
+          // Clear streaming temp id after replacement
+          streamingAssistantIdRef.current = null;
+          setStreamingAssistantId(null);
+          // Initialize reasoning state for the finalized AI message
+          if (newMessage.reasoning) {
+            setReasoningStates(prevRs => ({
+              ...prevRs,
+              [newMessage.id]: { isOpen: true, hasStartedStreaming: false }
+            }));
+          }
+          return updated;
+        }
+        return [...prev, newMessage];
+      });
+
+      // Track processed message id
+      setProcessedMessageIds(prev => new Set(prev).add(newMessage.id));
+      return;
+    }
 
     // Use functional updates to avoid dependency on processedMessageIds
     setProcessedMessageIds(prevProcessed => {
-      // Check if we've already processed this message
       if (prevProcessed.has(newMessage.id)) {
-        // Debug logging removed
-        return prevProcessed; // Return same reference to avoid re-render
+        return prevProcessed;
       }
 
-      // Mark message as processed and update UI
       setRealtimeMessages(prevMessages => {
         const exists = prevMessages.find(msg => msg.id === newMessage.id);
         if (exists) {
-          // Debug logging removed
           return prevMessages;
         }
-        // Debug logging removed
 
-        // Initialize reasoning state for AI messages
         if (newMessage.role === 'assistant' && newMessage.reasoning) {
           setReasoningStates(prev => ({
             ...prev,
@@ -570,7 +658,6 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
         return [...prevMessages, newMessage];
       });
 
-      // Return new Set with the processed message ID
       return new Set(prevProcessed).add(newMessage.id);
     });
   }, []); // Empty dependency array - stable function
@@ -599,6 +686,8 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 const tempId = `ai-temp-${Date.now()}`;
     streamingAssistantIdRef.current = tempId;
     setStreamingAssistantId(tempId);
+    // Stop blue loader once streaming begins to avoid duplicate loaders
+    setIsRoomLoading(false);
     setRealtimeMessages(prev => ([
       ...prev,
       {
@@ -633,10 +722,8 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
 
-    // CRITICAL FIX: For room chats, don't create a temporary permanent message
-    // The database will send the real message via room-message-created event
-    // Just remove the streaming message and let the database message take over
-    setRealtimeMessages(prev => prev.filter(m => m.id !== currentId));
+    // Do not remove the temporary message here; it will be replaced in-place when
+    // the DB-backed 'room-message-created' event arrives
 
     // Clear reasoning state - the database message will have the final reasoning
     setRoomReasoningState(prev => ({
@@ -645,9 +732,7 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
       isComplete: true
     }));
 
-    // Clear streaming state
-    streamingAssistantIdRef.current = null;
-    setStreamingAssistantId(null);
+    // Keep streamingAssistantIdRef so handleNewMessage can replace it in-place
   }, [roomContext]);
 
   // New reasoning handlers for room chats
@@ -704,6 +789,117 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     // Page reload should only happen for the specific user being removed
   }, []);
 
+  // Room rate limiting error handlers
+  const handleAIError = useCallback((error: any) => {
+    console.log('🚨 AI Error in Chat:', error);
+    
+    if (error.roomLimitExceeded) {
+      const resetTime = error.resetTime ? new Date(error.resetTime).toLocaleTimeString() : 'soon';
+      
+      if (error.error.includes('reasoning')) {
+        toast.error(`Room reasoning limit reached (${error.currentUsage}/${error.limit}). Resets at ${resetTime}.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+      } else {
+        toast.error(`Room AI response limit reached (${error.currentUsage}/${error.limit}). Resets at ${resetTime}.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+      }
+    } else {
+      // Handle other AI errors
+      toast.error(error.error || 'AI response failed. Please try again.');
+    }
+  }, [router]);
+
+  const handleRoomLimitReached = useCallback((limitType: 'messages' | 'ai_responses' | 'threads', details: any) => {
+    console.log('🚨 Room Limit Reached in Chat:', limitType, details);
+    
+    const resetTime = details.resetTime ? new Date(details.resetTime).toLocaleTimeString() : 'soon';
+    
+    switch (limitType) {
+      case 'messages':
+        toast.error(`Room message limit reached (${details.currentUsage}/${details.limit}). Resets at ${resetTime}.`, {
+          duration: 6000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+        break;
+        
+      case 'ai_responses':
+        toast.error(`Room AI response limit reached (${details.currentUsage}/${details.limit}). Resets at ${resetTime}.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+        break;
+        
+      case 'threads':
+        toast.warning(`Room thread limit reached (${details.currentUsage}/${details.limit}). Consider upgrading for more threads.`, {
+          duration: 8000,
+          action: {
+            label: 'Upgrade Room',
+            onClick: () => router.push('/account')
+          }
+        });
+        break;
+    }
+  }, [router]);
+
+  // Helper function to handle room rate limiting errors
+  const handleRoomRateLimitError = useCallback(async (response: Response): Promise<boolean> => {
+    if (response.status === 429) {
+      try {
+        const errorData = await response.json();
+        
+        if (errorData.error === 'ROOM_MESSAGE_LIMIT_EXCEEDED') {
+          const resetTime = errorData.resetTime ? new Date(errorData.resetTime).toLocaleTimeString() : 'soon';
+          toast.error(`Room message limit reached (${errorData.currentUsage}/${errorData.limit}). Resets at ${resetTime}.`, {
+            duration: 6000,
+            action: {
+              label: 'Upgrade Room',
+              onClick: () => router.push('/account')
+            }
+          });
+          return true; // Error handled
+        }
+        
+        if (errorData.error === 'THREAD_MESSAGE_LIMIT_EXCEEDED') {
+          toast.warning(`Thread limit reached (${errorData.messageCount}/${errorData.limit} messages). Consider starting a new thread for better AI responses.`, {
+            duration: 8000,
+            action: {
+              label: 'New Thread',
+              onClick: () => {
+                // Create new thread within the same room (same logic as handleNewChat)
+                const newThreadId = crypto.randomUUID();
+                const currentParams = new URLSearchParams(window.location.search);
+                currentParams.set('threadId', newThreadId);
+                currentParams.delete('chatSession');
+                const newUrl = `/chat/room/${roomContext?.shareCode}?${currentParams.toString()}`;
+                router.replace(newUrl);
+              }
+            }
+          });
+          return true; // Error handled
+        }
+      } catch (parseError) {
+        console.warn('Could not parse rate limit error response:', parseError);
+      }
+    }
+    return false; // Error not handled
+  }, [router, roomContext?.shareCode]);
+
   // Memoize realtime hook props to prevent unnecessary re-initializations
   const realtimeProps = useMemo(() => {
     if (!roomContext) return null;
@@ -721,7 +917,9 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
       onReasoningChunk: handleReasoningChunk,
       onReasoningEnd: handleReasoningEnd,
       onContentStart: handleContentStart,
-      onCrossThreadActivity: handleCrossThreadActivity
+      onCrossThreadActivity: handleCrossThreadActivity,
+      onAIError: handleAIError,
+      onRoomLimitReached: handleRoomLimitReached
     };
   }, [
     roomContext?.shareCode,
@@ -737,7 +935,10 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     handleReasoningChunk,
     handleReasoningEnd,
     handleContentStart,
-    handleCrossThreadActivity
+    handleCrossThreadActivity,
+    handleAIError,
+    handleRoomLimitReached,
+    handleRoomRateLimitError
   ]);
 
   // Initialize real-time hook with safe fallbacks
@@ -892,9 +1093,9 @@ console.error('Error creating new chat:', error);
       // Detect swipe zones
       const isLeftEdge = startX <= EDGE_ZONE;
       const isRightEdge = startX >= window.innerWidth - EDGE_ZONE;
-      const canOpenFromLeft = isLeftEdge && !isMobileSidebarOpen;
-      const canCloseFromRight = isRightEdge && isMobileSidebarOpen;
-      const canCloseFromAnywhere = isMobileSidebarOpen && startX <= MAX_SWIPE_DISTANCE;
+      const canOpenFromLeft = isLeftEdge && !(isMobile && openMobile);
+      const canCloseFromRight = isRightEdge && (isMobile && openMobile);
+      const canCloseFromAnywhere = (isMobile && openMobile) && startX <= MAX_SWIPE_DISTANCE;
 
       if (canOpenFromLeft || canCloseFromRight || canCloseFromAnywhere) {
         isTracking = true;
@@ -957,10 +1158,10 @@ console.error('Error creating new chat:', error);
 
       if (swipeDirection === 'open' && deltaX > SWIPE_THRESHOLD) {
         shouldTrigger = true;
-        openMobileSidebar();
+        if (isMobile) setOpenMobile(true);
       } else if (swipeDirection === 'close' && Math.abs(deltaX) > SWIPE_THRESHOLD) {
         shouldTrigger = true;
-        closeMobileSidebar();
+        if (isMobile) setOpenMobile(false);
       }
 
       // Smooth animation to final state
@@ -968,7 +1169,7 @@ console.error('Error creating new chat:', error);
         setSwipeProgress(swipeDirection === 'open' ? 1 : 0);
       } else {
         // Snap back to original state
-        setSwipeProgress(isMobileSidebarOpen ? 1 : 0);
+        setSwipeProgress((isMobile && openMobile) ? 1 : 0);
       }
 
       // Reset state
@@ -992,7 +1193,7 @@ console.error('Error creating new chat:', error);
       el.removeEventListener('touchmove', onTouchMove as any);
       el.removeEventListener('touchend', onTouchEnd as any);
     };
-  }, [openMobileSidebar, closeMobileSidebar, isMobileSidebarOpen]);
+  }, [isMobile, openMobile, setOpenMobile]);
 
   return (
     <div ref={touchAreaRef} className="flex h-full w-full flex-col relative">
@@ -1018,8 +1219,9 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         />
       )}
 
-      {/* Mobile Header with Hamburger Menu */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border h-12 shadow-sm w-full md:hidden">
+      {/* Mobile Header with Hamburger Menu - only for rooms */}
+      {roomContext && (
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-14 shadow-sm w-full md:hidden">
         <div className="flex items-center justify-between w-full h-full px-4">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1027,9 +1229,9 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             <Button
               variant="ghost"
               size="icon"
-              onClick={openMobileSidebar}
-              className="h-8 w-8 text-foreground hover:bg-transparent transition-colors bg-transparent border-0 shadow-none flex-shrink-0"
-              aria-label="Open sidebar"
+              onClick={toggleSidebar}
+              className="h-9 w-9 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
+              aria-label="Toggle sidebar"
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -1039,19 +1241,19 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               <Image
                 src="/icons/icon-512x512.png"
                 alt="PatioAI"
-                width={20}
-                height={20}
-                className="rounded-sm"
+                width={24}
+                height={24}
+                className="rounded-md"
               />
             </div>
 
             {/* Room Name */}
-            <h1 className="text-base font-medium tracking-tight truncate">
+            <h1 className="text-lg font-semibold tracking-tight truncate text-foreground">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
             </h1>
           </div>
 
-          {/* Right side - Activity Indicators */}
+          {/* Right side - Activity Indicators + New Chat Button */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Mobile cross-thread activity indicators */}
             {roomContext && crossThreadActivities.some(activity =>
@@ -1064,10 +1266,23 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                   currentUser={roomContext.displayName}
                 />
               )}
-          </div>
 
-          {/* Right side - New Chat Button + compact settings (mobile only) */}
-          <div className="flex items-center gap-2">
+            {/* New Chat Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNewChat}
+              disabled={isCreatingNewChat}
+              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors rounded-lg"
+            >
+              {isCreatingNewChat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+            </Button>
+
+            {/* Room Settings (if in room) */}
             {roomContext && (
               <RoomSettingsModal
                 roomContext={roomContext}
@@ -1076,25 +1291,14 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                 onRoomUpdate={() => router.refresh()}
               />
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleNewChat}
-              disabled={isCreatingNewChat}
-              className="h-8 px-2 text-sm font-medium hover:bg-muted/50 transition-colors"
-            >
-              {isCreatingNewChat ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-            </Button>
           </div>
         </div>
       </div>
+      )}
 
-      {/* Desktop Chat Header */}
-      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-2 sm:py-3 md:py-4 flex-shrink-0 hidden md:block">
+      {/* Desktop Chat Header - only for rooms */}
+      {roomContext && (
+      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
@@ -1171,41 +1375,110 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
           </div>
         </div>
       </div>
+      )}
+
+      {/* Personal chat: floating New Chat button (top-right inside chat area) */}
+      {!roomContext && (
+        <>
+        {/* Mobile-only floating hamburger (no background) to toggle sidebar */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Toggle sidebar"
+          className="md:hidden absolute top-2 left-3 z-10 h-8 w-8 flex items-center justify-center"
+        >
+          <Menu className="h-5 w-5 text-foreground" />
+        </button>
+
+        <div className="absolute top-2 right-3 md:top-4 md:right-6 z-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNewChat}
+            disabled={isCreatingNewChat}
+            className="h-8 px-3 text-sm font-medium hover:bg-muted/50 rounded-lg"
+            aria-label="New Chat"
+          >
+            {isCreatingNewChat ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+        </>
+      )}
 
       {/* Scrollable Chat Content */}
       <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
         {/* Use realtime messages for room chats, regular messages for individual chats */}
         {(roomContext ? realtimeMessages : messages).length === 0 ? (
-          <div className="flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4">
+          <div className="flex-1 flex flex-col justify-center items-center text-center px-4 sm:px-6 md:px-8">
             {roomContext ? (
-              <h2 className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
-                Welcome to {roomContext.roomName} — let's collaborate!
-              </h2>
+              <div className="flex flex-col items-center gap-4 max-w-md">
+                <div className="flex items-center gap-3">
+                  <Image
+                    src="/icons/icon-512x512.png"
+                    alt="PatioAI"
+                    width={40}
+                    height={40}
+                    className="drop-shadow-lg filter-[brightness(1.2)]"
+                  />
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gradient">
+                    Hey {userData?.full_name?.split(' ')[0] || 'there'}, welcome to {roomContext.roomName}
+                  </h1>
+                </div>
+                <p className="text-sm sm:text-base text-muted-foreground text-center">
+                  Invite people by sharing the room link and have a blast!
+                </p>
+              </div>
             ) : (
-              <h2 className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
-                Ready to chat? Ask me anything!
-              </h2>
+              <div className="flex flex-col items-center gap-4 max-w-md">
+                <div className="flex items-center gap-3">
+                  <Image
+                    src="/icons/icon-512x512.png"
+                    alt="PatioAI"
+                    width={40}
+                    height={40}
+                    className="drop-shadow-lg filter-[brightness(1.2)]"
+                  />
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gradient">
+                    Hey {userData?.full_name?.split(' ')[0] || 'there'}, let’s chat
+                  </h1>
+                </div>
+                <p className="text-sm sm:text-base text-muted-foreground text-center">
+                  Want to talk 1:1 before jumping into a room? No problem — you can create a room anytime.
+                </p>
+              </div>
             )}
           </div>
         ) : (
-          <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
+          <div className={`flex-1 w-full min-w-0 flex flex-col overflow-hidden relative ${!roomContext ? 'pt-6 sm:pt-8' : ''}`}>
+            {!roomContext && (
+              <div className="pointer-events-none absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background via-background/70 to-transparent backdrop-blur-[2px] z-[1]" />
+            )}
             <VirtualizedMessageList
-              messages={roomContext ? realtimeMessages : messages}
+              messages={roomContext ? displayMessages : messages}
               height={0} // Will be calculated by the flexible container using CSS
-              itemHeight={88}
+              itemHeight={64}
               currentUserDisplayName={roomContext?.displayName}
-              showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
+              showLoading={roomContext ? false : (status === 'streaming' || status === 'submitted')}
               isRoomChat={!!roomContext}
               streamingMessageId={(roomContext ? roomReasoningState.messageId : reasoningStream.streamingMessageId) || undefined}
               streamingReasoning={roomContext ? roomReasoningState.reasoning : reasoningStream.streamingReasoning}
               isReasoningStreaming={roomContext ? roomReasoningState.isStreaming : status === 'streaming'}
               isReasoningComplete={roomContext ? roomReasoningState.isComplete : reasoningStream.isReasoningComplete}
+              // Pagination props for room chats
+              hasMoreMessages={roomContext ? roomPagination.hasMore : false}
+              isLoadingMore={roomContext ? roomPagination.isLoading : false}
+              onLoadMore={roomContext ? roomPagination.loadMore : undefined}
+              totalDisplayed={roomContext ? roomPagination.totalDisplayed : 0}
             />
           </div>
         )}
       </div>
 
-      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-2 px-1 sm:px-2 md:px-4 bg-transparent">
+      <div className="sticky bottom-0 w-full z-5 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator

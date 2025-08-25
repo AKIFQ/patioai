@@ -10,10 +10,17 @@ import { openRouterService } from '@/lib/ai/openRouterService';
 import { ModelRouter } from '@/lib/ai/modelRouter';
 import { userTierService } from '@/lib/ai/userTierService';
 import { tierRateLimiter } from '@/lib/limits/rateLimiter';
+import { getTierLimits } from '@/lib/limits/tierLimits';
+import { withMemoryProtection, memoryProtection } from '@/lib/monitoring/memoryProtection';
 
 export const dynamic = 'force-dynamic';
 
 export const maxDuration = 60;
+
+// Simple token estimation (roughly 4 characters per token)
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
 
 const getSystemPrompt = (selectedFiles: string[], reasoningMode = false) => {
   const reasoningGuidelines = reasoningMode ? `
@@ -80,6 +87,17 @@ console.log(` Chat model routing: ${selectedModel} → ${routedModel} (tier: ${u
 };
 
 export async function POST(req: NextRequest) {
+  // Check memory protection circuit breaker FIRST
+  if (memoryProtection.shouldBlockOperation()) {
+    return new NextResponse(
+      JSON.stringify({ error: 'System under high load. Please try again in a few moments.' }),
+      { 
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
   const session = await getSession();
 
   if (!session) {
@@ -130,9 +148,44 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
-  // Get last message content for context analysis
+
+  // Check context window limits based on user tier
+  const tierLimits = getTierLimits(userSubscription.tier as any);
   const lastMessageContent = typeof lastMessage.content === 'string' ? lastMessage.content : '';
+  const currentPromptTokens = estimateTokens(lastMessageContent);
+  
+  // Calculate total context tokens from message history
+  const historyTokens = messages.slice(0, -1).reduce((total, msg) => {
+    const content = typeof msg.content === 'string' ? msg.content : '';
+    return total + estimateTokens(content);
+  }, 0);
+  const totalInputTokens = currentPromptTokens + historyTokens;
+
+  // Check per-message input token limit
+  if (currentPromptTokens > tierLimits.perMessageInputTokens!) {
+    return new NextResponse(
+      JSON.stringify({
+        error: `Message too long. Maximum ${tierLimits.perMessageInputTokens!.toLocaleString()} tokens allowed per message for ${userSubscription.tier} tier. Your message: ${currentPromptTokens.toLocaleString()} tokens.`
+      }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
+  // Check total context window limit
+  if (totalInputTokens > tierLimits.contextWindowTokens!) {
+    return new NextResponse(
+      JSON.stringify({
+        error: `Context too large. Maximum ${tierLimits.contextWindowTokens!.toLocaleString()} tokens allowed for ${userSubscription.tier} tier. Current context: ${totalInputTokens.toLocaleString()} tokens.`
+      }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+  
+  // Get last message content for context analysis (already defined above)
   
   // Route model and get provider options
   const context = modelRouter.analyzeMessageContext(lastMessageContent, messages.length);

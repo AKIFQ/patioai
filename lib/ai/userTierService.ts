@@ -7,8 +7,8 @@ const supabase = createClient(
 
 export interface UserSubscription {
   tier: 'free' | 'basic' | 'premium';
-  monthlyUsage: number;
-  monthlyLimit: number;
+  monthlyUsage: number; // Note: This actually tracks daily usage but kept for API compatibility
+  monthlyLimit: number; // Note: This actually tracks daily limit but kept for API compatibility
   costSpent: number;
   warningThreshold: number;
   hardLimit: number;
@@ -29,27 +29,27 @@ export class UserTierService {
 
       const tier = (tierRow?.tier as any) || 'free';
 
-      // 2) Read usage summary from counters (fallback to 0 if missing)
-      const monthStart = new Date();
-      monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+      // 2) Read usage summary from counters for DAILY usage (fallback to 0 if missing)
+      const dayStart = new Date();
+      dayStart.setHours(0,0,0,0);
       const { data: counters } = await supabase
         .from('user_usage_counters')
         .select('count')
         .eq('user_id', userId)
         .eq('resource', 'ai_requests')
-        .eq('period', 'month')
-        .eq('period_start', monthStart.toISOString())
+        .eq('period', 'day')
+        .eq('period_start', dayStart.toISOString())
         .maybeSingle();
 
-      const monthlyUsage = counters?.count ?? 0;
-      const monthlyLimit = tier === 'free' ? 400 : tier === 'basic' ? 1500 : 4000;
+      const dailyUsage = counters?.count ?? 0;
+      const dailyLimit = tier === 'free' ? 25 : tier === 'basic' ? 80 : 200;
       const costSpent = 0;
       const costLimit = tier === 'basic' ? 15 : tier === 'premium' ? 40 : 0;
 
       return {
         tier: tier as any,
-        monthlyUsage,
-        monthlyLimit,
+        monthlyUsage: dailyUsage,
+        monthlyLimit: dailyLimit,
         costSpent,
         warningThreshold: costLimit > 0 ? Math.floor(costLimit * 0.75) : 0,
         hardLimit: costLimit
@@ -60,7 +60,7 @@ export class UserTierService {
       return {
         tier: 'free',
         monthlyUsage: 0,
-        monthlyLimit: 50,
+        monthlyLimit: 25, // Daily limit for free tier
         costSpent: 0,
         warningThreshold: 0,
         hardLimit: 0

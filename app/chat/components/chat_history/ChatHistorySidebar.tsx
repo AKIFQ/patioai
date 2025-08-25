@@ -154,28 +154,28 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   rooms = [],
   roomChatsData = []
 }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  
-  // Get mobile state and sidebar context
+  // Get mobile state and sidebar context (single source of truth)
   const isMobile = useIsMobile();
-  const { setOpen } = useSidebar();
-  // Mobile sidebar visibility (shared with hamburger button)
-  const { isOpen: isMobileSidebarOpen, close: closeMobileSidebar } = useMobileSidebar();
+  const { setOpen, openMobile, setOpenMobile, open, toggleSidebar: toggleSidebarCtx } = useSidebar();
+  // Use unified sidebar context for mobile open/close
+  const isMobileSidebarOpen = openMobile;
+  const closeMobileSidebar = useCallback(() => setOpenMobile(false), [setOpenMobile]);
   const router = useRouter();
+  // Safe user params for links
+  const safeUserId = userInfo?.id || 'anon';
+  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || 'User';
+  const encodedDisplayName = encodeURIComponent(safeUserDisplay);
+  const encodedSessionId = encodeURIComponent(`auth_${safeUserId}`);
   
   // Get global modal context
   const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
 
 
 
-  // Auto-collapse sidebar on mobile
+  // Auto-collapse sidebar on mobile only; don't force open on desktop
   useEffect(() => {
     if (isMobile) {
-      setSidebarOpen(false);
       setOpen(false);
-    } else {
-      setSidebarOpen(true);
-      setOpen(true);
     }
   }, [isMobile, setOpen]);
 
@@ -272,11 +272,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
     };
   }, [mutateRoomChats]);
 
-  const toggleSidebar = () => {
-    const newState = !sidebarOpen;
-    setSidebarOpen(newState);
-    setOpen(newState);
-  };
+  const toggleSidebar = () => toggleSidebarCtx();
 
   const handleRoomSelect = () => {
     // Room selection is handled by navigation
@@ -425,9 +421,9 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   ) : null;
 
   // Minimized sidebar - Only show on desktop when collapsed
-  if (!sidebarOpen && !isMobile) {
+  if (!open && !isMobile) {
     return (
-      <div className="h-full border-r border-border w-[50px] flex-shrink-0 bg-background flex flex-col items-center py-2 hidden md:flex transform transition-all duration-300 ease-out">
+      <div className="h-full border-r-0 shadow-elevation-1 w-[50px] flex-shrink-0 bg-sidebar flex flex-col items-center py-3 hidden md:flex transform transition-smooth">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -435,7 +431,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={toggleSidebar}
-                className="h-8 w-8 mb-2 hover:bg-muted/70 transition-all duration-200 ease-out hover:scale-105 active:scale-95"
+                className="h-8 w-8 mb-3 rounded-full transition-smooth hover:scale-105 active:scale-95"
                 aria-label="Open sidebar"
               >
                 <Menu size={16} />
@@ -489,7 +485,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSidebarOpen(true)}
+                onClick={() => setOpen(true)}
                 className="h-8 w-8 mb-2 hover:bg-muted/70 transition-colors"
                 aria-label="Chat mode"
               >
@@ -513,7 +509,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       {mobileOverlay}
       <Sidebar
         collapsible="none"
-        className={`h-full border-r border-border w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-background ${
+        className={`h-full border-r-0 shadow-elevation-2 w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-sidebar ${
           isMobile 
             ? `fixed left-0 top-0 bottom-0 w-[280px] z-[101] mobile-sidebar sidebar-slide sidebar-transition transition-transform duration-300 ease-out ${
                 isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -521,7 +517,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             : 'sidebar-slide'
         }`}
       >
-        <SidebarHeader className="px-3 sm:px-4 lg:px-5 py-3 sm:py-4 border-b border-border gap-0">
+        <SidebarHeader className="px-3 sm:px-4 lg:px-5 py-4 sm:py-5 border-b-0 bg-sidebar gap-0">
           {/* PatioAI Logo - Larger with more spacing */}
           <div className="flex items-center justify-between mb-4 sm:mb-5 mt-1 sm:mt-2">
             <div className="ml-1 sm:ml-2">
@@ -531,51 +527,72 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                 width={100}
                 height={24}
                 priority
-                className="opacity-90"
+                className="opacity-90 dark:filter-none filter-[brightness(0.7)]"
+                style={{ width: 'auto', height: 'auto' }}
               />
             </div>
             <Button
               variant="ghost"
               size="sm"
-              onClick={toggleSidebar}
-              className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/70 transition-all duration-200 ease-out hover:scale-105 active:scale-95"
+              onClick={() => {
+                if (isMobile) {
+                  setOpenMobile(false);
+                } else {
+                  toggleSidebar();
+                }
+              }}
+              className="h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground transition-smooth hover:scale-105 active:scale-95"
               aria-label="Close sidebar"
             >
               <PanelLeftIcon size={14} />
             </Button>
           </div>
 
-          {/* Personal Chat Button - Aligned with ROOMS */}
+          {/* Personal Chat Button - Modern floating style */}
           <Button
             asChild
             variant="ghost"
-            className="w-full justify-start h-8 mb-4 sm:mb-6 ml-1 sm:ml-2 hover:bg-muted/70 transition-colors text-sm font-medium"
+            className="w-full justify-start h-10 mb-4 sm:mb-6 ml-1 sm:ml-2 rounded-xl 
+                       bg-[var(--elevation-1)] hover:bg-[var(--elevation-2)] 
+                       transition-smooth text-body font-medium shadow-elevation-1 hover:shadow-elevation-2
+                       border-0 text-gradient"
             size="sm"
           >
             <Link href="/chat">
+              <MessageSquare size={16} className="mr-2" />
               Personal Chat
             </Link>
           </Button>
 
-          {/* ROOMS Header - Compact */}
-          <div className="mb-1 border-b border-border/50 pb-2 ml-1 sm:ml-2">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rooms</h2>
+          {/* ROOMS Header - Modern styling */}
+          <div className="mb-3 pb-3 ml-1 sm:ml-2 relative">
+            <h2 className="text-caption font-semibold text-gradient opacity-90 flex items-center gap-2">
+              <Users size={14} className="opacity-70" />
+              Rooms
+            </h2>
+            <div className="absolute bottom-0 left-0 right-4 h-px bg-gradient-to-r from-[var(--elevation-3)] to-transparent opacity-50"></div>
           </div>
 
-          {/* Room Action Buttons - Compact */}
-          <div className="flex gap-1 sm:gap-2 ml-1 sm:ml-2">
+          {/* Room Action Buttons - Modern floating style */}
+          <div className="flex gap-2 ml-1 sm:ml-2">
             <Button
               onClick={openCreateRoomModal}
-              className="flex-1 h-7 text-xs font-medium"
+              className="flex-1 h-8 text-small font-medium rounded-lg 
+                         bg-[var(--elevation-1)] hover:bg-[var(--elevation-2)] 
+                         transition-smooth shadow-elevation-1 hover:shadow-elevation-2 border-0
+                         text-gradient"
               size="sm"
               variant="ghost"
             >
-              <Users size={13} className="mr-1 sm:mr-1.5" />
+              <Users size={14} className="mr-1.5" />
               New
             </Button>
             <Button
               onClick={openJoinRoomModal}
-              className="flex-1 h-7 text-xs font-medium"
+              className="flex-1 h-8 text-small font-medium rounded-lg
+                         bg-[var(--elevation-1)] hover:bg-[var(--elevation-2)] 
+                         transition-smooth shadow-elevation-1 hover:shadow-elevation-2 border-0
+                         text-gradient"
               size="sm"
               variant="outline"
             >
@@ -589,7 +606,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         {/* Rooms List - Clean scrollable section */}
         <div className="border-b border-border">
           <div className="px-3 sm:px-4 py-2">
-            {!userInfo.email ? (
+            {!userInfo?.email ? (
               <div className="text-center py-4 sm:py-6 space-y-2 sm:space-y-3">
                 <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
                 <Button asChild size="sm" variant="outline" className="h-8">
@@ -616,7 +633,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                     return (
                       <Link
                         key={room.id}
-                        href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
+                        href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${crypto.randomUUID()}`}
                         onClick={(e) => {
                           if (isExpired) {
                             e.preventDefault();
@@ -694,7 +711,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   {processedThreads.map((thread: any) => (
                     <Link
                       key={thread.id}
-                      href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                      href={`/chat/room/${currentRoomShareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${thread.id}`}
                       onClick={handleChatSelect}
                       className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                     >
@@ -743,7 +760,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                     {processedThreads.map((thread: any) => (
                       <Link
                         key={thread.id}
-                        href={`/chat/room/${thread.roomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                        href={`/chat/room/${thread.roomShareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${thread.id}`}
                         onClick={handleChatSelect}
                         className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                       >
@@ -782,20 +799,25 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
   rooms = [],
   roomChatsData = []
 }) => {
-  const { isOpen, close } = useMobileSidebar();
+  const { setOpenMobile } = useSidebar();
   const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
 
   const params = useParams();
   const searchParams = useSearchParams();
   const currentChatId = typeof params.id === 'string' ? params.id : undefined;
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
+  // Safe user params for links
+  const safeUserId = userInfo?.id || 'anon';
+  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || 'User';
+  const encodedDisplayName = encodeURIComponent(safeUserDisplay);
+  const encodedSessionId = encodeURIComponent(`auth_${safeUserId}`);
 
   const handleChatSelect = useCallback(() => {
     close();
   }, [close]);
 
   const handleCloseSidebar = () => {
-    close();
+    setOpenMobile(false);
   };
 
   const handleRoomCreated = useCallback(() => {
@@ -934,7 +956,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
     <>
 
 
-      <Sheet open={isOpen} onOpenChange={handleCloseSidebar}>
+      <Sheet open={true} onOpenChange={handleCloseSidebar}>
         <SheetContent side="left" className="w-[280px] p-0">
           <div className="flex flex-col h-full">
             {/* Header */}
@@ -946,7 +968,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                   width={100}
                   height={24}
                   priority
-                  className="opacity-90"
+                  className="opacity-90 dark:filter-none filter-[brightness(0.7)]"
                 />
               </div>
               <Button
@@ -1003,7 +1025,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
               {/* Rooms List */}
               <div className="px-4 py-2 border-b border-border">
-                {!userInfo.email ? (
+                {!userInfo?.email ? (
                   <div className="text-center py-4 space-y-2">
                     <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
                     <Button asChild size="sm" variant="outline" className="h-8">
@@ -1025,7 +1047,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                       return (
                         <Link
                           key={room.id}
-                          href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${crypto.randomUUID()}`}
+                          href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${crypto.randomUUID()}`}
                           onClick={(e) => {
                             if (isExpired) {
                               e.preventDefault();
@@ -1102,7 +1124,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                         {processedThreads.map((thread: any) => (
                           <Link
                             key={thread.id}
-                            href={`/chat/room/${currentRoomShareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                            href={`/chat/room/${currentRoomShareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${thread.id}`}
                             onClick={handleChatSelect}
                             className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                           >
@@ -1144,7 +1166,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                           {processedThreads.map((thread: any) => (
                             <Link
                               key={thread.id}
-                              href={`/chat/room/${thread.shareCode}?displayName=${encodeURIComponent(userInfo.full_name || userInfo.email?.split('@')[0] || 'User')}&sessionId=${encodeURIComponent(`auth_${userInfo.id}`)}&threadId=${thread.id}`}
+                              href={`/chat/room/${thread.shareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${thread.id}`}
                               onClick={handleChatSelect}
                               className="block p-2 rounded-lg hover:bg-muted/60 transition-colors"
                             >

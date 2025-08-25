@@ -15,6 +15,18 @@ import {
 export function ModeToggle() {
   const { setTheme } = useTheme();
 
+  const setThemeAndRefresh = (theme: 'light' | 'dark' | 'system') => {
+    setTheme(theme);
+    try {
+      // Give next-themes a tick to apply class, then refresh to ensure layout/styles recalc
+      setTimeout(() => {
+        window.location.reload();
+      }, 10);
+    } catch (e) {
+      // noop
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -25,13 +37,13 @@ export function ModeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme('light')}>
+        <DropdownMenuItem onClick={() => setThemeAndRefresh('light')}>
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')}>
+        <DropdownMenuItem onClick={() => setThemeAndRefresh('dark')}>
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')}>
+        <DropdownMenuItem onClick={() => setThemeAndRefresh('system')}>
           System
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -52,7 +52,7 @@ export function useAutoScroll({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
   const [userScrolling, setUserScrolling] = useState(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScrollTopRef = useRef(0);
   const programmaticScrollRef = useRef(false);
 
@@ -77,6 +77,9 @@ export function useAutoScroll({
       top: scrollRef.current.scrollHeight + extraBuffer,
       behavior: 'smooth'
     });
+    // Immediately mark as at-bottom so UI elements depending on it (e.g., down-arrow) can hide instantly
+    setIsAtBottom(true);
+    setIsAutoScrolling(true);
     
     // Reset programmatic flag after scroll completes
     setTimeout(() => {
@@ -116,6 +119,7 @@ export function useAutoScroll({
       // Clear any existing timeout
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
       }
     }
 
@@ -128,6 +132,7 @@ export function useAutoScroll({
     if (!atBottom) {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
       }
       
       scrollTimeoutRef.current = setTimeout(() => {
@@ -163,6 +168,7 @@ export function useAutoScroll({
       scrollElement.removeEventListener('scroll', handleScroll);
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
       }
     };
   }, [handleScroll]);
@@ -177,7 +183,7 @@ export function useAutoScroll({
   }, []);
 
   return {
-    scrollRef,
+    scrollRef: scrollRef as React.RefObject<HTMLDivElement>,
     isAtBottom,
     isAutoScrolling,
     scrollToBottom: autoScrollToBottom,

@@ -19,7 +19,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
-
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Room {
   id: string;
@@ -53,24 +53,8 @@ interface ShareOption {
 export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }: ShareRoomModalProps) {
   const [showQRCode, setShowQRCode] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const isMobile = useIsMobile();
   
-  // Mobile detection - use more reliable method
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const checkMobile = () => {
-      // Use multiple indicators for mobile detection
-      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      const isSmallScreen = window.innerWidth < 768;
-      const isMobileUserAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      setIsMobile(isTouchDevice && (isSmallScreen || isMobileUserAgent));
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
   // Check if user is the room creator (you can pass this as a prop or determine it somehow)
   const isRoomCreator = true; // This should be determined based on actual user/room data
   
@@ -338,21 +322,6 @@ export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }:
     }
   ];
 
-  // Shared header
-  const ShareHeader = (
-    <div className="flex-shrink-0 px-6 py-4 border-b border-border/40">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-          <Share2 className="h-4 w-4 text-amber-600" />
-        </div>
-        <div>
-          <h2 className="text-lg font-medium">Share Room</h2>
-          <p className="text-sm text-muted-foreground/80">Choose how to share "{room.name}"</p>
-        </div>
-      </div>
-    </div>
-  );
-
   // Shared content
   const ShareContent = (
     <div 
@@ -444,8 +413,26 @@ export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }:
           }}
         >
           <div className="w-12 h-1.5 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-1" />
-          {ShareHeader}
-          {ShareContent}
+          
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-border/40">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center">
+                <Share2 className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Share Room</h2>
+                <p className="text-sm text-muted-foreground">
+                  Choose how to share '{room.name}'
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 px-6 py-6 space-y-6 overflow-y-auto">
+            {ShareContent}
+          </div>
         </SheetContent>
       </Sheet>
     );
@@ -453,12 +440,32 @@ export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }:
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0 flex flex-col max-h-[90vh] backdrop-blur-md bg-background/95 border-border/40">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] p-0 gap-0 flex flex-col backdrop-blur-md bg-background/95 border-border/40">
         <VisuallyHidden>
           <DialogTitle>Share Room - {room.name}</DialogTitle>
         </VisuallyHidden>
-        {ShareHeader}
-        {ShareContent}
+        
+        {/* Header */}
+        <div className="px-6 py-6 border-b border-border/40">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center">
+              <Share2 className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">Share Room</h2>
+              <p className="text-sm text-muted-foreground">
+                Choose how to share '{room.name}'
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 px-6 py-6 space-y-6 overflow-y-auto">
+          {ShareContent}
+        </div>
+
+        {/* Footer */}
         <div className="px-6 py-4 border-t border-border/40">
           <Button 
             onClick={onClose} 

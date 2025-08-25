@@ -28,45 +28,20 @@ export const saveChatToSupbabase = async (
   }
   const supabase = await createServerSupabaseClient();
   try {
-    const now = new Date();
-    // Add a small delay (1 second) for the AI message
-    const aiMessageTime = new Date(now.getTime() + 1000);
-
     // Upsert the chat session
     const { error: sessionError } = await supabase.from('chat_sessions').upsert(
       {
         id: chatSessionId,
         user_id: userId,
-        updated_at: aiMessageTime.toISOString() // Use the later timestamp
+        updated_at: new Date().toISOString()
       },
       { onConflict: 'id' }
     );
 
     if (sessionError) throw sessionError;
 
-    // Prepare messages data with different timestamps
-    const messagesData = [
-      {
-        chat_session_id: chatSessionId,
-        is_user_message: true,
-        content: currentMessageContent,
-        attachments: attachments ? JSON.stringify(attachments) : null,
-        created_at: now.toISOString() // User message timestamp
-      },
-      {
-        chat_session_id: chatSessionId,
-        is_user_message: false,
-        content: completion,
-        reasoning: reasoning || null,
-        sources: sources && sources.length > 0 ? sources : null,
-        tool_invocations: toolInvocations
-          ? JSON.stringify(toolInvocations)
-          : null,
-        created_at: aiMessageTime.toISOString()
-      }
-    ];
-
-    // Use optimized batch insert for better performance
+    // Use optimized batch insert with proper ordering (user message first, then AI message)
+    // The SocketDatabaseService.insertChatMessages handles proper sequencing
     const result = await SocketDatabaseService.insertChatMessages([
       {
         chatSessionId,
@@ -78,7 +53,10 @@ export const saveChatToSupbabase = async (
         chatSessionId,
         content: completion,
         isUserMessage: false,
-        attachments: undefined
+        attachments: undefined,
+        reasoning: reasoning,
+        sources: sources && sources.length > 0 ? sources : null,
+        toolInvocations: toolInvocations
       }
     ]);
 

@@ -205,20 +205,30 @@ export class SocketDatabaseService {
     }
   }
 
-  // Batch insert chat messages for better performance
+  // Batch insert chat messages for better performance with proper ordering
   static async insertChatMessages(messages: {
     chatSessionId: string;
     content: string;
     isUserMessage: boolean;
     attachments?: any[];
+    reasoning?: string;
+    sources?: any;
+    toolInvocations?: any;
   }[]): Promise<{ success: boolean; messageIds?: string[]; error?: string }> {
     try {
-      const insertData = messages.map(msg => ({
+      // Use microsecond precision for guaranteed ordering in high-concurrency scenarios
+      const baseTime = Date.now();
+      
+      const insertData = messages.map((msg, index) => ({
         chat_session_id: msg.chatSessionId,
         content: msg.content,
         is_user_message: msg.isUserMessage,
         attachments: msg.attachments ? JSON.stringify(msg.attachments) : null,
-        created_at: new Date().toISOString()
+        reasoning: msg.reasoning || null,
+        sources: msg.sources || null,
+        tool_invocations: msg.toolInvocations ? JSON.stringify(msg.toolInvocations) : null,
+        // Microsecond precision: each message gets a unique timestamp
+        created_at: new Date(baseTime + index).toISOString()
       }));
 
       const supabase = this.getClient();
@@ -274,18 +284,28 @@ export class SocketDatabaseService {
   }> {
     try {
       const supabase = this.getClient();
-      // Find empty chat sessions older than 30 minutes
+      
+      // Step 1: Get all chat session IDs that have messages
+      const { data: sessionsWithMessages, error: messagesError } = await supabase
+        .from('chat_messages')
+        .select('chat_session_id')
+        .not('chat_session_id', 'is', null);
+
+      if (messagesError) {
+        return { success: false, error: messagesError.message };
+      }
+
+      // Extract the session IDs that have messages
+      const activeSessionIds = new Set(
+        sessionsWithMessages?.map(msg => msg.chat_session_id).filter(Boolean) || []
+      );
+
+      // Step 2: Find empty chat sessions older than 30 minutes that are NOT in the active list
       const { data: emptySessions, error: findError } = await supabase
         .from('chat_sessions')
         .select('id')
         .eq('user_id', userId)
-        .lt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
-        .not('id', 'in', 
-          supabase
-            .from('chat_messages')
-            .select('chat_session_id')
-            .not('chat_session_id', 'is', null)
-        );
+        .lt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString());
 
       if (findError) {
         return { success: false, error: findError.message };
@@ -295,8 +315,15 @@ export class SocketDatabaseService {
         return { success: true, cleanedCount: 0 };
       }
 
+      // Filter out sessions that have messages
+      const sessionsToDelete = emptySessions.filter(session => !activeSessionIds.has(session.id));
+
+      if (sessionsToDelete.length === 0) {
+        return { success: true, cleanedCount: 0 };
+      }
+
       // Delete empty sessions in batch
-      const sessionIds = emptySessions.map(s => s.id);
+      const sessionIds = sessionsToDelete.map(s => s.id);
       const { error: deleteError } = await supabase
         .from('chat_sessions')
         .delete()

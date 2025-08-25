@@ -25,9 +25,9 @@ export class MemoryManager {
   private monitoringInterval: NodeJS.Timeout | null = null;
   
   // CRITICAL: Container-compatible memory thresholds in MB
-  private readonly CRITICAL_THRESHOLD = 768;  // 768MB - aggressive cleanup (was 3GB)
-  private readonly WARNING_THRESHOLD = 512;   // 512MB - moderate cleanup (was 2GB)
-  private readonly CLEANUP_COOLDOWN = 15000;  // 15 seconds between cleanups (more frequent)
+  private readonly CRITICAL_THRESHOLD = 2048;  // 2GB - aggressive cleanup (was 768MB)
+  private readonly WARNING_THRESHOLD = 1536;   // 1.5GB - moderate cleanup (was 512MB)
+  private readonly CLEANUP_COOLDOWN = 30000;   // 30 seconds between cleanups (less frequent)
 
   private constructor() {
     this.startMemoryMonitoring();
@@ -57,9 +57,9 @@ export class MemoryManager {
         this.checkMemoryUsage();
         lastMemoryLevel = currentMemory;
         
-        // Adaptive interval: 30s when stable, 10s when unstable, 5s when critical
-        const nextInterval = currentMemory > this.CRITICAL_THRESHOLD ? 5000 :
-                            isStable ? 30000 : 10000;
+        // Adaptive interval: 60s when stable, 30s when unstable, 15s when critical
+        const nextInterval = currentMemory > this.CRITICAL_THRESHOLD ? 15000 :
+                            isStable ? 60000 : 30000;
         
         // Clear existing interval and set new one
         if (this.monitoringInterval) {
