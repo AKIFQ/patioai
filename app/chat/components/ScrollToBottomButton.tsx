@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
 import { ChevronDown } from 'lucide-react';
 
 interface ScrollToBottomButtonProps {
@@ -18,14 +17,14 @@ const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-32 left-1/2 transform -translate-x-1/2 translate-x-8 z-50 animate-in slide-in-from-bottom-2 duration-200">
-      <Button
+    <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 z-20 animate-in slide-in-from-bottom-2 duration-200">
+      <button
         onClick={onClick}
-        size="icon"
-        className="h-10 w-10 rounded-full shadow-md hover:shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+        aria-label="Scroll to bottom"
+        className="h-12 w-12 flex items-center justify-center bg-transparent text-foreground/80 hover:text-foreground transition-colors"
       >
-        <ChevronDown className="h-5 w-5" />
-      </Button>
+        <ChevronDown className="h-8 w-8" />
+      </button>
     </div>
   );
 };

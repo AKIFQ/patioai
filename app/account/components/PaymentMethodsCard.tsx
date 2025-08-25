@@ -36,7 +36,7 @@ export default function PaymentMethodsCard({ subscriptionInfo }: PaymentMethodsC
   return (
     <div className="space-y-6">
       {/* Payment Methods Overview */}
-      <Card className="p-6">
+      <Card className="p-6 bg-[var(--elevation-1)] border-[var(--border)]">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
@@ -59,7 +59,7 @@ export default function PaymentMethodsCard({ subscriptionInfo }: PaymentMethodsC
 
         {/* Payment Status Alert */}
         {needsPaymentUpdate && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mb-6 p-4 bg-red-50 dark:bg-[var(--elevation-2)] border border-red-200 dark:border-[var(--border)] rounded-lg">
             <div className="flex items-start gap-3">
               <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="space-y-2">
@@ -79,7 +79,7 @@ export default function PaymentMethodsCard({ subscriptionInfo }: PaymentMethodsC
           {hasActiveSubscription ? (
             <>
               {/* Active Subscription */}
-              <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-[var(--elevation-2)] border border-green-200 dark:border-[var(--border)] rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded flex items-center justify-center">
                     <span className="text-white text-xs font-bold">••••</span>
@@ -144,14 +144,14 @@ export default function PaymentMethodsCard({ subscriptionInfo }: PaymentMethodsC
       </Card>
 
       {/* Payment Security */}
-      <Card className="p-6 bg-blue-50 border-blue-200">
+      <Card className="p-6 bg-[var(--elevation-1)] border-[var(--border)]">
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-            <CreditCard className="h-4 w-4 text-blue-600" />
+          <div className="w-8 h-8 rounded-full bg-[var(--elevation-2)] flex items-center justify-center flex-shrink-0">
+            <CreditCard className="h-4 w-4 text-foreground/70" />
           </div>
           <div className="space-y-2">
-            <h4 className="font-medium text-blue-900">Secure Payment Processing</h4>
-            <ul className="space-y-1 text-sm text-blue-800">
+            <h4 className="font-medium">Secure Payment Processing</h4>
+            <ul className="space-y-1 text-sm text-muted-foreground">
               <li>• All payments are processed securely through Stripe</li>
               <li>• Your payment information is encrypted and never stored on our servers</li>
               <li>• You can update or cancel your subscription at any time</li>

@@ -16,6 +16,9 @@ import {
   AccordionTrigger
 } from '@/components/ui/accordion';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Inter } from 'next/font/google';
+
+const interMessage = Inter({ subsets: ['latin'], display: 'swap' });
 
 // Enhanced message interface for room chats with reasoning support
 interface EnhancedMessage extends Message {
@@ -128,7 +131,7 @@ const ChatMessage = memo(({
         )}
 
         {/* Message Content with Copy Button */}
-        <div className={`flex items-start gap-2 sm:gap-1 ${isUserMessage ? 'max-w-[72%] sm:max-w-[70%] md:max-w-[65%]' : 'max-w-[78%] sm:max-w-[76%] md:max-w-[70%]'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex items-start gap-2 sm:gap-1 ${isUserMessage ? 'max-w-[72%] sm:max-w-[70%] md:max-w-[65%]' : (isRoomChat && message.role === 'assistant' ? 'max-w-[90%] sm:max-w-[90%] md:max-w-[90%]' : 'max-w-[78%] sm:max-w-[76%] md:max-w-[70%]')} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 
@@ -152,7 +155,7 @@ const ChatMessage = memo(({
             <div 
               className={`
                 rounded-2xl transition-smooth shadow-elevation-1 hover:shadow-elevation-2
-                ${isMobile ? 'px-3.5 py-2.5 text-body' : 'px-3 py-2 text-small'}
+                ${isMobile ? 'px-3.5 py-2.5 text-body' : 'px-3 py-2 text-small'} ${interMessage.className}
                 ${isUserMessage
                   ? `bg-primary text-primary-foreground rounded-br-lg 
                      shadow-[0_2px_12px_color-mix(in_srgb,var(--primary)_20%,transparent)]

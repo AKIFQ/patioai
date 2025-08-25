@@ -13,16 +13,52 @@ import SubscriptionTierCard from './SubscriptionTierCard';
 import UsageDashboard from './UsageDashboard';
 import PaymentMethodsCard from './PaymentMethodsCard';
 import BillingHistoryCard from './BillingHistoryCard';
+import PaymentStatusAlert from './PaymentStatusAlert';
+
+export interface BillingHistoryItem {
+  id: string;
+  date: string;
+  amount: number;
+  status: 'paid' | 'failed' | 'pending' | 'refunded';
+  description: string;
+  currency: string;
+  downloadUrl?: string | null;
+  subscriptionId?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  failureReason?: string;
+  attemptCount?: number;
+  nextAttempt?: string;
+}
 
 interface AccountSettingsContentProps {
   subscriptionInfo: UserSubscriptionInfo;
+  billingHistory?: BillingHistoryItem[];
+  paymentSuccess?: boolean;
+  paymentCancelled?: boolean;
+  stripeSessionId?: string | null;
 }
 
-export default function AccountSettingsContent({ subscriptionInfo }: AccountSettingsContentProps) {
+export default function AccountSettingsContent({ 
+  subscriptionInfo,
+  billingHistory = [],
+  paymentSuccess = false,
+  paymentCancelled = false,
+  stripeSessionId = null
+}: AccountSettingsContentProps) {
   const [activeTab, setActiveTab] = useState('subscription');
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6">
+      {/* Payment Status Alert */}
+      <PaymentStatusAlert
+        paymentSuccess={paymentSuccess}
+        paymentCancelled={paymentCancelled}
+        stripeSessionId={stripeSessionId}
+        userEmail={subscriptionInfo.email || ''}
+        subscriptionTier={subscriptionInfo.subscription_tier}
+      />
+
       {/* Header */}
       <div className="flex items-center gap-4 pb-4 border-b border-border/40">
         <Button asChild variant="ghost" size="sm" className="gap-2">
@@ -107,7 +143,10 @@ export default function AccountSettingsContent({ subscriptionInfo }: AccountSett
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-4">
-          <BillingHistoryCard subscriptionInfo={subscriptionInfo} />
+          <BillingHistoryCard 
+            subscriptionInfo={subscriptionInfo} 
+            billingHistory={billingHistory}
+          />
         </TabsContent>
 
         <TabsContent value="payment" className="space-y-4">

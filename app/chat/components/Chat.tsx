@@ -33,7 +33,6 @@ import { useRoomSocket } from '../hooks/useRoomSocket';
 import TypingIndicator from './TypingIndicator';
 import RoomRateLimitHandler from './RoomRateLimitHandler';
 import CrossThreadActivity from './CrossThreadActivity';
-import AILoadingMessage from './AILoadingMessage';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useViewportHeight } from '../hooks/useViewportHeight';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -610,26 +609,45 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 
   // Real-time functionality for room chats - memoized to prevent re-renders
   const handleNewMessage = useCallback((newMessage: EnhancedMessage) => {
-    // Debug logging removed
+    // If a temporary streaming assistant message exists, replace it in-place with the DB-backed message
+    const tempId = streamingAssistantIdRef.current;
+    if (tempId && newMessage.role === 'assistant') {
+      setRealtimeMessages(prev => {
+        const hasTemp = prev.some(m => m.id === tempId);
+        if (hasTemp) {
+          const updated = prev.map(m => (m.id === tempId ? { ...newMessage } as any : m));
+          // Clear streaming temp id after replacement
+          streamingAssistantIdRef.current = null;
+          setStreamingAssistantId(null);
+          // Initialize reasoning state for the finalized AI message
+          if (newMessage.reasoning) {
+            setReasoningStates(prevRs => ({
+              ...prevRs,
+              [newMessage.id]: { isOpen: true, hasStartedStreaming: false }
+            }));
+          }
+          return updated;
+        }
+        return [...prev, newMessage];
+      });
+
+      // Track processed message id
+      setProcessedMessageIds(prev => new Set(prev).add(newMessage.id));
+      return;
+    }
 
     // Use functional updates to avoid dependency on processedMessageIds
     setProcessedMessageIds(prevProcessed => {
-      // Check if we've already processed this message
       if (prevProcessed.has(newMessage.id)) {
-        // Debug logging removed
-        return prevProcessed; // Return same reference to avoid re-render
+        return prevProcessed;
       }
 
-      // Mark message as processed and update UI
       setRealtimeMessages(prevMessages => {
         const exists = prevMessages.find(msg => msg.id === newMessage.id);
         if (exists) {
-          // Debug logging removed
           return prevMessages;
         }
-        // Debug logging removed
 
-        // Initialize reasoning state for AI messages
         if (newMessage.role === 'assistant' && newMessage.reasoning) {
           setReasoningStates(prev => ({
             ...prev,
@@ -640,7 +658,6 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
         return [...prevMessages, newMessage];
       });
 
-      // Return new Set with the processed message ID
       return new Set(prevProcessed).add(newMessage.id);
     });
   }, []); // Empty dependency array - stable function
@@ -669,6 +686,8 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 const tempId = `ai-temp-${Date.now()}`;
     streamingAssistantIdRef.current = tempId;
     setStreamingAssistantId(tempId);
+    // Stop blue loader once streaming begins to avoid duplicate loaders
+    setIsRoomLoading(false);
     setRealtimeMessages(prev => ([
       ...prev,
       {
@@ -703,10 +722,8 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     const currentId = streamingAssistantIdRef.current;
     if (!currentId) return;
 
-    // CRITICAL FIX: For room chats, don't create a temporary permanent message
-    // The database will send the real message via room-message-created event
-    // Just remove the streaming message and let the database message take over
-    setRealtimeMessages(prev => prev.filter(m => m.id !== currentId));
+    // Do not remove the temporary message here; it will be replaced in-place when
+    // the DB-backed 'room-message-created' event arrives
 
     // Clear reasoning state - the database message will have the final reasoning
     setRoomReasoningState(prev => ({
@@ -715,9 +732,7 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
       isComplete: true
     }));
 
-    // Clear streaming state
-    streamingAssistantIdRef.current = null;
-    setStreamingAssistantId(null);
+    // Keep streamingAssistantIdRef so handleNewMessage can replace it in-place
   }, [roomContext]);
 
   // New reasoning handlers for room chats
@@ -1204,7 +1219,8 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         />
       )}
 
-      {/* Mobile Header with Hamburger Menu */}
+      {/* Mobile Header with Hamburger Menu - only for rooms */}
+      {roomContext && (
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-14 shadow-sm w-full md:hidden">
         <div className="flex items-center justify-between w-full h-full px-4">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
@@ -1278,9 +1294,11 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
           </div>
         </div>
       </div>
+      )}
 
-      {/* Desktop Chat Header */}
-      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-2 sm:py-3 md:py-4 flex-shrink-0 hidden md:block">
+      {/* Desktop Chat Header - only for rooms */}
+      {roomContext && (
+      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
@@ -1357,6 +1375,39 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
           </div>
         </div>
       </div>
+      )}
+
+      {/* Personal chat: floating New Chat button (top-right inside chat area) */}
+      {!roomContext && (
+        <>
+        {/* Mobile-only floating hamburger (no background) to toggle sidebar */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Toggle sidebar"
+          className="md:hidden absolute top-2 left-3 z-10 h-8 w-8 flex items-center justify-center"
+        >
+          <Menu className="h-5 w-5 text-foreground" />
+        </button>
+
+        <div className="absolute top-2 right-3 md:top-4 md:right-6 z-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNewChat}
+            disabled={isCreatingNewChat}
+            className="h-8 px-3 text-sm font-medium hover:bg-muted/50 rounded-lg"
+            aria-label="New Chat"
+          >
+            {isCreatingNewChat ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+        </>
+      )}
 
       {/* Scrollable Chat Content */}
       <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
@@ -1369,9 +1420,9 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                   <Image
                     src="/icons/icon-512x512.png"
                     alt="PatioAI"
-                    width={48}
-                    height={48}
-                    className="drop-shadow-lg"
+                    width={40}
+                    height={40}
+                    className="drop-shadow-lg filter-[brightness(1.2)]"
                   />
                   <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gradient">
                     Hey {userData?.full_name?.split(' ')[0] || 'there'}, welcome to {roomContext.roomName}
@@ -1382,33 +1433,36 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-4 max-w-sm">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-4 max-w-md">
+                <div className="flex items-center gap-3">
                   <Image
                     src="/icons/icon-512x512.png"
                     alt="PatioAI"
-                    width={32}
-                    height={32}
-                    className="rounded-full"
+                    width={40}
+                    height={40}
+                    className="drop-shadow-lg filter-[brightness(1.2)]"
                   />
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gradient">
+                    Hey {userData?.full_name?.split(' ')[0] || 'there'}, let’s chat
+                  </h1>
                 </div>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-foreground">
-                  Ready to chat?
-                </h2>
                 <p className="text-sm sm:text-base text-muted-foreground text-center">
-                  Ask me anything! I'm here to help with your questions and tasks.
+                  Want to talk 1:1 before jumping into a room? No problem — you can create a room anytime.
                 </p>
               </div>
             )}
           </div>
         ) : (
-          <div className="flex-1 w-full min-w-0 flex flex-col overflow-hidden">
+          <div className={`flex-1 w-full min-w-0 flex flex-col overflow-hidden relative ${!roomContext ? 'pt-6 sm:pt-8' : ''}`}>
+            {!roomContext && (
+              <div className="pointer-events-none absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background via-background/70 to-transparent backdrop-blur-[2px] z-[1]" />
+            )}
             <VirtualizedMessageList
               messages={roomContext ? displayMessages : messages}
               height={0} // Will be calculated by the flexible container using CSS
               itemHeight={64}
               currentUserDisplayName={roomContext?.displayName}
-              showLoading={roomContext ? isRoomLoading : (status === 'streaming' || status === 'submitted')}
+              showLoading={roomContext ? false : (status === 'streaming' || status === 'submitted')}
               isRoomChat={!!roomContext}
               streamingMessageId={(roomContext ? roomReasoningState.messageId : reasoningStream.streamingMessageId) || undefined}
               streamingReasoning={roomContext ? roomReasoningState.reasoning : reasoningStream.streamingReasoning}

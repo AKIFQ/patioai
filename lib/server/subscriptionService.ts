@@ -97,10 +97,32 @@ export const getUserSubscriptionInfo = cache(async (): Promise<UserSubscriptionI
   }
 });
 
+export interface PaymentEvent {
+  id: string;
+  user_id: string;
+  stripe_customer_id: string;
+  event_type: 'succeeded' | 'failed' | 'refunded';
+  amount: number; // Amount in cents
+  stripe_invoice_id?: string;
+  stripe_payment_intent_id?: string;
+  metadata: {
+    subscription_id?: string;
+    period_start?: string;
+    period_end?: string;
+    currency?: string;
+    hosted_invoice_url?: string;
+    invoice_pdf?: string;
+    failure_reason?: string;
+    attempt_count?: number;
+    next_payment_attempt?: string;
+  };
+  created_at: string;
+}
+
 /**
- * Get user's payment history
+ * Get user's payment history with proper formatting
  */
-export const getUserPaymentHistory = cache(async (limit: number = 10) => {
+export const getUserPaymentHistory = cache(async (limit: number = 10): Promise<PaymentEvent[]> => {
   try {
     const userInfo = await getUserInfo();
     if (!userInfo) {
@@ -121,9 +143,48 @@ export const getUserPaymentHistory = cache(async (limit: number = 10) => {
       return [];
     }
 
-    return paymentEvents || [];
+    return (paymentEvents || []).map(event => ({
+      ...event,
+      metadata: event.metadata || {}
+    })) as PaymentEvent[];
   } catch (error) {
     console.error('Error in getUserPaymentHistory:', error);
+    return [];
+  }
+});
+
+/**
+ * Get formatted billing history for UI display
+ */
+export const getFormattedBillingHistory = cache(async () => {
+  try {
+    const paymentHistory = await getUserPaymentHistory();
+    const subscriptionInfo = await getUserSubscriptionInfo();
+    
+    if (!subscriptionInfo) {
+      return [];
+    }
+
+    return paymentHistory.map(event => ({
+      id: event.stripe_invoice_id || event.id,
+      date: event.created_at,
+      amount: event.amount / 100, // Convert cents to dollars
+      status: event.event_type === 'succeeded' ? 'paid' : 
+              event.event_type === 'failed' ? 'failed' : 
+              event.event_type === 'refunded' ? 'refunded' : 'pending',
+      description: `${subscriptionInfo.subscription_tier.charAt(0).toUpperCase() + 
+                     subscriptionInfo.subscription_tier.slice(1)} Plan - Monthly`,
+      currency: event.metadata?.currency || 'usd',
+      downloadUrl: event.metadata?.invoice_pdf || event.metadata?.hosted_invoice_url || null,
+      subscriptionId: event.metadata?.subscription_id,
+      periodStart: event.metadata?.period_start,
+      periodEnd: event.metadata?.period_end,
+      failureReason: event.metadata?.failure_reason,
+      attemptCount: event.metadata?.attempt_count,
+      nextAttempt: event.metadata?.next_payment_attempt,
+    }));
+  } catch (error) {
+    console.error('Error in getFormattedBillingHistory:', error);
     return [];
   }
 });
