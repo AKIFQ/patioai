@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "always"
+
+[variables]
+# Railway will auto-assign PORT, no need to set it
+NODE_ENV = "production"
