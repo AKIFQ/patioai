@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient as createClient } from '@/lib/server/server';
+import { getEnvironmentUrls } from '@/lib/config/environment';
 import { redirect } from 'next/navigation';
 
 interface AuthResponse {
@@ -122,12 +123,14 @@ export async function signup(formData: FormData): Promise<AuthResponse> {
 
   const { email, password, fullName } = result.data;
 
+  const { authConfirm } = getEnvironmentUrls();
+  
   const { error } = await supabase.auth.signUp({
     email: email,
     password: password,
     options: {
       data: { full_name: fullName ?? 'default_user' },
-      emailRedirectTo: `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat'}/api/auth/confirm?next=/signin`
+      emailRedirectTo: `${authConfirm}?next=/signin`
     }
   });
 
@@ -189,8 +192,10 @@ export async function resetPasswordForEmail(
     };
   }
 
+  const { passwordReset } = getEnvironmentUrls();
+  
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat'}/redirect/auth-password-update`
+    redirectTo: passwordReset
   });
 
   if (error) {

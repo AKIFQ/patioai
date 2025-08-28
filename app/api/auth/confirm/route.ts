@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/server/server';
+import { getBaseUrl } from '@/lib/config/environment';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,8 +10,8 @@ export async function GET(request: Request) {
   // if "next" is in param, use it as the redirect URL
   const next = searchParams.get('next') ?? '/signin';
 
-  // Use configured app URL instead of request origin to avoid localhost:8080 redirects
-  const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_CLIENT_URL || 'https://www.patioai.chat';
+  // Use environment-aware base URL
+  const appUrl = getBaseUrl();
 
   if (code) {
     const supabase = await createServerSupabaseClient();
