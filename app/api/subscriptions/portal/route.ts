@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat';
     
     const session = await createCustomerPortalSession(
       user.stripe_customer_id,

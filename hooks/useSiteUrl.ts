@@ -9,6 +9,6 @@ export function useSiteUrl(): string {
     // Fallback for SSR
     return process.env.NEXT_PUBLIC_SITE_URL || 
            process.env.NEXT_PUBLIC_APP_URL || 
-           'http://127.0.0.1:3000';
+           'https://www.patioai.chat';
   }, []);
 } 

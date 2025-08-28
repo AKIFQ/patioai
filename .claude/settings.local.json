@@ -7,7 +7,9 @@
       "WebSearch",
       "Bash(grep:*)",
       "Bash(npm run dev:*)",
-      "Read(/Users/akifazherqureshi/Projects/truth/truth/**)"
+      "Read(/Users/akifazherqureshi/Projects/truth/truth/**)",
+      "Read(/var/folders/_j/58p1_y194y384_6505s0mj_c0000gn/T/TemporaryItems/NSIRD_screencaptureui_tkNsdz/**)",
+      "Read(/var/folders/_j/58p1_y194y384_6505s0mj_c0000gn/T/TemporaryItems/NSIRD_screencaptureui_ec4a0P/**)"
     ],
     "defaultMode": "acceptEdits"
   }
