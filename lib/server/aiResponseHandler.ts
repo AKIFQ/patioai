@@ -452,6 +452,11 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
 
       for await (const delta of result.fullStream) {
         if (process.env.NODE_ENV === 'development') console.debug('Received delta:', delta.type);
+        
+        // Debug DeepSeek R1 reasoning deltas
+        if (routedModelId.includes('deepseek-r1')) {
+          console.log(`🔍 DeepSeek R1 delta:`, JSON.stringify(delta, null, 2));
+        }
 
         // Handle error deltas - simple error handling without fallbacks
         if (delta.type === 'error') {

@@ -1,0 +1,28 @@
+{
+  "functions": {
+    "app/api/chat/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/rooms/[shareCode]/chat/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/processdoc/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/uploaddoc/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/websitechat/route.ts": {
+      "maxDuration": 300
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
