@@ -9,6 +9,7 @@
     "build:server": "npx tsc server.ts --outDir dist --target es2020 --module commonjs --esModuleInterop --skipLibCheck",
     "start": "NODE_ENV=production npm run build:server && node --expose-gc dist/server.js",
     "start:next": "next start",
+    "vercel-build": "npm run build",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "test": "jest",
     "test:watch": "jest --watch",
