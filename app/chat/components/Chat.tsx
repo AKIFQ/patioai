@@ -1239,19 +1239,19 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Mobile Header with Hamburger Menu - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-14 shadow-sm w-full md:hidden">
-        <div className="flex items-center justify-between w-full h-full px-4">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-12 shadow-sm w-full md:hidden pt-safe">
+        <div className="flex items-center justify-between w-full h-full px-2">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* Hamburger Menu Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="h-9 w-9 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
+              className="h-7 w-7 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
               aria-label="Toggle sidebar"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-4 w-4" />
             </Button>
 
             {/* PatioAI Logo */}
@@ -1259,20 +1259,20 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               <Image
                 src="/icons/icon-512x512.png"
                 alt="PatioAI"
-                width={24}
-                height={24}
+                width={20}
+                height={20}
                 className="rounded-md"
               />
             </div>
 
             {/* Room Name */}
-            <h1 className="text-lg font-semibold tracking-tight truncate text-foreground">
+            <h1 className="text-sm font-medium tracking-tight truncate text-foreground">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
             </h1>
           </div>
 
           {/* Right side - Activity Indicators + New Chat Button */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Mobile cross-thread activity indicators */}
             {roomContext && crossThreadActivities.some(activity =>
               activity.threadId !== (roomContext.chatSessionId || '') &&
@@ -1291,12 +1291,12 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               size="sm"
               onClick={handleNewChat}
               disabled={isCreatingNewChat}
-              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors rounded-lg"
+              className="h-6 w-6 p-0 text-xs font-medium hover:bg-muted/50 transition-colors rounded-lg"
             >
               {isCreatingNewChat ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3 w-3" />
               )}
             </Button>
 
@@ -1496,7 +1496,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         )}
       </div>
 
-      <div className="sticky bottom-0 w-full z-5 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent">
+      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-3 px-2 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator
