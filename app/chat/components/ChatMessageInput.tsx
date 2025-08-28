@@ -417,7 +417,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
         onSubmit={handleFormSubmit}
         className="relative w-full max-w-full mb-1.5 sm:mb-2 rounded-xl sm:rounded-xl overflow-hidden border-0 
                    shadow-elevation-2 hover:shadow-elevation-3 focus-within:shadow-elevation-4
-                   flex flex-col transition-smooth 
+                   flex flex-col transition-smooth message-input-container
                    bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
       >
         <input
@@ -440,7 +440,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                      bg-transparent text-sm sm:text-body placeholder:text-muted-foreground/60
                      placeholder:font-medium leading-relaxed
                      max-h-[50vh] sm:max-h-40 break-words overflow-wrap-anywhere
-                     word-break-break-all min-w-0"
+                     word-break-break-all min-w-0 max-w-full overflow-hidden whitespace-pre-wrap"
           rows={1}
         />
 
