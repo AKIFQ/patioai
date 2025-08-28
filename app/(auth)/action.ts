@@ -126,7 +126,8 @@ export async function signup(formData: FormData): Promise<AuthResponse> {
     email: email,
     password: password,
     options: {
-      data: { full_name: fullName ?? 'default_user' }
+      data: { full_name: fullName ?? 'default_user' },
+      emailRedirectTo: `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat'}/api/auth/confirm?next=/signin`
     }
   });
 
@@ -189,7 +190,7 @@ export async function resetPasswordForEmail(
   }
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat'}/auth/reset-password`
+    redirectTo: `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat'}/redirect/auth-password-update`
   });
 
   if (error) {
