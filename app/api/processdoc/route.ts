@@ -14,7 +14,7 @@ import { revalidatePath } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
 
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 const embeddingModel = voyage.textEmbeddingModel('voyage-3-large', {
   inputType: 'document',
