@@ -93,7 +93,7 @@ export default function RootLayout({
       <body className={`${jomolhari.className} min-h-screen w-full overflow-x-hidden`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
