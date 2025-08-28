@@ -1239,7 +1239,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Mobile Header with Hamburger Menu - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-12 shadow-sm w-full md:hidden pt-safe">
+              <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md h-12 shadow-sm w-full md:hidden pt-safe">
         <div className="flex items-center justify-between w-full h-full px-2">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1316,7 +1316,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Desktop Chat Header - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
@@ -1330,7 +1330,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                 {/* Indicators on the right */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Participant count - styled indicator */}
-                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full border border-green-200/50 dark:border-green-800/30">
+                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                     <span className="text-xs font-medium text-green-700 dark:text-green-300">
                       {roomContext.participants.length} online

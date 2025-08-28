@@ -230,6 +230,8 @@ const VirtualizedMessageList = memo(({
               />
             </div>
           )}
+          {/* Top spacing for better visual separation */}
+          <div className="h-8 sm:h-12" />
           <ul className="w-full min-w-0 space-y-1 pb-4" style={{ listStyle: 'none', paddingLeft: 0 }}>
             {messages.map((message, index) => {
               // For room chats, check if the message is from the current user by comparing sender names
@@ -294,6 +296,8 @@ const VirtualizedMessageList = memo(({
             />
           </div>
         )}
+        {/* Top spacing for better visual separation */}
+        <div className="h-8 sm:h-12" />
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,

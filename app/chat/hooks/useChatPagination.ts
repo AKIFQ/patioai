@@ -31,11 +31,11 @@ export function useChatPagination({
 }: UseChatPaginationProps): ChatPaginationState {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(false); // Default to false - only true if we actually have more to load
   const [error, setError] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
 
-  // Initialize cursor from initial messages
+  // Initialize cursor from initial messages and determine if there are more messages
   useEffect(() => {
     if (initialMessages.length > 0 && !cursor) {
       // Get the oldest message's timestamp as cursor for loading even older messages
@@ -43,8 +43,14 @@ export function useChatPagination({
       if (oldestMessage?.createdAt) {
         setCursor(oldestMessage.createdAt.toISOString());
       }
+      // Assume there might be more messages only if we have a full page of messages
+      // This prevents showing "Load more" when there are only a few messages
+      setHasMore(initialMessages.length >= pageSize);
+    } else if (initialMessages.length === 0) {
+      // No messages means no more to load
+      setHasMore(false);
     }
-  }, [initialMessages, cursor]);
+  }, [initialMessages, cursor, pageSize]);
 
   // Deduplicate messages by ID to handle real-time updates
   const deduplicatedMessages = useMemo(() => {
