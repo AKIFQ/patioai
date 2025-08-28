@@ -214,8 +214,8 @@ const MemoizedMarkdownBlock = memo(
           },
           // Tables
           table: ({ children }) => (
-            <div className="block py-2 overflow-x-auto">
-              <table className="w-full border-collapse break-normal text-[0.85rem]">
+            <div className="block py-2 overflow-x-auto max-w-full">
+              <table className="w-full border-collapse break-normal text-[0.85rem] min-w-full">
                 {children}
               </table>
             </div>
@@ -226,7 +226,7 @@ const MemoizedMarkdownBlock = memo(
           th: ({ children }) => (
             <th
               scope="row"
-              className="border border-border p-1 text-left text-[0.9em] break-normal font-semibold hyphens-auto overflow-wrap-normal"
+              className="border border-border p-1 text-left text-[0.9em] break-words font-semibold hyphens-auto overflow-wrap-anywhere"
             >
               {children}
             </th>
@@ -234,7 +234,7 @@ const MemoizedMarkdownBlock = memo(
           td: ({ children }) => (
             <td
               scope="row"
-              className="border border-border p-1 text-left text-[0.9em] break-normal font-normal hyphens-auto overflow-wrap-normal"
+              className="border border-border p-1 text-left text-[0.9em] break-words font-normal hyphens-auto overflow-wrap-anywhere"
             >
               {children}
             </td>
@@ -312,7 +312,7 @@ const MemoizedMarkdownBlock = memo(
             if (inline) {
               return (
                 <code
-                  className={`bg-muted px-1 py-0.5 rounded ${className}`}
+                  className={`bg-muted px-1 py-0.5 rounded text-sm break-words ${className}`}
                   {...props}
                 >
                   {children}
@@ -321,12 +321,12 @@ const MemoizedMarkdownBlock = memo(
             }
 
             return (
-              <div className="relative rounded w-full pt-5 my-2">
+              <div className="relative rounded w-full pt-5 my-2 max-w-full">
                 <span className="absolute top-0 left-2 text-xs uppercase text-muted-foreground">
                   {language}
                 </span>
-                <pre className="m-0 overflow-x-auto bg-muted p-4 rounded-md">
-                  <code className={className} {...props}>
+                <pre className="m-0 overflow-x-auto bg-muted p-3 sm:p-4 rounded-md text-sm max-w-full">
+                  <code className={`${className} break-words whitespace-pre-wrap block`} {...props}>
                     {children}
                   </code>
                 </pre>
