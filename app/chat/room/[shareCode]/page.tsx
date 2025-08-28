@@ -176,11 +176,14 @@ export default async function RoomChatPage(props: {
 
     // Get thread ID from URL (prioritize threadId over legacy chatSession)
     let chatSessionId = searchParams.threadId || searchParams.chatSession;
+    console.log('🔍 URL Search Params:', { threadId: searchParams.threadId, chatSession: searchParams.chatSession, chatSessionId });
     if (!chatSessionId) {
         // Always generate a new thread ID - no persistent main thread
         // This ensures every room entry starts a fresh conversation
         chatSessionId = crypto.randomUUID();
         console.log('🆕 Generated new thread for room entry:', chatSessionId);
+    } else {
+        console.log('📌 Using existing thread ID from URL:', chatSessionId);
     }
 
     // Get current user info to check if they're the creator

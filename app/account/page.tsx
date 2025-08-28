@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import { getUserSubscriptionInfo, getFormattedBillingHistory } from '@/lib/server/subscriptionService';
 import AccountSettingsContent from './components/AccountSettingsContent';
 
+// Force dynamic rendering since this page uses authentication cookies
+export const dynamic = 'force-dynamic';
+
 interface AccountPageProps {
   searchParams: Record<string, string | string[] | undefined>;
 }

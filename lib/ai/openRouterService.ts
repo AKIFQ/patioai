@@ -24,7 +24,12 @@ export class OpenRouterService {
    * Get model instance for AI SDK
    */
   getModel(modelId: string) {
-    // Direct model instantiation - router handles validation
+    // Handle special routing for free models
+    if (modelId.includes(':free')) {
+      return this.client(modelId);
+    }
+
+    // Regular OpenRouter models
     return this.client(modelId);
   }
 

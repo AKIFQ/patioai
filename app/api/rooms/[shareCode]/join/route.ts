@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { getSession } from '@/lib/server/supabase';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
 import { checkAnonymousRoomJoin, incrementAnonymousRoomJoin } from '@/lib/security/anonymousRateLimit';
+import { concurrentRoomLimiter } from '@/lib/limits/concurrentRoomLimiter';
+import { type UserTier } from '@/lib/limits/tierLimits';
+import { MessageGenerator } from '@/lib/notifications/messageGenerator';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -99,31 +102,50 @@ export async function POST(
           { status: 429 }
         );
       }
+    }
 
-      // Enforce concurrent room limit for anonymous users (1 room max)
-      const { getClientIP, getAnonymousUserId } = await import('@/lib/security/anonymousRateLimit');
-      const ip = getClientIP(req);
-      const anonymousUserId = getAnonymousUserId(ip);
+    // UNIVERSAL CONCURRENT ROOM LIMIT ENFORCEMENT
+    // Get user tier from session or database
+    let userTier: UserTier = 'anonymous';
+    
+    if (userId) {
+      // Get user tier from database
+      const { data: userData } = await supabase
+        .from('users')
+        .select('subscription_tier')
+        .eq('id', userId)
+        .single();
+      
+      userTier = (userData?.subscription_tier as UserTier) || 'free';
+    }
 
-      // Check how many rooms this anonymous user is currently in (by IP)
-      const { data: currentRooms, error: roomCheckError } = await supabase
-        .from('room_participants')
-        .select('room_id, rooms!inner(share_code)')
-        .like('session_id', `anon_${anonymousUserId.split('_')[1]}%`) // Match session IDs starting with anon_{hashed_ip}
-        .neq('room_id', room.id); // Exclude current room (in case of rejoining)
+    // Check concurrent room limits for ALL user types
+    const concurrentCheck = await concurrentRoomLimiter.checkLimit(
+      userId,
+      userTier,
+      room.id, // Exclude current room in case of rejoining
+      sessionId
+    );
 
-      if (roomCheckError) {
-        console.error('Error checking anonymous user room count:', roomCheckError);
-      } else if (currentRooms && currentRooms.length >= 1) {
-        // Anonymous users can only be in 1 room at a time
-        return NextResponse.json(
-          { 
-            error: 'Anonymous users can only join one room at a time. Please leave your current room first.',
-            currentRoomCount: currentRooms.length
-          },
-          { status: 409 }
-        );
-      }
+    if (!concurrentCheck.allowed) {
+      const roomNames = concurrentCheck.currentRooms?.map(r => r.roomName) || [];
+      const notification = MessageGenerator.concurrentRoomLimitExceeded(
+        userTier,
+        concurrentCheck.currentCount,
+        concurrentCheck.maxAllowed,
+        roomNames
+      );
+
+      return NextResponse.json(
+        { 
+          ...notification,
+          currentRoomCount: concurrentCheck.currentCount,
+          maxAllowed: concurrentCheck.maxAllowed,
+          currentRooms: concurrentCheck.currentRooms,
+          type: 'concurrent_room_limit'
+        },
+        { status: 409 }
+      );
     }
 
     // ATOMIC OPERATION: Use upsert with capacity check and removal validation

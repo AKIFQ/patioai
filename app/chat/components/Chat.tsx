@@ -40,6 +40,7 @@ import { useReasoningStream } from '../hooks/useReasoningStream';
 import { useChatSubmissionState } from '@/lib/client/atomicStateManager';
 import { logger } from '@/lib/utils/logger';
 import { useChatPagination } from '../hooks/useChatPagination';
+import { UserInfoWithTier } from '@/lib/server/supabase';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
@@ -70,7 +71,7 @@ interface ChatProps {
   initialModelType: string;
   initialSelectedOption: string;
   roomContext?: RoomContext;
-  userData?: any;
+  userData?: UserInfoWithTier;
   sidebarData?: any;
 }
 
@@ -104,6 +105,18 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Reasoning mode state (only for free users)
   const [reasoningMode, setReasoningMode] = useState(false);
+
+  // Auto-enable reasoning mode when DeepSeek R1 is selected
+  useEffect(() => {
+    console.log('🧠 Reasoning mode check:', { optimisticOption, reasoningMode });
+    if (optimisticOption === 'deepseek-r1-full' || optimisticOption === 'deepseek/deepseek-r1') {
+      console.log('✅ Auto-enabling reasoning mode for DeepSeek R1');
+      setReasoningMode(true);
+    } else if (reasoningMode && optimisticOption !== 'deepseek-r1-full' && optimisticOption !== 'deepseek/deepseek-r1') {
+      console.log('❌ Disabling reasoning mode for non-R1 model');
+      setReasoningMode(false);
+    }
+  }, [optimisticOption, reasoningMode]);
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -315,7 +328,7 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
   }, [roomContext, isRoomLoading, displayMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput with atomic state management
-  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI = true, reasoningModeEnabled = false) => {
+  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI = true, reasoningModeEnabled = reasoningMode) => {
     const messageId = crypto.randomUUID();
     logger.chatSubmission(messageId, {
       roomContext: roomContext?.shareCode,
@@ -413,7 +426,12 @@ throw new Error(`API call failed: ${response.status}`);
                   : msg.content
               }));
 
-            // Debug logging removed
+            // Debug logging for room AI invocation
+            console.log('🚀 Invoking AI with:', {
+              modelId: optimisticOption,
+              reasoningMode: reasoningModeEnabled,
+              roomContext: roomContext.shareCode
+            });
             invokeAIRef.current({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
@@ -1502,7 +1520,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
           setWebSearchEnabled={setWebSearchEnabled}
           reasoningMode={reasoningMode}
           setReasoningMode={setReasoningMode}
-          userTier={(userData as any)?.subscription_tier || 'free'}
+          userTier={userData?.subscription_tier || 'free'}
           onUpgrade={() => {
             // Placeholder: surface your checkout/upgrade flow here
             // Debug logging removed

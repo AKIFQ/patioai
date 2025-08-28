@@ -3,8 +3,9 @@ import { getSession } from '@/lib/server/supabase';
 import { createAdminClient } from '@/lib/server/admin';
 import { userTierService } from '@/lib/ai/userTierService';
 import { tierRateLimiter } from '@/lib/limits/rateLimiter';
-import { getTierLimits } from '@/lib/limits/tierLimits';
+import { getTierLimits, type UserTier } from '@/lib/limits/tierLimits';
 import { memoryProtection } from '@/lib/monitoring/memoryProtection';
+import { MessageGenerator } from '@/lib/notifications/messageGenerator';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +17,13 @@ export async function POST(req: NextRequest) {
   try {
     // Check memory protection circuit breaker FIRST
     if (memoryProtection.shouldBlockOperation()) {
+      const notification = MessageGenerator.systemEmergencyMode('uploads_disabled');
+      
       return NextResponse.json(
-        { error: 'System under high load. Please try again in a few moments.' },
+        {
+          ...notification,
+          type: 'system_overload'
+        },
         { status: 503 }
       );
     }
@@ -25,16 +31,25 @@ export async function POST(req: NextRequest) {
     // Check for Llama Cloud API key
     if (!process.env.LLAMA_CLOUD_API_KEY) {
       console.error('LLAMA_CLOUD_API_KEY is not configured');
+      const notification = MessageGenerator.genericError('Document processing is temporarily unavailable. Our team is working on it!');
+      
       return NextResponse.json(
-        { error: 'Server configuration error: LLAMA_CLOUD_API_KEY is missing' },
+        notification,
         { status: 500 }
       );
     }
 
     const session = await getSession();
     if (!session) {
+      const notification = MessageGenerator.systemEmergencyMode('ai_disabled'); // Reuse login prompt message
+      notification.title = "Sign in required! 🔐";
+      notification.message = "You need to be signed in to upload documents. It's quick and free!";
+      
       return NextResponse.json(
-        { error: 'No active session found' },
+        {
+          ...notification,
+          type: 'authentication_required'
+        },
         { status: 401 }
       );
     }
@@ -43,22 +58,34 @@ export async function POST(req: NextRequest) {
 
     // Get user tier and check file upload rate limits
     const userSubscription = await userTierService.getUserTier(userId);
-    const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, 'file_uploads');
+    const userTier = userSubscription.tier as UserTier;
+    const limiterCheck = await tierRateLimiter.check(userId, userTier, 'file_uploads');
     
     if (!limiterCheck.allowed) {
+      const notification = MessageGenerator.fileUploadLimitExceeded(userTier);
+      
       return NextResponse.json(
-        { error: limiterCheck.reason || 'File upload rate limit exceeded. Please try again later.' },
+        {
+          ...notification,
+          remaining: limiterCheck.remaining,
+          type: 'rate_limit_exceeded'
+        },
         { status: 429 }
       );
     }
 
     // Get tier limits for file size validation
-    const tierLimits = getTierLimits(userSubscription.tier as any);
+    const tierLimits = getTierLimits(userTier);
 
     const { uploadedFiles } = await req.json();
 
     if (!Array.isArray(uploadedFiles) || uploadedFiles.length === 0) {
-      return NextResponse.json({ error: 'No files provided' }, { status: 400 });
+      const notification = MessageGenerator.genericError('Oops, no files to upload! Please select some files first.');
+      
+      return NextResponse.json(
+        notification, 
+        { status: 400 }
+      );
     }
 
     const results = [];
@@ -82,10 +109,15 @@ export async function POST(req: NextRequest) {
         // Check file size against tier limit
         const fileSizeMB = data.size / (1024 * 1024);
         if (fileSizeMB > tierLimits.fileSizeMB!) {
+          const notification = MessageGenerator.genericError(
+            `${file.name} is too large (${fileSizeMB.toFixed(1)}MB). ${userTier} users can upload up to ${tierLimits.fileSizeMB}MB files.${userTier !== 'premium' ? ' Upgrade for larger files!' : ''}`
+          );
+          
           results.push({
             file: file.name,
             status: 'error',
-            message: `File too large. Maximum ${tierLimits.fileSizeMB}MB allowed for ${userSubscription.tier} tier. File size: ${fileSizeMB.toFixed(2)}MB.`
+            message: notification.message,
+            upgradeRequired: userTier !== 'premium'
           });
           continue;
         }
@@ -131,7 +163,7 @@ export async function POST(req: NextRequest) {
     const successfulUploads = results.filter(r => r.status === 'success').length;
     if (successfulUploads > 0) {
       try {
-        await tierRateLimiter.increment(userId, userSubscription.tier as any, 'file_uploads', successfulUploads);
+        await tierRateLimiter.increment(userId, userTier, 'file_uploads', successfulUploads);
       } catch (error) {
         console.warn('Failed to increment file upload counter:', error);
       }
@@ -173,8 +205,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ results });
   } catch (error) {
     console.error('Error in POST request:', error);
+    const notification = MessageGenerator.genericError('Upload failed! Our document wizards are investigating the issue.');
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      notification,
       { status: 500 }
     );
   }
