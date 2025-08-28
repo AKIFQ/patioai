@@ -131,7 +131,7 @@ const ChatMessage = memo(({
         )}
 
         {/* Message Content with Copy Button */}
-        <div className={`flex items-start ${isMobile ? 'gap-1' : 'gap-2 sm:gap-1'} ${isUserMessage ? (isMobile ? 'max-w-[85%]' : 'max-w-[72%] sm:max-w-[70%] md:max-w-[65%]') : (isRoomChat && message.role === 'assistant' ? (isMobile ? 'max-w-[85%]' : 'max-w-[90%] sm:max-w-[90%] md:max-w-[90%]') : (isMobile ? 'max-w-[85%]' : 'max-w-[78%] sm:max-w-[76%] md:max-w-[70%]'))} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex items-start ${isMobile ? 'gap-1' : 'gap-2 sm:gap-1'} ${isUserMessage ? (isMobile ? 'max-w-[85%]' : 'max-w-[72%] sm:max-w-[70%] md:max-w-[65%]') : 'max-w-full'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 
