@@ -415,7 +415,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative w-full mb-1.5 sm:mb-2 rounded-xl sm:rounded-xl overflow-hidden border-0 
+        className="relative w-full max-w-full mb-1.5 sm:mb-2 rounded-xl sm:rounded-xl overflow-hidden border-0 
                    shadow-elevation-2 hover:shadow-elevation-3 focus-within:shadow-elevation-4
                    flex flex-col transition-smooth 
                    bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
@@ -439,13 +439,14 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                      border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none 
                      bg-transparent text-sm sm:text-body placeholder:text-muted-foreground/60
                      placeholder:font-medium leading-relaxed
-                     max-h-[50vh] sm:max-h-40"
+                     max-h-[50vh] sm:max-h-40 break-words overflow-wrap-anywhere
+                     word-break-break-all min-w-0"
           rows={1}
         />
 
         {/* Bottom controls row with buttons */}
-        <div className="flex px-2 sm:px-3 pb-2 pt-1.5 sm:pb-2 sm:pt-1.5 items-center gap-1.5 sm:gap-2 justify-between min-w-0">
-          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 overflow-hidden">
+        <div className="flex px-2 sm:px-3 pb-2 pt-1.5 sm:pb-2 sm:pt-1.5 items-center gap-1.5 sm:gap-2 justify-between min-w-0 max-w-full">
+          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-1 overflow-hidden">
             {/* Plus menu with Attach and Web search toggle */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -539,7 +540,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 max-w-[calc(100%-120px)] sm:max-w-none">
               <ModelSelector
                 selectedModel={selectedOption}
                 userTier={userTier}
