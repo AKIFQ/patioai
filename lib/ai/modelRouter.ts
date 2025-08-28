@@ -32,23 +32,28 @@ export class ModelRouter {
       if (userTier.tier === 'premium') {
         return 'openai/o1-preview';
       }
-      // Free/Basic explicit reasoning - use DeepSeek for better reasoning
-      return 'deepseek/deepseek-chat-v3-0324';
+      // Free/Basic explicit reasoning - use DeepSeek R1 full version
+      return 'deepseek/deepseek-r1';
     }
 
-    // Auto mode or free/basic tier - use smart routing
-    if (selectedModel === 'auto' || userTier.tier === 'free' || userTier.tier === 'basic') {
+    // Auto mode or free tier - use smart routing
+    if (selectedModel === 'auto' || userTier.tier === 'free') {
       return this.getOptimalModel(context, userTier.tier);
     }
 
-    // Premium tier with specific model selection
-    if (selectedModel && userTier.tier === 'premium') {
+    // Basic and Premium tiers with specific model selection
+    if (selectedModel && (userTier.tier === 'basic' || userTier.tier === 'premium')) {
       if (isModelAvailableForTier(selectedModel, userTier.tier)) {
         if (costControl) {
           return this.applyCostControl(selectedModel, costControl);
         }
         return selectedModel;
       }
+    }
+
+    // Basic tier auto mode - use smart routing
+    if (userTier.tier === 'basic' && selectedModel === 'auto') {
+      return this.getOptimalModel(context, userTier.tier);
     }
 
     // Fallback to tier default

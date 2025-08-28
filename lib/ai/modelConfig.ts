@@ -93,6 +93,16 @@ export const MODEL_TIERS: Record<string, ModelTier> = {
         outputCost: 0.28, // $0.28 per 1M output tokens
         reasoning: false,
         specialization: 'Superior coding, mathematical reasoning, algorithmic problems'
+      },
+      'deepseek-r1-full': {
+        id: 'deepseek/deepseek-r1',
+        name: 'DeepSeek R1 (Full Version)',
+        provider: 'openrouter',
+        costTier: 'ultra-low',
+        inputCost: 0.55, // $0.55 per 1M input tokens
+        outputCost: 2.19, // $2.19 per 1M output tokens
+        reasoning: true,
+        specialization: 'Full reasoning model - unlimited usage, advanced mathematical and coding capabilities'
       }
     },
     monthlyLimit: 8000,
@@ -156,6 +166,7 @@ export const SIMPLE_MODEL_ROUTING = {
   general: 'google/gemini-2.5-flash-lite', // Fast, efficient for general tasks
   coding: 'deepseek/deepseek-chat-v3-0324', // Superior coding capabilities
   math: 'deepseek/deepseek-chat-v3-0324', // Strong mathematical reasoning
+  reasoning: 'deepseek/deepseek-r1', // Actual reasoning model for free/basic
   fallback: 'google/gemini-2.5-flash-lite' // Reliable default
 };
 

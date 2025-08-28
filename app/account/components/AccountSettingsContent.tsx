@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { UserSubscriptionInfo } from '@/lib/server/subscriptionService';
-import { SmartAvatar } from '@/components/ui/Avatar';
+import { SmartAvatar } from '@/components/ui/avatar';
 import SubscriptionTierCard from './SubscriptionTierCard';
 import UsageDashboard from './UsageDashboard';
 import PaymentMethodsCard from './PaymentMethodsCard';

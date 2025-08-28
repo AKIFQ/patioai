@@ -10,8 +10,12 @@ import { openRouterService } from '@/lib/ai/openRouterService';
 import { ModelRouter } from '@/lib/ai/modelRouter';
 import { userTierService } from '@/lib/ai/userTierService';
 import { tierRateLimiter } from '@/lib/limits/rateLimiter';
-import { getTierLimits } from '@/lib/limits/tierLimits';
+import { getTierLimits, type UserTier } from '@/lib/limits/tierLimits';
 import { withMemoryProtection, memoryProtection } from '@/lib/monitoring/memoryProtection';
+import { tokenManager } from '@/lib/utils/tokenCounter';
+import { checkCircuitBreakers, trackSystemEvent } from '@/lib/monitoring/circuitBreakers';
+import { threadManager } from '@/lib/ai/threadManager';
+import { MessageGenerator } from '@/lib/notifications/messageGenerator';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,15 +91,42 @@ console.log(` Chat model routing: ${selectedModel} → ${routedModel} (tier: ${u
 };
 
 export async function POST(req: NextRequest) {
-  // Check memory protection circuit breaker FIRST
-  if (memoryProtection.shouldBlockOperation()) {
-    return new NextResponse(
-      JSON.stringify({ error: 'System under high load. Please try again in a few moments.' }),
-      { 
-        status: 503,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+  try {
+    console.log('🚀 Chat API: Request started');
+    
+    // Check memory protection circuit breaker FIRST
+    if (memoryProtection.shouldBlockOperation()) {
+      console.log('🛡️ Chat API: Memory protection blocking request');
+      return new NextResponse(
+        JSON.stringify({ error: 'System under high load. Please try again in a few moments.' }),
+        { 
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+  // Check system-wide circuit breakers
+  const circuitBreakers = checkCircuitBreakers();
+  
+  if (circuitBreakers.isEmergencyMode()) {
+    console.log('System in emergency mode, degraded service active');
+    
+    // For anonymous users, block AI if circuit breaker is active
+    const session = await getSession();
+    if (!session && circuitBreakers.shouldBlockAnonymousAI()) {
+      const notification = MessageGenerator.systemEmergencyMode('ai_disabled');
+      return new NextResponse(
+        JSON.stringify({ 
+          ...notification,
+          type: 'emergency_mode'
+        }),
+        { 
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
   }
 
   const session = await getSession();
@@ -140,14 +171,106 @@ export async function POST(req: NextRequest) {
   
   // Get user tier
   const userSubscription = await userTierService.getUserTier(userId);
-  // Enforce new tier-based request limits
-  const limiterCheck = await tierRateLimiter.check(userId, userSubscription.tier as any, 'ai_requests');
-  if (!limiterCheck.allowed) {
-    return new NextResponse(limiterCheck.reason || 'Limit reached', {
-      status: 429,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  const userTier = userSubscription.tier as UserTier;
+
+  // VALIDATE MESSAGE TOKEN LIMITS
+  if (lastMessage?.role === 'user' && lastMessage.content) {
+    const messageValidation = tokenManager.validateMessage(lastMessage.content, userTier);
+    
+    if (!messageValidation.valid) {
+      const notification = MessageGenerator.messageTokenLimitExceeded(
+        userTier, 
+        messageValidation.tokenCount, 
+        messageValidation.limit
+      );
+      
+      return new NextResponse(
+        JSON.stringify({ 
+          ...notification,
+          tokenCount: messageValidation.tokenCount,
+          limit: messageValidation.limit,
+          type: 'token_limit_exceeded'
+        }),
+        {
+          status: 413, // Payload Too Large
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
   }
+
+  // ADVANCED THREAD MANAGEMENT
+  const threadStatus = await threadManager.analyzeThreadStatus(
+    chatSessionId,
+    userTier,
+    lastMessage?.content
+  );
+
+  // Generate warning if needed
+  const threadWarning = threadManager.generateThreadWarning(threadStatus, userTier);
+  
+  // Handle critical thread limits
+  if (threadStatus.recommendedAction === 'force_new_thread') {
+    const notification = MessageGenerator.contextWindowFull(
+      userTier, 
+      threadStatus.contextUsage, 
+      userTier === 'premium'
+    );
+    
+    return new NextResponse(
+      JSON.stringify({
+        ...notification,
+        contextUsage: {
+          current: threadStatus.tokenCount,
+          limit: threadManager.getTierContextLimit(userTier),
+          percentage: threadStatus.contextUsage
+        },
+        threadWarning,
+        action: 'new_thread_required',
+        type: 'context_limit_exceeded'
+      }),
+      {
+        status: 413,
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Context-Usage': threadStatus.contextUsage.toString(),
+          'X-Thread-Action': threadStatus.recommendedAction,
+          'X-Thread-Warning': threadWarning ? JSON.stringify(threadWarning) : ''
+        }
+      }
+    );
+  }
+
+  // Apply automatic compression for premium users
+  if (threadStatus.recommendedAction === 'compress_context' && userTier === 'premium') {
+    console.log(`Applying automatic context compression for premium user ${userId}`);
+    const compressionResult = await threadManager.compressContext(chatSessionId, 0.4);
+    
+    if (compressionResult.success) {
+      console.log(`Context compressed: ${compressionResult.originalTokens} → ${compressionResult.compressedTokens} tokens (${Math.round(compressionResult.compressionRatio * 100)}% reduction)`);
+    }
+  }
+
+  // Enforce new tier-based request limits
+  const limiterCheck = await tierRateLimiter.check(userId, userTier, 'ai_requests');
+  if (!limiterCheck.allowed) {
+    const notification = MessageGenerator.aiRequestLimitExceeded(userTier, limiterCheck.remaining);
+    
+    return new NextResponse(
+      JSON.stringify({
+        ...notification,
+        remaining: limiterCheck.remaining,
+        type: 'rate_limit_exceeded'
+      }),
+      {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
+  // Track AI request for circuit breakers
+  trackSystemEvent.aiRequest();
 
   // Check context window limits based on user tier
   const tierLimits = getTierLimits(userSubscription.tier as any);
@@ -307,4 +430,20 @@ console.log(` Usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)}
   });
   try { response.headers.set('x-model-used', routedModel); } catch {}
   return response;
+  
+  } catch (error) {
+    console.error('🚨 Chat API: FATAL ERROR occurred:', error);
+    console.error('🚨 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
+    return new NextResponse(
+      JSON.stringify({ 
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
 }

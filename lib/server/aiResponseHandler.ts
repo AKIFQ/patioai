@@ -85,7 +85,7 @@ export class AIResponseHandler {
       : abortController.signal;
 
     return streamText({
-      model: this.getModel(modelId, currentMessage),
+      model: this.getModel(modelId, currentMessage) as any,
       system: promptResult.system,
       messages: promptResult.messages,
       providerOptions,
@@ -379,7 +379,7 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
 
       // Check reasoning mode
       if (reasoningMode) {
-        // Reasoning mode enabled
+        console.log(`🎯 Starting AI stream for model: ${routedModelId} (reasoning: ${reasoningMode})`);
       } else {
         // Regular routing
       }
@@ -387,8 +387,7 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       // Get provider options for reasoning models
       const providerOptions = openRouterService.getProviderOptions(routedModelId);
 
-      // Final model selected
-      // Model ready for use
+      console.log(`🔧 Provider options for ${routedModelId}:`, JSON.stringify(providerOptions, null, 2));
 
       // Set appropriate token limits based on model and context
       const getMaxTokens = (modelId: string, messageContext: string): number => {
@@ -417,10 +416,6 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       };
 
       const maxTokens = getMaxTokens(routedModelId, currentMessage);
-      // Max tokens set
-
-      // Prompt prepared
-      // Messages ready
 
       // Choose streaming strategy based on user tier
       const result = userTier === 'premium' 
@@ -450,7 +445,7 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
       const MAX_REASONING_SIZE = 200000; // 200KB limit for reasoning
       let isTruncated = false;
 
-      if (process.env.NODE_ENV === 'development') console.debug('Starting AI stream for model:', routedModelId);
+      console.log(`🎯 Starting AI stream for model: ${routedModelId} (reasoning: ${reasoningMode})`);
 
       // Use AI SDK's proper streaming interface with error handling
       // Starting streaming loop
@@ -461,12 +456,12 @@ const analysisText = `${currentMessage} ${recentHistoryText}`.trim();
         // Handle error deltas - simple error handling without fallbacks
         if (delta.type === 'error') {
           const deltaAny = delta as any;
-          console.error('Model error delta:', deltaAny);
+          console.error('🚨 AI Response Handler Error:', deltaAny);
 
           const errorMessage = deltaAny.error?.message || JSON.stringify(deltaAny.error);
 
           // Emit error directly without complex fallback logic
-this.io.to(`room:${shareCode}`).emit('ai-error', {
+          this.io.to(`room:${shareCode}`).emit('ai-error', {
             threadId,
             error: 'Model failed to generate response',
             details: errorMessage,
@@ -474,7 +469,7 @@ this.io.to(`room:${shareCode}`).emit('ai-error', {
           });
 
           // End the stream with error
-this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
+          this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
             threadId,
             text: 'Sorry, I encountered an error while processing your request. Please try again.',
             timestamp: Date.now(),
@@ -485,16 +480,9 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
           return; // Exit early on error
         }
 
-        // Handle DeepSeek delta format
-        if (routedModelId.includes('deepseek')) {
-          const deltaAny = delta as any;
-          if (process.env.NODE_ENV === 'development') {
-            console.debug('DeepSeek delta:', delta.type, deltaAny.textDelta ? `"${deltaAny.textDelta.substring(0, 50)}..."` : 'no text');
-          }
-        }
-
+        // Handle main text deltas
         if (delta.type === 'text-delta') {
-          const chunk = delta.textDelta;
+          let chunk = delta.textDelta || '';
 
           // CRITICAL: Check size limits to prevent memory explosions
           if (fullText.length + chunk.length > MAX_RESPONSE_SIZE) {
@@ -504,7 +492,7 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
               fullText += '\n\n[Response truncated due to size limits]';
 
               // Emit truncation warning to client
-this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
+              this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
                 threadId,
                 chunk: '\n\n[Response truncated due to size limits]',
                 timestamp: Date.now(),
@@ -516,82 +504,66 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
             break;
           }
 
-          fullText += chunk;
-
-          // OpenRouter-specific: Extract reasoning from streaming text chunks
-          // DeepSeek R1 includes <think> tags in the normal text stream
-          if (routedModelId.includes('deepseek') && chunk.includes('<think>')) {
-            if (process.env.NODE_ENV === 'development') {
-              console.debug('Found <think> tag in chunk:', chunk.substring(0, 100));
-            }
-
-            // Extract reasoning content between <think> tags
-            const thinkMatch = /<think>([\s\S]*?)(?:<\/think>|$)/.exec(chunk);
-            if (thinkMatch) {
-              const reasoningContent = thinkMatch[1];
-              if (reasoningContent.trim()) {
-                // CRITICAL: Check reasoning size limits
-                if (fullReasoning.length + reasoningContent.length > MAX_REASONING_SIZE) {
-                  console.warn('AI reasoning truncated for memory protection');
-                  fullReasoning += '\n\n[Reasoning truncated due to size limits]';
-                } else {
-                  fullReasoning += reasoningContent;
-                }
-
+          // Handle DeepSeek R1 <think> tag processing for reasoning
+          if (routedModelId.includes('deepseek') && chunk && chunk.includes('<think>')) {
+            const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/g;
+            let match: RegExpExecArray | null;
+            while ((match = thinkRegex.exec(chunk)) !== null) {
+              const reasoningContent = match[1];
+              if (reasoningContent && reasoningContent.trim()) {
                 if (!hasReasoningStarted) {
                   hasReasoningStarted = true;
-                  // Starting reasoning UI
                   this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
                     threadId,
                     timestamp: Date.now(),
                     modelUsed: routedModelId
                   });
                 }
-
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+                fullReasoning += reasoningContent;
+                this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
                   threadId,
-                  reasoning: fullReasoning,
+                  reasoning: reasoningContent,
                   timestamp: Date.now(),
                   modelUsed: routedModelId
                 });
               }
             }
+            // Strip all <think> blocks from main content
+            chunk = chunk ? chunk.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*$/g, '') : '';
           }
 
-          // Stream main content
-this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
-            threadId,
-            chunk,
-            timestamp: Date.now(),
-            modelUsed: routedModelId
-          });
-        }
-        else if (delta.type === 'reasoning') {
-          // Handle reasoning/thought content across providers
-          const deltaAny = delta as any;
-          const chunk =
-            deltaAny.textDelta ?? // Gemini reasoning delta
-            deltaAny.reasoning ??
-            deltaAny.reasoningDelta ??
-            deltaAny.thinkingDelta ??
-            deltaAny.thoughtDelta ??
-            '';
+          fullText += chunk;
 
-          if (typeof chunk === 'string' && chunk.length > 0) {
+          // Stream main content (only if chunk has content after think tag removal)
+          if (chunk) {
+            this.io.to(`room:${shareCode}`).emit('ai-stream-chunk', {
+              threadId,
+              chunk,
+              timestamp: Date.now(),
+              modelUsed: routedModelId
+            });
+          }
+        }
+        // Handle reasoning deltas from other models
+        else if (delta.type === 'reasoning') {
+          const deltaAny = delta as any;
+          const reasoningChunk = deltaAny.reasoning || deltaAny.textDelta || '';
+
+          if (typeof reasoningChunk === 'string' && reasoningChunk.length > 0) {
             // CRITICAL: Check reasoning size limits
-            if (fullReasoning.length + chunk.length > MAX_REASONING_SIZE) {
+            if (fullReasoning.length + reasoningChunk.length > MAX_REASONING_SIZE) {
               console.warn('AI reasoning truncated for memory protection');
               if (!fullReasoning.includes('[Reasoning truncated due to size limits]')) {
                 fullReasoning += '\n\n[Reasoning truncated due to size limits]';
               }
             } else {
-              fullReasoning += chunk;
+              fullReasoning += reasoningChunk;
             }
 
             // Start reasoning if not already started
             if (!hasReasoningStarted) {
               hasReasoningStarted = true;
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
+              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
                 threadId,
                 timestamp: Date.now(),
                 modelUsed: routedModelId
@@ -599,7 +571,7 @@ this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
             }
 
             // Stream cumulative reasoning for smooth UI updates
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
+            this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
               threadId,
               reasoning: fullReasoning,
               timestamp: Date.now(),
@@ -617,140 +589,11 @@ this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
               totalTokens: (u.promptTokens ?? 0) + (u.completionTokens ?? 0)
             };
           }
-
-          // Check DeepSeek finish delta for reasoning
-          if (routedModelId.includes('deepseek')) {
-            if (process.env.NODE_ENV === 'development') {
-              console.debug('DeepSeek finish delta:', JSON.stringify(anyDelta, null, 2));
-            }
-
-            // Check for reasoning tokens in OpenRouter response
-            const reasoningTokens = anyDelta.providerMetadata?.openai?.reasoningTokens ||
-              anyDelta.experimental_providerMetadata?.openai?.reasoningTokens;
-
-            if (reasoningTokens && reasoningTokens > 0) {
-              // Found reasoning tokens - creating synthetic reasoning UI
-
-              // Create informative reasoning indicator since OpenRouter doesn't expose the actual reasoning
-const syntheticReasoning = ` **DeepSeek R1 Reasoning Process**
-
-The model engaged in ${reasoningTokens} tokens of internal reasoning to analyze your question. While the specific reasoning steps aren't exposed by OpenRouter, the model considered:
-
-• Multiple philosophical perspectives
-• Logical connections and implications  
-• Relevant examples and counterarguments
-• How to structure a comprehensive response
-
-*Note: This represents the reasoning process that occurred, though the actual reasoning content isn't accessible through OpenRouter's API.*`;
-
-              if (!hasReasoningStarted) {
-                hasReasoningStarted = true;
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
-                  threadId,
-                  timestamp: Date.now(),
-                  modelUsed: routedModelId
-                });
-              }
-
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
-                threadId,
-                reasoning: syntheticReasoning,
-                timestamp: Date.now(),
-                modelUsed: routedModelId
-              });
-
-              fullReasoning = syntheticReasoning;
-            }
-          }
-
-          // Some providers (or routes) include reasoning only at the end
-          let finalReasoning: string | undefined;
-          const r =
-            anyDelta.reasoning ??
-            anyDelta.reasoningText ??
-            anyDelta.response?.reasoning ??
-            anyDelta.response?.message?.reasoning ??
-            undefined;
-          if (Array.isArray(r)) {
-            finalReasoning = r.map((p: any) => (typeof p === 'string' ? p : p?.text || '')).join('');
-          } else if (typeof r === 'string') {
-            finalReasoning = r;
-          }
-          if (finalReasoning && finalReasoning.trim().length > 0) {
-            if (process.env.NODE_ENV === 'development') {
-              console.debug('Found reasoning in finish delta:', finalReasoning.substring(0, 100));
-            }
-            fullReasoning = finalReasoning;
-            if (!hasReasoningStarted) {
-              hasReasoningStarted = true;
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
-                threadId,
-                timestamp: Date.now(),
-                modelUsed: routedModelId
-              });
-            }
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
-              threadId,
-              reasoning: fullReasoning,
-              timestamp: Date.now(),
-              modelUsed: routedModelId
-            });
-          }
-        }
-
-        // Handle other delta types that might contain reasoning/thought content
-        else {
-          // Quiet by default
-
-          // Check if this delta contains thought-like content (flexible detection)
-          const deltaAny = delta as any;
-
-          // Check for various thought/reasoning properties
-          const thoughtContent =
-            deltaAny.thoughts ||
-            deltaAny.thought ||
-            deltaAny.thoughtDelta ||
-            deltaAny.thinking ||
-            deltaAny.thinkingDelta ||
-            deltaAny.reasoning ||
-            deltaAny.reasoningDelta ||
-            '';
-
-          if (thoughtContent) {
-            if (process.env.NODE_ENV === 'development') console.debug('thought from', delta.type);
-
-            // For delta types, append; for complete types, replace
-            if (delta.type.includes('delta') || delta.type.includes('chunk')) {
-              fullReasoning += thoughtContent;
-            } else {
-              fullReasoning = thoughtContent;
-            }
-
-            // Start reasoning if not already started
-            if (!hasReasoningStarted) {
-              hasReasoningStarted = true;
-              if (process.env.NODE_ENV === 'development') console.debug('thoughts started for', routedModelId, delta.type);
-              this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
-                threadId,
-                timestamp: Date.now(),
-                modelUsed: routedModelId
-              });
-            }
-
-            // Stream thought content
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
-              threadId,
-              reasoning: fullReasoning,
-              timestamp: Date.now(),
-              modelUsed: routedModelId
-            });
-          }
         }
       }
 
       // End reasoning if it was started
       if (hasReasoningStarted && fullReasoning) {
-        // Completing reasoning UI
         this.io.to(`room:${shareCode}`).emit('ai-reasoning-end', {
           threadId,
           reasoning: fullReasoning,
@@ -760,54 +603,13 @@ this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
       }
 
       // Signal that main content is starting
-this.io.to(`room:${shareCode}`).emit('ai-content-start', {
+      this.io.to(`room:${shareCode}`).emit('ai-content-start', {
         threadId,
         timestamp: Date.now(),
         modelUsed: routedModelId
       });
 
-      // Final check: Extract reasoning from fullText if not found during streaming
-      // This handles cases where reasoning comes in large chunks or at the end
-      if (routedModelId.includes('deepseek') && fullText.includes('<think>')) {
-        // Final extraction: Found think tags
-
-        // Extract all reasoning content
-        const thinkMatches = fullText.match(/<think>([\s\S]*?)<\/think>/g);
-        if (thinkMatches) {
-          const allReasoning = thinkMatches
-            .map(match => match.replace(/<\/?think>/g, ''))
-            .join('\n\n')
-            .trim();
-
-          if (allReasoning && allReasoning !== fullReasoning) {
-            fullReasoning = allReasoning;
-            if (process.env.NODE_ENV === 'development') {
-              console.debug('Final reasoning extracted:', allReasoning.substring(0, 100));
-            }
-
-            // Clean the display text
-            fullText = fullText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-            // Emit reasoning events if not already started
-            if (!hasReasoningStarted) {
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-start', {
-                threadId,
-                timestamp: Date.now(),
-                modelUsed: routedModelId
-              });
-            }
-
-this.io.to(`room:${shareCode}`).emit('ai-reasoning-chunk', {
-              threadId,
-              reasoning: fullReasoning,
-              timestamp: Date.now(),
-              modelUsed: routedModelId
-            });
-          }
-        }
-      }
-
-this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
+      this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
         threadId,
         text: fullText,
         reasoning: fullReasoning || undefined,
@@ -816,176 +618,95 @@ this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
         usage: usageTotals
       });
 
-      // Track usage for room chat (same as personal chat)
-      const totalTokens = usageTotals.totalTokens || 0;
-      const estimatedCost = totalTokens * 0.00001; // Rough estimate
-      
-      try {
-        // Update user usage tracking
-        await userTierService.updateUsage(userId, totalTokens, estimatedCost, routedModelId, 'room');
+      // Track usage and cost
+      if (usageTotals.totalTokens) {
+        const estimatedCost = openRouterService.estimateCost(
+          routedModelId, 
+          usageTotals.promptTokens || 0, 
+          usageTotals.completionTokens || 0
+        );
+        
+        // Update user usage
+        await userTierService.updateUsage(userId, usageTotals.totalTokens, estimatedCost, routedModelId, 'room');
         await tierRateLimiter.increment(userId, userSubscription.tier as any, reasoningMode ? 'reasoning_messages' : 'ai_requests', 1);
         
-        console.log(`🏠 Room usage tracked: ${totalTokens} tokens, $${estimatedCost.toFixed(6)} cost for user ${userId}`);
-        
-        // Increment room-level AI usage counter
-        const roomIncrementResult = await roomTierService.incrementRoomAIUsage(shareCode, reasoningMode);
-        if (roomIncrementResult.success) {
-          console.log(`🏠 Room ${reasoningMode ? 'reasoning' : 'AI'} usage incremented for ${shareCode}`);
-        } else {
-          console.warn(`Failed to increment room ${reasoningMode ? 'reasoning' : 'AI'} usage:`, roomIncrementResult.error);
-        }
-      } catch (error) {
-        console.error('Error tracking room chat usage:', error);
+        console.log(`🏠 Room usage tracked: ${usageTotals.totalTokens} tokens, $${estimatedCost.toFixed(6)} cost for user ${userId}`);
       }
 
-      // CRITICAL FIX: Save AI message to database AND broadcast to all users
-      try {
-        const { SocketDatabaseService } = await import('../database/socketQueries');
+      // Track room AI usage
+      await roomTierService.incrementRoomAIUsage(shareCode, reasoningMode);
+      console.log(`🏠 Room ${reasoningMode ? 'reasoning' : 'AI'} usage incremented for ${shareCode}`);
 
-        // Get the actual room_id from shareCode
-        const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
-        if (!roomValidation.valid || !roomValidation.room) {
-          console.warn('Failed to get room_id for shareCode:', shareCode, roomValidation.error);
-          return;
-        }
-
-        // Save AI message to database IMMEDIATELY (not deferred)
-        const result = await SocketDatabaseService.insertRoomMessage({
-          roomId: roomValidation.room.id, // Use actual room UUID
-          threadId,
-          senderName: 'AI Assistant',
-          content: fullText,
-          isAiResponse: true,
-          reasoning: fullReasoning || undefined
-        });
-
-        if (!result.success) {
-          console.error('Failed to save AI message to DB:', result.error);
-        } else {
-          // AI message saved to DB
-
-          // CRITICAL FIX: Broadcast AI message to ALL users in the room
-this.io.to(`room:${shareCode}`).emit('room-message-created', {
-            new: {
-              id: result.messageId,
-              room_id: roomValidation.room.id,
-              thread_id: threadId,
-              sender_name: 'AI Assistant',
-              content: fullText,
-              is_ai_response: true,
-              reasoning: fullReasoning || null,
-              created_at: new Date().toISOString()
-            },
-            eventType: 'INSERT',
-            table: 'room_messages',
-            schema: 'public'
-          });
-
-          // AI message broadcasted
-        }
-      } catch (e) {
-        console.error('Critical error saving/broadcasting AI message:', e);
-      }
-      
-      // Cleanup: Remove abort controller
-      this.activeStreams.delete(threadId);
-    } catch (error) {
-      // Check if this was a user-initiated abort
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log(`AI response aborted by user for threadId: ${threadId}`);
-        
-        // Save partial response if we have any content
-        if (fullText.trim()) {
-          try {
-            const { SocketDatabaseService } = await import('../database/socketQueries');
-            const roomValidation = await SocketDatabaseService.validateRoomAccess(shareCode);
-            
-            if (roomValidation.valid && roomValidation.room) {
-              const result = await SocketDatabaseService.insertRoomMessage({
-                roomId: roomValidation.room.id,
-                threadId,
-                senderName: 'AI Assistant',
-                content: fullText + '\n\n[Response stopped by user]',
-                isAiResponse: true,
-                reasoning: fullReasoning || undefined
-              });
-
-              if (result.success) {
-                // Broadcast partial AI message to ALL users in the room
-                this.io.to(`room:${shareCode}`).emit('room-message-created', {
-                  new: {
-                    id: result.messageId,
-                    room_id: roomValidation.room.id,
-                    thread_id: threadId,
-                    sender_name: 'AI Assistant',
-                    content: fullText + '\n\n[Response stopped by user]',
-                    is_ai_response: true,
-                    reasoning: fullReasoning || null,
-                    created_at: new Date().toISOString()
-                  },
-                  eventType: 'INSERT',
-                  table: 'room_messages',
-                  schema: 'public'
-                });
-              }
-            }
-          } catch (saveError) {
-            console.error('Failed to save partial AI response:', saveError);
+      // CRITICAL: Save AI message to database
+      console.log(`🔍 Attempting to save AI message - fullText length: ${fullText.length}, content: "${fullText.substring(0, 100)}..."`);
+      if (fullText.trim()) {
+        try {
+          // Get room UUID from shareCode
+          const roomInfo = await roomTierService.getRoomInfo(shareCode);
+          if (!roomInfo) {
+            console.error(`❌ Cannot save AI message - room not found for shareCode: ${shareCode}`);
+            return;
           }
+
+          const { SocketDatabaseService } = await import('../database/socketQueries');
+          const result = await SocketDatabaseService.insertRoomMessage({
+            roomId: roomInfo.id, // Use room UUID instead of shareCode
+            threadId,
+            senderName: 'AI Assistant',
+            content: fullText,
+            isAiResponse: true,
+            sources: undefined,
+            reasoning: fullReasoning || undefined
+          });
+          
+          if (result.success) {
+            console.log(`💾 AI message saved to database: ${result.messageId} for thread ${threadId}`);
+          } else {
+            console.error(`💥 Failed to save AI message:`, result.error);
+          }
+        } catch (dbError) {
+          console.error(`💥 Database save error:`, dbError);
         }
-        
-        // Emit stream end with partial content
-        this.io.to(`room:${shareCode}`).emit('ai-stream-end', {
-          threadId,
-          text: fullText || 'Response stopped by user',
-          reasoning: fullReasoning || undefined,
-          timestamp: Date.now(),
-          stopped: true
-        });
       } else {
-        console.error('Error streaming AI response:', error);
-        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-        this.io.to(`room:${shareCode}`).emit('ai-error', { error: 'AI streaming failed', threadId });
+        console.error(`❌ Cannot save AI message - fullText is empty! Length: ${fullText.length}`);
       }
-      
-      // Cleanup: Remove abort controller
+
+    } catch (error: any) {
+      console.error('🚨 AI Response Handler Error:', error);
+      this.io.to(`room:${shareCode}`).emit('ai-error', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        threadId,
+        timestamp: Date.now()
+      });
+    } finally {
+      // Clean up abort controller
       this.activeStreams.delete(threadId);
     }
   }
 
-  // Stop AI response gracefully and save partial content
+  // Stop AI response
   async stopAIResponse(shareCode: string, threadId: string): Promise<void> {
-    const abortController = this.activeStreams.get(threadId);
-    
-    if (!abortController) {
-      console.warn(`No active stream found for threadId: ${threadId}`);
-      return;
-    }
-
     try {
-      // Abort the stream
-      abortController.abort();
-      
-      // Remove from active streams
-      this.activeStreams.delete(threadId);
-      
-      // Emit stopped event
-      this.io.to(`room:${shareCode}`).emit('ai-stream-stopped', {
-        threadId,
-        timestamp: Date.now(),
-        reason: 'user_stopped'
-      });
+      // Cancel the stream if it exists
+      const abortController = this.activeStreams.get(threadId);
+      if (abortController) {
+        abortController.abort();
+        this.activeStreams.delete(threadId);
+        console.log(`AI stream stopped for thread ${threadId}`);
+      }
 
-      console.log(`AI response stopped for threadId: ${threadId}`);
+      // Emit stop event to clients
+      this.io.to(`room:${shareCode}`).emit('ai-stream-stopped', { 
+        threadId,
+        timestamp: Date.now() 
+      });
+      
     } catch (error) {
       console.error('Error stopping AI response:', error);
-      throw error;
     }
   }
 
-  // Reasoning is now handled properly through AI SDK's built-in streaming interface
-
-  // Generate contextual AI response
+  // Generate simple AI response based on context
   private generateAIResponse(
     message: string,
     senderName: string,
@@ -993,51 +714,34 @@ this.io.to(`room:${shareCode}`).emit('room-message-created', {
     participants: string[]
   ): string {
     const responses = [
-`Hi ${senderName}! I'm here to help. What would you like to know?`,
-`Thanks for the question, ${senderName}. Let me think about that...`,
-`Hello everyone in ${roomName}! ${senderName} asked a great question.`,
-`I see ${participants.length} participants here. ${senderName}, how can I assist?`,
-`That's an interesting point, ${senderName}. Here's what I think...`
+      `Thanks for the question, ${senderName}! Let me think about that...`,
+      `Interesting point! In the context of ${roomName}, I'd say...`,
+      `Great question! Based on our conversation with ${participants.join(', ')}, here's what I think...`,
+      `${senderName}, that's something worth exploring further...`,
     ];
 
-    // Simple response selection based on message content
-    if (message.toLowerCase().includes('help')) {
-return `Hi ${senderName}! I'm the AI assistant for ${roomName}. I can help answer questions, provide explanations, or assist with discussions. What would you like to know?`;
-    }
-
-    if (message.toLowerCase().includes('question')) {
-return `Great question, ${senderName}! I'm ready to help. Could you provide more details about what you'd like to know?`;
-    }
-
-    if (this.config.mentionPattern.test(message)) {
-return `Hello ${senderName}! You mentioned me - how can I assist you and the ${participants.length} participants in ${roomName}?`;
-    }
-
-    if (this.config.questionPattern.test(message.trim())) {
-return `That's a thoughtful question, ${senderName}. Let me provide some insights that might help everyone in ${roomName}.`;
-    }
-
-    // Default response
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
   // Update configuration
   updateConfig(newConfig: Partial<AIResponseConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    // AI response configuration updated
+    console.log('AI response config updated:', this.config);
   }
 
   // Enable/disable AI responses
   setEnabled(enabled: boolean): void {
     this.config.enabled = enabled;
-    // AI responses toggled
+    console.log(`AI responses ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  // Get current configuration
+  getConfig(): AIResponseConfig {
+    return { ...this.config };
   }
 }
 
-// Factory function to create AI response handler
-export function createAIResponseHandler(
-  io: SocketIOServer,
-  config?: Partial<AIResponseConfig>
-): AIResponseHandler {
+// Factory function for creating AI response handler
+export function createAIResponseHandler(io: SocketIOServer, config?: Partial<AIResponseConfig>): AIResponseHandler {
   return new AIResponseHandler(io, config);
 }

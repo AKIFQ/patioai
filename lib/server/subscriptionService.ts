@@ -72,11 +72,26 @@ export const getUserSubscriptionInfo = cache(async (): Promise<UserSubscriptionI
     // Get usage information from userTierService
     const usage = await userTierService.getUserTier(userInfo.id);
 
+    // Normalize tier string
+    const resolvedTier = (subscriptionData?.subscription_tier || 'free') as SubscriptionTier;
+
+    // Ensure user_tiers table reflects latest subscription for immediate propagation
+    try {
+      await supabase
+        .from('user_tiers')
+        .upsert(
+          { user_id: userInfo.id as any, tier: resolvedTier as any },
+          { onConflict: 'user_id' }
+        );
+    } catch (e) {
+      console.warn('Failed to sync user_tiers with subscription tier:', e);
+    }
+
     return {
       id: userInfo.id,
       full_name: userInfo.full_name,
       email: userInfo.email,
-      subscription_tier: (subscriptionData?.subscription_tier || 'free') as SubscriptionTier,
+      subscription_tier: resolvedTier,
       subscription_status: subscriptionData?.subscription_status || 'active',
       stripe_customer_id: subscriptionData?.stripe_customer_id,
       stripe_subscription_id: subscriptionData?.stripe_subscription_id,

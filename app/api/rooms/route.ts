@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
             shareCode: room.share_code,
             participantCount: room.participant_count,
             maxParticipants: room.max_participants,
-            tier: room.creator_tier as 'free' | 'pro',
+            // If the current user is the creator, reflect their current tier name
+            tier: (room.created_by === userInfo.id ? userInfo.subscription_tier : room.creator_tier) as 'free' | 'basic' | 'premium',
             expiresAt: room.expires_at,
             createdAt: room.created_at,
             isCreator: room.is_creator !== undefined ? room.is_creator : (room.created_by === userInfo.id)

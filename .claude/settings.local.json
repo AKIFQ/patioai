@@ -6,7 +6,8 @@
       "Bash(npm run build:*)",
       "WebSearch",
       "Bash(grep:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Read(/Users/akifazherqureshi/Projects/truth/truth/**)"
     ],
     "defaultMode": "acceptEdits"
   }
