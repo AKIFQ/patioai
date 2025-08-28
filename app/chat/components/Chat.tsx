@@ -1496,7 +1496,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         )}
       </div>
 
-      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-3 px-2 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe">
+      <div className="sticky bottom-0 w-full z-10 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator
