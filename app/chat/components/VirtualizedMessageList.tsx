@@ -211,7 +211,7 @@ const VirtualizedMessageList = memo(({
     return (
       <div 
         ref={containerRef}
-        className="flex-1 w-full min-w-0 px-2 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col overflow-hidden relative"
+        className="flex-1 w-full min-w-0 px-1 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col overflow-hidden relative"
         data-chat-container
       >
         <div 
@@ -230,6 +230,8 @@ const VirtualizedMessageList = memo(({
               />
             </div>
           )}
+          {/* Top spacing for better visual separation */}
+          <div className="h-8 sm:h-12" />
           <ul className="w-full min-w-0 space-y-1 pb-4" style={{ listStyle: 'none', paddingLeft: 0 }}>
             {messages.map((message, index) => {
               // For room chats, check if the message is from the current user by comparing sender names
@@ -275,7 +277,7 @@ const VirtualizedMessageList = memo(({
   return (
     <div 
       ref={containerRef}
-      className="flex-1 w-full min-w-0 px-2 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col overflow-hidden relative" 
+      className="flex-1 w-full min-w-0 px-1 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col overflow-hidden relative" 
       data-chat-container
     >
       <div
@@ -294,6 +296,8 @@ const VirtualizedMessageList = memo(({
             />
           </div>
         )}
+        {/* Top spacing for better visual separation */}
+        <div className="h-8 sm:h-12" />
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,

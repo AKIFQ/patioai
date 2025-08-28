@@ -23,7 +23,7 @@ const jomolhari = Jomolhari({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000/'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat/'),
   title: {
     default: 'PatioAI',
     template: '%s | PatioAI'
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000/',
+    url: process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat/',
     title: 'PatioAI',
     description: 'Experience the power of AI-driven conversations with PatioAI',
     siteName: 'PatioAI',
@@ -93,7 +93,7 @@ export default function RootLayout({
       <body className={`${jomolhari.className} min-h-screen w-full overflow-x-hidden`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >

@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/server/supabase';
 import { createClient } from '@supabase/supabase-js';
-// Rate limiting removed - using new tier-based system
+import { tierRateLimiter } from '@/lib/limits/rateLimiter';
+import { MessageGenerator } from '@/lib/notifications/messageGenerator';
+import { type UserTier } from '@/lib/limits/tierLimits';
 import { randomBytes } from 'crypto';
 
 const supabase = createClient(
@@ -16,7 +18,7 @@ function generateShareCode(): string {
   return randomBytes(6).toString('hex').toUpperCase(); // 12-character hex (48-bit)
 }
 
-async function getUserTier(userId: string): Promise<'free' | 'basic' | 'premium'> {
+async function getUserTier(userId: string): Promise<UserTier> {
   const { data, error } = await supabase
     .from('user_tiers')
     .select('tier')
@@ -24,11 +26,10 @@ async function getUserTier(userId: string): Promise<'free' | 'basic' | 'premium'
     .single();
   
   if (error || !data) {
-    // Default to free tier if no record exists
     return 'free';
   }
   
-  return data.tier as 'free' | 'basic' | 'premium';
+  return data.tier as UserTier;
 }
 
 export async function POST(req: NextRequest) {
@@ -53,9 +54,23 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.id;
-    
-    // No legacy rate limiting
     const userTier = await getUserTier(userId);
+    
+    // Check room creation rate limits
+    const rateLimitCheck = await tierRateLimiter.check(userId, userTier, 'room_creation');
+    
+    if (!rateLimitCheck.allowed) {
+      const notification = MessageGenerator.roomCreationLimitExceeded(userTier);
+      
+      return NextResponse.json(
+        {
+          ...notification,
+          remaining: rateLimitCheck.remaining,
+          type: 'rate_limit_exceeded'
+        },
+        { status: 429 }
+      );
+    }
     
     // SECURITY FIX: Check user's existing room count
     const { data: existingRooms, error: countError } = await supabase
@@ -82,8 +97,15 @@ export async function POST(req: NextRequest) {
     const currentTierLimits = tierLimits[userTier];
     
     if (existingRooms && existingRooms.length >= currentTierLimits.maxRooms) {
+      const notification = MessageGenerator.roomCreationLimitExceeded(userTier);
+      
       return NextResponse.json(
-        { error: `Room limit reached (${currentTierLimits.maxRooms} active rooms maximum for ${userTier} tier)` },
+        {
+          ...notification,
+          currentCount: existingRooms.length,
+          maxAllowed: currentTierLimits.maxRooms,
+          type: 'room_count_limit'
+        },
         { status: 409 }
       );
     }
@@ -112,8 +134,10 @@ export async function POST(req: NextRequest) {
     }
     
     if (attempts >= maxAttempts) {
+      const notification = MessageGenerator.genericError('Unable to generate unique room code. Please try again!');
+      
       return NextResponse.json(
-        { error: 'Failed to generate unique share code' },
+        notification,
         { status: 500 }
       );
     }
@@ -135,16 +159,25 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error('Error creating room:', error);
+      const notification = MessageGenerator.genericError('Room creation failed. Our team has been notified!');
+      
       return NextResponse.json(
-        { error: 'Failed to create room' },
+        notification,
         { status: 500 }
       );
     }
 
     // Return room details with shareable link
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat';
     const shareableLink = `${baseUrl}/room/${shareCode}`;
 
+    // Increment room creation counter after successful creation
+    try {
+      await tierRateLimiter.increment(userId, userTier, 'room_creation', 1);
+    } catch (error) {
+      console.warn('Failed to increment room creation counter:', error);
+    }
+    
     // Emit Socket.IO event for room creation
     try {
       const { emitSidebarRefresh } = await import('@/lib/server/socketEmitter');
@@ -170,8 +203,10 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Error in room creation:', error);
+    const notification = MessageGenerator.genericError('Something went wrong creating your room. Please try again!');
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      notification,
       { status: 500 }
     );
   }

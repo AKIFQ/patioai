@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SocketDatabaseService } from '@/lib/database/socketQueries';
 import { roomTierService } from '@/lib/rooms/roomTierService';
+import { tokenManager } from '@/lib/utils/tokenCounter';
+import { type UserTier } from '@/lib/limits/tierLimits';
+import { checkCircuitBreakers, trackSystemEvent } from '@/lib/monitoring/circuitBreakers';
+import { MessageGenerator } from '@/lib/notifications/messageGenerator';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -201,6 +205,23 @@ export async function POST(
   const requestId = Math.random().toString(36).substring(7);
 console.log(` [${requestId}] API CALL START - Room chat request received`);
 
+  // Check system-wide circuit breakers
+  const circuitBreakers = checkCircuitBreakers();
+  
+  if (circuitBreakers.shouldQueueMessages()) {
+    console.log(`[${requestId}] Message queuing active due to high system load`);
+    const notification = MessageGenerator.systemEmergencyMode('queue_enabled');
+    
+    return new NextResponse(JSON.stringify({ 
+      ...notification,
+      type: 'message_queued',
+      retryAfter: 60
+    }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': '60' }
+    });
+  }
+
   try {
     const { shareCode } = await params;
 console.log(` [${requestId}] Share code: ${shareCode}`);
@@ -223,7 +244,9 @@ console.log(` [${requestId}] Room chat API received:`, {
     // Duplicate request handling removed - using new tier-based system
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return new NextResponse('No messages provided', {
+      const notification = MessageGenerator.genericError('No message to send! Type something first.');
+      
+      return new NextResponse(JSON.stringify(notification), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -234,7 +257,9 @@ console.log(` [${requestId}] Room chat API received:`, {
     const message = lastMessage?.content;
 
     if (!message || !displayName || !threadId) {
-      return new NextResponse('Missing required fields', {
+      const notification = MessageGenerator.genericError('Missing message details! Please refresh and try again.');
+      
+      return new NextResponse(JSON.stringify(notification), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -258,7 +283,10 @@ console.log(` [${requestId}] Room chat API received:`, {
     const currentTime = new Date();
     const expiresAt = new Date(room.expires_at);
     if (currentTime > expiresAt) {
-      return new NextResponse('Room has expired', {
+      const notification = MessageGenerator.genericError('This room has expired! The conversation has ended.');
+      notification.title = 'Room expired! ⏰';
+      
+      return new NextResponse(JSON.stringify(notification), {
         status: 410,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -275,9 +303,14 @@ console.log(` [${requestId}] Room chat API received:`, {
       .single();
 
     if (removedParticipant) {
+      const notification = MessageGenerator.genericError(`You've been removed from "${room.name}". Contact the room admin if you think this was a mistake.`);
+      notification.title = 'Access denied! 🚫';
+      
       return new NextResponse(JSON.stringify({ 
+        ...notification,
         error: 'REMOVED_FROM_ROOM',
-        roomName: room.name 
+        roomName: room.name,
+        type: 'access_denied'
       }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' }
@@ -324,10 +357,109 @@ console.log(` [${requestId}] Room chat API received:`, {
     }
 
     if (!participant) {
-      return new NextResponse('Not a participant in this room', {
+      const notification = MessageGenerator.genericError(`You're not a participant in "${room.name}". Join the room first!`);
+      notification.title = 'Not a participant! 🙅‍♀️';
+      
+      return new NextResponse(JSON.stringify(notification), {
         status: 403,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // GET ROOM CREATOR TIER FOR TOKEN VALIDATION
+    const roomInfo = await roomTierService.getRoomInfo(shareCode);
+    if (!roomInfo) {
+      const notification = MessageGenerator.genericError('Room details are loading. Please try again in a moment!');
+      
+      return new NextResponse(JSON.stringify(notification), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // VALIDATE MESSAGE TOKEN LIMITS (based on room creator's tier)
+    const messageValidation = tokenManager.validateMessage(message, roomInfo.creatorTier);
+    
+    if (!messageValidation.valid) {
+      console.log(`[${requestId}] Message token limit exceeded:`, messageValidation);
+      const notification = MessageGenerator.messageTokenLimitExceeded(
+        roomInfo.creatorTier, 
+        messageValidation.tokenCount, 
+        messageValidation.limit
+      );
+      
+      notification.title = 'Message too long for this room! 📝';
+      notification.message = `This room supports ${Math.round(messageValidation.limit/1000)}K token messages (${roomInfo.creatorTier} tier). Yours is ${Math.round(messageValidation.tokenCount/1000)}K tokens. Try shortening it!`;
+      
+      return new NextResponse(JSON.stringify({ 
+        ...notification,
+        tokenCount: messageValidation.tokenCount,
+        limit: messageValidation.limit,
+        roomTier: roomInfo.creatorTier,
+        type: 'token_limit_exceeded'
+      }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // VALIDATE THREAD CONTEXT (last 20 messages to approximate context window usage)
+    try {
+      const { data: recentThreadMessages } = await supabase
+        .from('room_messages')
+        .select('content, is_ai_response, sender_name')
+        .eq('room_id', room.id)
+        .eq('thread_id', threadId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (recentThreadMessages && recentThreadMessages.length > 0) {
+        // Format messages for context validation
+        const contextMessages = [
+          ...recentThreadMessages.reverse().map(msg => ({
+            content: msg.is_ai_response ? msg.content : `${msg.sender_name}: ${msg.content}`,
+            role: msg.is_ai_response ? 'assistant' as const : 'user' as const
+          })),
+          { content: `${displayName}: ${message}`, role: 'user' as const } // Include current message
+        ];
+
+        const contextValidation = tokenManager.validateContext(contextMessages, roomInfo.creatorTier);
+        
+        if (!contextValidation.valid && contextValidation.action === 'new_thread') {
+          console.log(`[${requestId}] Thread context window full:`, contextValidation);
+          const notification = MessageGenerator.contextWindowFull(
+            roomInfo.creatorTier, 
+            contextValidation.percentage, 
+            false // Room threads don't have compression
+          );
+          
+          notification.title = 'Thread getting long! 📜';
+          notification.message = `This thread is ${Math.round(contextValidation.percentage)}% full (${roomInfo.creatorTier} room limits). Start a new thread to continue the conversation!`;
+          notification.actionButton = { text: 'New Thread', action: 'new_thread' };
+          
+          return new NextResponse(JSON.stringify({
+            ...notification,
+            contextUsage: {
+              current: contextValidation.currentTokens,
+              limit: contextValidation.limit,
+              percentage: contextValidation.percentage
+            },
+            action: 'new_thread_required',
+            roomTier: roomInfo.creatorTier,
+            type: 'context_limit_exceeded'
+          }), {
+            status: 413,
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Context-Usage': contextValidation.percentage.toString(),
+              'X-Context-Action': contextValidation.action
+            }
+          });
+        }
+      }
+    } catch (contextError) {
+      console.warn(`[${requestId}] Error checking thread context:`, contextError);
+      // Don't fail the request for context validation errors, just log
     }
 
     // Check room-level message limits BEFORE saving message
@@ -336,12 +468,25 @@ console.log(` [${requestId}] Room chat API received:`, {
     
     if (!roomMessageLimitCheck.allowed) {
       console.log(`[${requestId}] Room message limit exceeded:`, roomMessageLimitCheck);
+      
+      // Create tier-appropriate notification
+      const notification = MessageGenerator.genericError(
+        roomMessageLimitCheck.reason || `This ${roomInfo.creatorTier} room has reached its message limit for today. The conversation will resume tomorrow!`
+      );
+      notification.title = 'Room message limit reached! 💬';
+      
+      // Add upgrade suggestion if not premium
+      if (roomInfo.creatorTier !== 'premium') {
+        notification.message += ` Room admin can upgrade to ${roomInfo.creatorTier === 'free' ? 'Basic' : 'Premium'} for more messages!`;
+      }
+      
       return new NextResponse(JSON.stringify({ 
-        error: 'ROOM_MESSAGE_LIMIT_EXCEEDED',
-        reason: roomMessageLimitCheck.reason,
+        ...notification,
         currentUsage: roomMessageLimitCheck.currentUsage,
         limit: roomMessageLimitCheck.limit,
-        resetTime: roomMessageLimitCheck.resetTime
+        resetTime: roomMessageLimitCheck.resetTime,
+        roomTier: roomInfo.creatorTier,
+        type: 'room_message_limit_exceeded'
       }), {
         status: 429,
         headers: { 'Content-Type': 'application/json' }
@@ -354,10 +499,18 @@ console.log(` [${requestId}] Room chat API received:`, {
     
     if (!threadLimitCheck.allowed) {
       console.log(`[${requestId}] Thread message limit exceeded:`, threadLimitCheck);
+      const notification = MessageGenerator.genericError(
+        `This thread has reached its ${threadLimitCheck.limit} message limit. Start a new thread to continue chatting!`
+      );
+      notification.title = 'Thread is full! 🧵';
+      notification.actionButton = { text: 'New Thread', action: 'new_thread' };
+      
       return new NextResponse(JSON.stringify({ 
-        error: 'THREAD_MESSAGE_LIMIT_EXCEEDED',
+        ...notification,
         messageCount: threadLimitCheck.messageCount,
-        limit: threadLimitCheck.limit
+        limit: threadLimitCheck.limit,
+        roomTier: roomInfo.creatorTier,
+        type: 'thread_message_limit_exceeded'
       }), {
         status: 429,
         headers: { 'Content-Type': 'application/json' }
@@ -369,7 +522,9 @@ console.log(` [${requestId}] Saving user message: "${message.substring(0, 50)}" 
     const messageSaved = await saveRoomMessage(room.id, shareCode, threadId, displayName, message, false, undefined, undefined, room.name);
     if (!messageSaved) {
 console.log(` [${requestId}] Failed to save user message`);
-      return new NextResponse('Failed to save message', {
+      const notification = MessageGenerator.genericError('Failed to save your message! The room might be experiencing issues.');
+      
+      return new NextResponse(JSON.stringify(notification), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -389,6 +544,9 @@ console.log(` [${requestId}] User message saved successfully`);
       // Don't fail the request if usage increment fails
     }
 
+    // Track message for circuit breakers
+    trackSystemEvent.message();
+
     // Room chats always use triggerAI: false and handle AI via Socket.IO streaming
     // Return success after saving user message
 console.log(` [${requestId}] Message saved successfully (AI handled via Socket.IO)`);
@@ -399,8 +557,9 @@ console.log(` [${requestId}] Message saved successfully (AI handled via Socket.I
 
   } catch (error) {
 console.error(` [${requestId}] Error in room chat:`, error);
+    const notification = MessageGenerator.genericError('Something went wrong sending your message! Please try again.');
 
-    return new NextResponse('Internal server error', {
+    return new NextResponse(JSON.stringify(notification), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });

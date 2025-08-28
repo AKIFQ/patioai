@@ -177,7 +177,8 @@ const fetchUserData = async () => {
       shareCode: room.share_code,
       participantCount: room.participant_count || room.room_participants?.length || 0,
       maxParticipants: room.max_participants,
-      tier: room.creator_tier as 'free' | 'pro',
+      // Reflect the creator's current subscription tier in UI
+      tier: (room.created_by === userInfo.id ? userInfo.subscription_tier : room.creator_tier) as 'free' | 'basic' | 'premium',
       expiresAt: room.expires_at,
       createdAt: room.created_at,
       isCreator: room.is_creator !== undefined ? room.is_creator : (room.created_by === userInfo.id),

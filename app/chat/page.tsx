@@ -5,6 +5,7 @@ import DocumentViewer from './components/PDFViewer';
 import WebsiteWiever from './components/WebsiteWiever';
 import { v4 as uuidv4 } from 'uuid';
 import { getUserInfo } from '@/lib/server/supabase';
+import { getUserSubscriptionInfo } from '@/lib/server/subscriptionService';
 import { unstable_noStore as noStore } from 'next/cache';
 
 interface PageProps {
@@ -23,8 +24,13 @@ export default async function ChatPage(props: PageProps) {
   // Use a timestamp-based approach to ensure stability during the same session
   const createChatId = uuidv4();
 
-  // Get user data for mobile sidebar
-  const userData = await getUserInfo();
+  // Get user data with accurate subscription tier for toolbar gating
+  const basicUserInfo = await getUserInfo();
+  const subscriptionInfo = await getUserSubscriptionInfo();
+  const userData = basicUserInfo ? {
+    ...basicUserInfo,
+    subscription_tier: subscriptionInfo?.subscription_tier || basicUserInfo.subscription_tier
+  } : null;
 
   return (
     <div className="flex w-full h-full overflow-hidden">

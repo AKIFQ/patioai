@@ -14,6 +14,87 @@
   }
 }
 
+/* Notch-aware design utilities */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+
+.pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+
+.pt-safe-4 {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+.pb-safe-4 {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Split header for notch phones */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .notch-split-header {
+    display: grid;
+    grid-template-columns: env(safe-area-inset-left, 0px) 1fr env(safe-area-inset-right, 0px);
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .notch-split-header .left-area {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 0.5rem;
+  }
+  
+  .notch-split-header .center-area {
+    grid-column: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+  
+  .notch-split-header .right-area {
+    grid-column: 3;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+  }
+}
+
+/* Force textarea to wrap text properly */
+.message-input-container textarea {
+  field-sizing: content !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+  resize: none !important;
+}
+
+/* Prevent horizontal scrolling in message input */
+.message-input-container {
+  overflow-x: hidden !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  contain: layout !important;
+}
+
 @media (min-width: 2560px) {
   .width-4k-sidebar {
     width: min(400px, calc((100vw-1150px-48px) / 2)) !important;

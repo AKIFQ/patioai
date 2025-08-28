@@ -40,6 +40,7 @@ import { useReasoningStream } from '../hooks/useReasoningStream';
 import { useChatSubmissionState } from '@/lib/client/atomicStateManager';
 import { logger } from '@/lib/utils/logger';
 import { useChatPagination } from '../hooks/useChatPagination';
+import { UserInfoWithTier } from '@/lib/server/supabase';
 
 // Icons from Lucide React
 import { User, Copy, CheckCircle, FileIcon, Plus, Loader2, Settings } from 'lucide-react';
@@ -70,7 +71,7 @@ interface ChatProps {
   initialModelType: string;
   initialSelectedOption: string;
   roomContext?: RoomContext;
-  userData?: any;
+  userData?: UserInfoWithTier;
   sidebarData?: any;
 }
 
@@ -104,6 +105,18 @@ const ChatComponent: React.FC<ChatProps> = ({
 
   // Reasoning mode state (only for free users)
   const [reasoningMode, setReasoningMode] = useState(false);
+
+  // Auto-enable reasoning mode when DeepSeek R1 is selected
+  useEffect(() => {
+    console.log('🧠 Reasoning mode check:', { optimisticOption, reasoningMode });
+    if (optimisticOption === 'deepseek-r1-full' || optimisticOption === 'deepseek/deepseek-r1') {
+      console.log('✅ Auto-enabling reasoning mode for DeepSeek R1');
+      setReasoningMode(true);
+    } else if (reasoningMode && optimisticOption !== 'deepseek-r1-full' && optimisticOption !== 'deepseek/deepseek-r1') {
+      console.log('❌ Disabling reasoning mode for non-R1 model');
+      setReasoningMode(false);
+    }
+  }, [optimisticOption, reasoningMode]);
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -315,7 +328,7 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
   }, [roomContext, isRoomLoading, displayMessages.length]); // Only depend on length, not full array
 
   // Handle message submission from MessageInput with atomic state management
-  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI = true, reasoningModeEnabled = false) => {
+  const handleSubmit = useCallback(async (message: string, attachments?: File[], triggerAI = true, reasoningModeEnabled = reasoningMode) => {
     const messageId = crypto.randomUUID();
     logger.chatSubmission(messageId, {
       roomContext: roomContext?.shareCode,
@@ -413,7 +426,12 @@ throw new Error(`API call failed: ${response.status}`);
                   : msg.content
               }));
 
-            // Debug logging removed
+            // Debug logging for room AI invocation
+            console.log('🚀 Invoking AI with:', {
+              modelId: optimisticOption,
+              reasoningMode: reasoningModeEnabled,
+              roomContext: roomContext.shareCode
+            });
             invokeAIRef.current({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
@@ -1221,19 +1239,19 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Mobile Header with Hamburger Menu - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-14 shadow-sm w-full md:hidden">
-        <div className="flex items-center justify-between w-full h-full px-4">
+              <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md h-12 shadow-sm w-full md:hidden pt-safe">
+        <div className="flex items-center justify-between w-full h-full px-2">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* Hamburger Menu Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="h-9 w-9 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
+              className="h-7 w-7 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
               aria-label="Toggle sidebar"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-4 w-4" />
             </Button>
 
             {/* PatioAI Logo */}
@@ -1241,20 +1259,20 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               <Image
                 src="/icons/icon-512x512.png"
                 alt="PatioAI"
-                width={24}
-                height={24}
+                width={20}
+                height={20}
                 className="rounded-md"
               />
             </div>
 
             {/* Room Name */}
-            <h1 className="text-lg font-semibold tracking-tight truncate text-foreground">
+            <h1 className="text-sm font-medium tracking-tight truncate text-foreground">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
             </h1>
           </div>
 
           {/* Right side - Activity Indicators + New Chat Button */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Mobile cross-thread activity indicators */}
             {roomContext && crossThreadActivities.some(activity =>
               activity.threadId !== (roomContext.chatSessionId || '') &&
@@ -1273,12 +1291,12 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               size="sm"
               onClick={handleNewChat}
               disabled={isCreatingNewChat}
-              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors rounded-lg"
+              className="h-6 w-6 p-0 text-xs font-medium hover:bg-muted/50 transition-colors rounded-lg"
             >
               {isCreatingNewChat ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3 w-3" />
               )}
             </Button>
 
@@ -1298,7 +1316,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Desktop Chat Header - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
@@ -1312,7 +1330,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                 {/* Indicators on the right */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Participant count - styled indicator */}
-                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full border border-green-200/50 dark:border-green-800/30">
+                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                     <span className="text-xs font-medium text-green-700 dark:text-green-300">
                       {roomContext.participants.length} online
@@ -1478,7 +1496,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         )}
       </div>
 
-      <div className="sticky bottom-0 w-full z-5 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent">
+      <div className="sticky bottom-0 w-full z-5 pb-1 sm:pb-3 px-2 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator
@@ -1502,7 +1520,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
           setWebSearchEnabled={setWebSearchEnabled}
           reasoningMode={reasoningMode}
           setReasoningMode={setReasoningMode}
-          userTier={(userData as any)?.subscription_tier || 'free'}
+          userTier={userData?.subscription_tier || 'free'}
           onUpgrade={() => {
             // Placeholder: surface your checkout/upgrade flow here
             // Debug logging removed

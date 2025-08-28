@@ -2,6 +2,14 @@ import 'server-only';
 import { cache } from 'react';
 import { createServerSupabaseClient } from '@/lib/server/server';
 
+// Extended user info type that includes subscription tier
+export interface UserInfoWithTier {
+  id: string;
+  full_name: string;
+  email: string;
+  subscription_tier: 'free' | 'basic' | 'premium';
+}
+
 // React Cache: https://react.dev/reference/react/cache
 //This memoizes/dedupes the request
 // if it is called multiple times in the same request.
@@ -22,7 +30,7 @@ export const getSession = cache(async () => {
 
 //This memoizes/dedupes the request
 // if it is called multiple times in the same request.
-export const getUserInfo = cache(async () => {
+export const getUserInfo = cache(async (): Promise<UserInfoWithTier | null> => {
   const supabase = await createServerSupabaseClient();
   try {
     // First check if user is authenticated
@@ -43,9 +51,21 @@ export const getUserInfo = cache(async () => {
       return null;
     }
 
-    return data;
+    // Get subscription tier from user_tiers table
+    const { data: tierData } = await supabase
+      .from('user_tiers')
+      .select('tier')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const subscription_tier = (tierData?.tier as 'free' | 'basic' | 'premium') || 'free';
+
+    return {
+      ...data,
+      subscription_tier
+    };
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error fetching user info:', error);
     return null;
   }
 });

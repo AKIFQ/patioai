@@ -23,8 +23,8 @@ interface EndpointConfig {
 
 export const getConfig = (): EndpointConfig => ({
   socketIO: {
-    serverUrl: process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000',
-    clientUrl: process.env.NEXT_PUBLIC_CLIENT_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000',
+    serverUrl: process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat',
+    clientUrl: process.env.NEXT_PUBLIC_CLIENT_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat',
     timeout: parseInt(process.env.SOCKET_TIMEOUT || '20000'),
     retries: parseInt(process.env.SOCKET_RETRIES || '3'),
     reconnectionAttempts: parseInt(process.env.SOCKET_RECONNECTION_ATTEMPTS || '5'),

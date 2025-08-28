@@ -14,7 +14,7 @@ export class OpenRouterService {
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: apiKey,
       headers: {
-        'HTTP-Referer': process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+        'HTTP-Referer': process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat',
         'X-Title': 'PatioAI'
       }
     });
@@ -24,7 +24,12 @@ export class OpenRouterService {
    * Get model instance for AI SDK
    */
   getModel(modelId: string) {
-    // Direct model instantiation - router handles validation
+    // Handle special routing for free models
+    if (modelId.includes(':free')) {
+      return this.client(modelId);
+    }
+
+    // Regular OpenRouter models
     return this.client(modelId);
   }
 
@@ -80,14 +85,16 @@ export class OpenRouterService {
       };
     }
 
-    // DeepSeek R1 reasoning configuration with cost controls
+    // DeepSeek R1 reasoning configuration with OpenRouter unified reasoning
     if (modelId.includes('deepseek/deepseek-r1')) {
+      const isFreeModel = modelId.includes(':free');
       return {
-        // OpenRouter-specific configuration for DeepSeek R1
+        reasoning: {
+          enabled: true,
+          effort: isFreeModel ? 'low' : 'high',
+          exclude: false
+        },
         openai: {
-          // These parameters may not work with OpenRouter, but we'll try
-          max_reasoning_tokens: 512,
-          // DeepSeek R1 reasoning appears in <think> tags within the response
           stream: true,
           temperature: 0.7
         }

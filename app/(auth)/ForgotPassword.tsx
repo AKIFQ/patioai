@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input';
 import { useFormStatus } from 'react-dom';
 import { resetPasswordForEmail } from './action';
 import { usePathname } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ForgotPasswordProps {
   open: boolean;
@@ -31,9 +32,31 @@ export default function ForgotPassword({
       setError('Email address is required');
       return;
     }
-    await resetPasswordForEmail(formData);
-    setError('');
-    setEmail('');
+    
+    try {
+      const result = await resetPasswordForEmail(formData);
+      
+      if (result.success) {
+        toast.success(result.message, {
+          icon: <CheckCircle className="h-4 w-4" />,
+          duration: 6000,
+        });
+        setError('');
+        setEmail('');
+        handleClose(); // Close the dialog on success
+      } else {
+        toast.error(result.message, {
+          icon: <AlertCircle className="h-4 w-4" />,
+          duration: 5000,
+        });
+        setError(result.message);
+      }
+    } catch (error) {
+      toast.error('Something went wrong. Please try again.', {
+        icon: <AlertCircle className="h-4 w-4" />,
+      });
+      setError('Something went wrong. Please try again.');
+    }
   };
 
   return (

@@ -415,9 +415,9 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative w-full mb-2 rounded-2xl sm:rounded-xl overflow-hidden border-0 
+        className="relative w-full max-w-full mb-1.5 sm:mb-2 rounded-xl sm:rounded-xl overflow-hidden border-0 
                    shadow-elevation-2 hover:shadow-elevation-3 focus-within:shadow-elevation-4
-                   flex flex-col transition-smooth 
+                   flex flex-col transition-smooth message-input-container
                    bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
       >
         <input
@@ -435,16 +435,18 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
           disabled={isLoading}
-          className="w-full pt-5 pb-3 sm:pt-4 sm:pb-2 px-4 sm:px-3 min-h-0 max-h-40 resize-none 
+          className="w-full pt-3 pb-2 sm:pt-4 sm:pb-2 px-2 sm:px-3 min-h-0 resize-none 
                      border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none 
-                     bg-transparent text-body sm:text-body placeholder:text-muted-foreground/60
-                     placeholder:font-medium"
+                     bg-transparent text-sm sm:text-body placeholder:text-muted-foreground/60
+                     placeholder:font-medium leading-relaxed
+                     max-h-[50vh] sm:max-h-40 break-words overflow-wrap-anywhere
+                     word-break-break-all min-w-0 max-w-full overflow-hidden whitespace-pre-wrap"
           rows={1}
         />
 
         {/* Bottom controls row with buttons */}
-        <div className="flex px-4 sm:px-3 pb-3 pt-2 sm:pb-2 sm:pt-1.5 items-center gap-3 sm:gap-2 justify-between min-w-0">
-          <div className="flex items-center gap-2 sm:gap-1.5 min-w-0 overflow-hidden">
+        <div className="flex px-2 sm:px-3 pb-2 pt-1.5 sm:pb-2 sm:pt-1.5 items-center gap-1.5 sm:gap-2 justify-between min-w-0 max-w-full">
+          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-1 overflow-hidden">
             {/* Plus menu with Attach and Web search toggle */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -452,14 +454,14 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 cursor-pointer rounded-full flex items-center justify-center 
+                  className="h-6 w-6 sm:h-8 sm:w-8 cursor-pointer rounded-full flex items-center justify-center 
                              bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)] 
                              transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
                              hover:scale-105 active:scale-95 flex-shrink-0"
                   disabled={isLoading}
                   aria-label="More tools"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 border-0 bg-[var(--elevation-2)] backdrop-blur-md shadow-elevation-3 rounded-xl">
@@ -538,7 +540,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 max-w-[calc(100%-120px)] sm:max-w-none">
               <ModelSelector
                 selectedModel={selectedOption}
                 userTier={userTier}
@@ -548,8 +550,8 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
             </div>
 
             {selectedBlobs.length > 0 && (
-              <div className="hidden sm:flex items-center rounded-full text-xs px-2 h-8 bg-primary/10 border border-primary/30 flex-shrink-0">
-                <span className="text-primary font-medium">
+              <div className="hidden sm:flex items-center rounded-full text-xs px-2 h-7 bg-primary/10 border border-primary/30 flex-shrink-0">
+                <span className="text-primary font-medium text-xs">
                   {selectedBlobs.length} file
                   {selectedBlobs.length > 1 ? 's' : ''} attached
                 </span>
@@ -558,7 +560,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2 sm:gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-1.5 flex-shrink-0">
             {/* Prompt button or Stop button */}
             {!isLoading && (
               <>
@@ -568,13 +570,13 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     size="icon"
                     variant="ghost"
                     onClick={onStopAI}
-                    className="h-8 w-8 rounded-full flex items-center justify-center 
+                    className="h-6 w-6 sm:h-8 sm:w-8 rounded-full flex items-center justify-center 
                                bg-destructive/10 hover:bg-destructive/20 
                                transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
                                hover:scale-105 active:scale-95 flex-shrink-0 group"
                     title="Stop AI response"
                   >
-                    <Square className="text-destructive w-4 h-4 group-hover:scale-105 transition-transform" />
+                    <Square className="text-destructive w-3 h-3 sm:w-4 sm:h-4 group-hover:scale-105 transition-transform" />
                   </Button>
                 ) : (
                   <Button
@@ -583,14 +585,14 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     variant="ghost"
                     onClick={handlePromptSubmit}
                     disabled={!input.trim() && attachedFiles.length === 0}
-                    className="h-8 w-8 rounded-full flex items-center justify-center 
+                    className="h-6 w-6 sm:h-8 sm:w-8 rounded-full flex items-center justify-center 
                                bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40
                                hover:from-amber-200 hover:to-orange-200 dark:hover:from-amber-800/50 dark:hover:to-orange-800/50
                                transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
                                hover:scale-105 active:scale-95 flex-shrink-0 group disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Send with AI response (Shift + Enter)"
                   >
-                    <Zap className="text-amber-600 dark:text-amber-400 w-4 h-4 group-hover:scale-105 transition-transform" />
+                    <Zap className="text-amber-600 dark:text-amber-400 w-3 h-3 sm:w-4 sm:h-4 group-hover:scale-105 transition-transform" />
                   </Button>
                 )}
               </>
@@ -599,10 +601,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
             {/* Send button or spinner with matched sizing */}
             {roomContext && (
               isLoading ? (
-                <div className="h-8 w-8 rounded-full flex items-center justify-center 
+                <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full flex items-center justify-center 
                                bg-[var(--elevation-3)] shadow-elevation-1 
                                flex-shrink-0 animate-pulse">
-                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                  <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 text-primary animate-spin" />
                 </div>
               ) : (
                 <Button
@@ -611,7 +613,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   size="icon"
                   variant="ghost"
                   disabled={!input.trim() && attachedFiles.length === 0}
-                  className="h-8 w-8 rounded-full flex items-center justify-center 
+                  className="h-6 w-6 sm:h-8 sm:w-8 rounded-full flex items-center justify-center 
                              bg-gradient-to-br from-primary to-primary/90
                              hover:from-primary/90 hover:to-primary/80
                              transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
@@ -619,7 +621,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                              disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
                 >
-                  <Send className="text-primary-foreground w-4 h-4 group-hover:scale-105 transition-transform" />
+                  <Send className="text-primary-foreground w-3 h-3 sm:w-4 sm:h-4 group-hover:scale-105 transition-transform" />
                 </Button>
               )
             )}
