@@ -241,6 +241,13 @@ console.log(` [${requestId}] Room chat API received:`, {
       lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 50)
     });
 
+    // Debug: Log the exact displayName being used for message saving
+    console.log('🔍 Room chat API displayName for message saving:', {
+      displayName,
+      displayNameType: typeof displayName,
+      displayNameLength: displayName?.length
+    });
+
     // Duplicate request handling removed - using new tier-based system
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {

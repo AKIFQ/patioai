@@ -417,12 +417,26 @@ throw new Error(`API call failed: ${response.status}`);
             // Prepare chat history for context (last 10 messages)
             const chatHistory = realtimeMessages
               .slice(-10) // Last 10 messages for context
-              .map(msg => ({
-                role: msg.role,
-                content: msg.senderName && msg.role === 'user'
+              .map(msg => {
+                const formattedContent = msg.senderName && msg.role === 'user'
                   ? `${msg.senderName}: ${msg.content}`
-                  : msg.content
-              }));
+                  : msg.content;
+                
+                // Debug logging for message formatting
+                if (msg.role === 'user' && roomContext) {
+                  console.log('🔍 Formatting user message for API:', {
+                    originalContent: msg.content,
+                    senderName: msg.senderName,
+                    formattedContent,
+                    roomDisplayName: roomContext.displayName
+                  });
+                }
+                
+                return {
+                  role: msg.role,
+                  content: formattedContent
+                };
+              });
 
             // Debug logging for room AI invocation
             console.log('🚀 Invoking AI with:', {

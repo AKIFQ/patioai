@@ -61,6 +61,18 @@ const ChatMessage = memo(({
   const cleanContent = React.useMemo(() => {
     if (!message.content) return '';
     
+    // Debug: Always log for room chat user messages
+    if (isRoomChat && message.role === 'user') {
+      console.log('🔍 ChatMessage cleaning debug:', {
+        messageId: message.id,
+        isRoomChat,
+        messageRole: message.role,
+        senderName: message.senderName,
+        contentStart: message.content.substring(0, 50),
+        contentLength: message.content.length
+      });
+    }
+    
     // For room chats, we need to clean USER messages (not AI messages)
     // User messages often have "SenderName: message" format that should be cleaned
     if (isRoomChat && message.role === 'user') {
@@ -71,6 +83,16 @@ const ChatMessage = memo(({
           console.log('🧹 Removing sender prefix from user message:', senderPrefix);
           return message.content.substring(senderPrefix.length);
         }
+      }
+      
+      // Debug: Log message details for troubleshooting
+      if (isRoomChat && message.role === 'user') {
+        console.log('🔍 ChatMessage content cleaning debug:', {
+          originalContent: message.content,
+          senderName: message.senderName,
+          hasPrefix: message.senderName && message.content.startsWith(`${message.senderName}: `),
+          contentPreview: message.content.substring(0, 50) + '...'
+        });
       }
       
       // Method 2: Pattern detection for "Name: message" format

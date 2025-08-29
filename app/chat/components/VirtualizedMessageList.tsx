@@ -240,6 +240,16 @@ const VirtualizedMessageList = memo(({
                 ? (message as any).senderName === currentUserDisplayName
                 : message.role === 'user';
               
+              // Debug logging for anonymous user message display
+              if (isRoomChat && message.role === 'user') {
+                console.log('🔍 Message sender comparison:', {
+                  messageSenderName: (message as any).senderName,
+                  currentUserDisplayName,
+                  isUserMessage,
+                  messageContent: message.content.substring(0, 30) + '...'
+                });
+              }
+              
               // Check if this message is currently streaming
               const isStreaming = streamingMessageId === message.id;
                 
@@ -313,6 +323,16 @@ const VirtualizedMessageList = memo(({
             const isUserMessage = currentUserDisplayName 
               ? (message as any).senderName === currentUserDisplayName
               : message.role === 'user';
+            
+            // Debug logging for anonymous user message display
+            if (isRoomChat && message.role === 'user') {
+              console.log('🔍 Virtualized message sender comparison:', {
+                messageSenderName: (message as any).senderName,
+                currentUserDisplayName,
+                isUserMessage,
+                messageContent: message.content.substring(0, 30) + '...'
+              });
+            }
 
             // Check if this message is currently streaming
             const isStreaming = streamingMessageId === message.id;

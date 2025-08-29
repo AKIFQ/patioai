@@ -51,6 +51,8 @@ export default function RoomChatWrapper({
     const displayName = searchParams.get('displayName');
     const threadId = searchParams.get('threadId') || searchParams.get('chatSession'); // Support both new and legacy params
 
+
+
     // If no display name, redirect to join page
     if (!displayName) {
       router.push(`/room/${shareCode}`);

@@ -69,10 +69,10 @@ async function checkUserRemovalStatus(shareCode: string, displayName: string, us
         }
 
         if (removedParticipant) {
-            return { 
-                isRemoved: true, 
+            return {
+                isRemoved: true,
                 roomName: roomInfo.room.name,
-                shareCode: shareCode 
+                shareCode: shareCode
             };
         }
 
@@ -154,6 +154,12 @@ export default async function RoomChatPage(props: {
         redirect(`/room/${shareCode}`);
     }
 
+    // Prevent "User" from being used as a display name - redirect to join form
+    if (searchParams.displayName === 'User') {
+        console.log('Redirecting user with invalid "User" display name to join form');
+        redirect(`/room/${shareCode}`);
+    }
+
     // Check if room is expired first
     const expirationCheck = await checkRoomExpiration(shareCode);
 
@@ -210,26 +216,26 @@ export default async function RoomChatPage(props: {
         console.error('Error ensuring user in room:', error);
     }
 
-        const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
-    
+    const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
+
     // If user just signed in (has auth but was previously anonymous), update their participant record
     if (userInfo && searchParams.sessionId?.startsWith('session_')) {
-      try {
-        // Update the anonymous participant to authenticated
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            roomId: roomInfo?.room.id,
-            sessionId: searchParams.sessionId,
-            displayName: userInfo.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
-          })
-        });
-      } catch (error) {
-        console.warn('Could not update participant record:', error);
-      }
+        try {
+            // Update the anonymous participant to authenticated
+            await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    roomId: roomInfo?.room.id,
+                    sessionId: searchParams.sessionId,
+                    displayName: userInfo.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
+                })
+            });
+        } catch (error) {
+            console.warn('Could not update participant record:', error);
+        }
     }
     if (!roomInfo) {
         // Room not found or deleted - redirect to main chat page

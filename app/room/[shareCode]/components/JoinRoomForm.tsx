@@ -92,7 +92,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
     // Only check stored display name if user is not authenticated
     if (!isAuthenticated) {
       const storedName = getStoredDisplayName(shareCode);
-      if (storedName) {
+      if (storedName && storedName !== 'User') { // Prevent "User" from being used as a valid stored name
         setDisplayName(storedName);
         
         // If user has a stored session, try to auto-join them
@@ -104,6 +104,10 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
           }, 100);
           return;
         }
+      } else if (storedName === 'User') {
+        // Clear invalid "User" display name from storage
+        console.log('Clearing invalid "User" display name from localStorage');
+        localStorage.removeItem(`room_${shareCode}_displayName`);
       }
     }
   }, [shareCode, router, isAuthenticated]);
@@ -133,6 +137,11 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
   const handleJoinRoom = async () => {
     if (!displayName.trim()) {
       toast.error('Please enter a display name');
+      return;
+    }
+
+    if (displayName.trim().toLowerCase() === 'user') {
+      toast.error('Please choose a more specific display name than "User"');
       return;
     }
 
