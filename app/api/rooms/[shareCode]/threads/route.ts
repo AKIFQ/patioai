@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -7,13 +7,13 @@ const supabase = createClient(
 );
 
 export async function GET(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ shareCode: string }> }
 ) {
   try {
     const { shareCode } = await params;
-    const url = new URL(req.url);
-    const displayName = url.searchParams.get('displayName');
+    const { searchParams } = new URL(request.url);
+    const displayName = searchParams.get('displayName');
 
     if (!displayName) {
       return NextResponse.json(
@@ -25,7 +25,7 @@ export async function GET(
     // Get room info
     const { data: room, error: roomError } = await supabase
       .from('rooms')
-      .select('id, name, share_code, expires_at')
+      .select('id, name, share_code')
       .eq('share_code', shareCode)
       .single();
 
@@ -36,82 +36,92 @@ export async function GET(
       );
     }
 
-    // Check if room has expired
-    const now = new Date();
-    const expiresAt = new Date(room.expires_at);
-    if (now > expiresAt) {
-      return NextResponse.json(
-        { error: 'Room has expired' },
-        { status: 410 }
-      );
-    }
-
-    // Verify user is a participant
-    const { data: participant, error: participantError } = await supabase
+    // Check if user is a participant in the room
+    const { data: participant } = await supabase
       .from('room_participants')
       .select('*')
       .eq('room_id', room.id)
-      .eq('display_name', displayName.trim())
+      .eq('display_name', displayName)
       .single();
 
-    if (participantError || !participant) {
+    if (!participant) {
       return NextResponse.json(
-        { error: 'Not a participant in this room' },
+        { error: 'User is not a participant in this room' },
         { status: 403 }
       );
     }
 
-    // Get all threads for this room with their first messages
-    const { data: threads, error: threadsError } = await supabase
+    // Get all messages for this room, grouped by thread
+    const { data: messages, error: messagesError } = await supabase
       .from('room_messages')
-      .select(`
-        thread_id,
-        content,
-        sender_name,
-        created_at,
-        is_ai_response
-      `)
+      .select('*')
       .eq('room_id', room.id)
       .order('created_at', { ascending: true });
 
-    if (threadsError) {
-      console.error('Error fetching threads:', threadsError);
+    if (messagesError) {
+      console.error('Error fetching room messages:', messagesError);
       return NextResponse.json(
-        { error: 'Failed to fetch threads' },
+        { error: 'Failed to fetch room messages' },
         { status: 500 }
       );
     }
 
-    // Group messages by thread and get first message of each thread
+    // Group messages by thread_id and find the first user message for each thread
     const threadMap = new Map();
-    
-    threads?.forEach((message) => {
-      if (!threadMap.has(message.thread_id)) {
-        threadMap.set(message.thread_id, {
-          threadId: message.thread_id,
-          firstMessage: message.content,
-          senderName: message.sender_name,
-          createdAt: message.created_at,
-          messageCount: 0
-        });
+    const threadLatestTimes = new Map();
+
+    (messages || []).forEach((msg: any) => {
+      if (msg.thread_id) {
+        // Track the first user message for each thread
+        if (!msg.is_ai_response && !threadMap.has(msg.thread_id)) {
+          threadMap.set(msg.thread_id, msg);
+        }
+        
+        // Track latest message time for each thread
+        const currentLatest = threadLatestTimes.get(msg.thread_id);
+        if (!currentLatest || new Date(msg.created_at) > new Date(currentLatest)) {
+          threadLatestTimes.set(msg.thread_id, msg.created_at);
+        }
       }
-      threadMap.get(message.thread_id).messageCount++;
     });
 
-    const threadList = Array.from(threadMap.values())
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    // Convert to thread format
+    const threads = Array.from(threadMap.entries()).map(([threadId, firstMsg]) => {
+      // Use the first few words of the first user message as the title
+      let title = 'New Chat';
+      if (firstMsg.content) {
+        const words = firstMsg.content.trim().split(/\s+/);
+        title = words.slice(0, 4).join(' ');
+        if (title.length > 30) {
+          title = title.substring(0, 30) + '...';
+        }
+      }
+
+      return {
+        threadId,
+        firstMessage: title,
+        createdAt: firstMsg.created_at,
+        senderName: firstMsg.sender_name,
+        latestActivity: threadLatestTimes.get(threadId) || firstMsg.created_at
+      };
+    });
+
+    // Sort by latest activity
+    threads.sort((a, b) => 
+      new Date(b.latestActivity).getTime() - new Date(a.latestActivity).getTime()
+    );
 
     return NextResponse.json({
+      threads,
       room: {
         id: room.id,
         name: room.name,
         shareCode: room.share_code
-      },
-      threads: threadList
+      }
     });
 
   } catch (error) {
-    console.error('Error in room threads API:', error);
+    console.error('Error in threads API:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

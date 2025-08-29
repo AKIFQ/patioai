@@ -278,109 +278,7 @@ export default async function RoomChatPage(props: {
     console.log('Room page rendering with chatSessionId:', chatSessionId);
     console.log('Room messages count:', roomMessages.length);
 
-        // Create sidebar data for anonymous users
-    let finalSidebarData = props.sidebarData;
 
-    if (!userInfo && searchParams.displayName) {
-      // For anonymous users, fetch room threads and create sidebar data
-      let roomThreads = [];
-      
-      try {
-        const threadsResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/${shareCode}/threads?displayName=${encodeURIComponent(searchParams.displayName)}`,
-          { cache: 'no-store' }
-        );
-        
-        if (threadsResponse.ok) {
-          const threadsData = await threadsResponse.json();
-          roomThreads = threadsData.threads || [];
-        }
-      } catch (error) {
-        console.warn('Failed to fetch room threads for anonymous user:', error);
-      }
-
-      // Convert room threads to the format expected by the sidebar
-      // The sidebar expects raw message data, not processed thread data
-      const roomChatsData = roomThreads.flatMap((thread: any) => {
-        // Create a message entry for each thread (the first message)
-        return [{
-          id: `thread_${thread.threadId}`,
-          room_id: roomInfo.room.id,
-          thread_id: thread.threadId,
-          content: thread.firstMessage || 'No messages yet',
-          sender_name: thread.senderName || 'Anonymous',
-          created_at: thread.createdAt,
-          is_ai_response: false // First message is always from user
-        }];
-      });
-
-      // Create chat previews from room threads
-      const roomChatPreviews = roomThreads.map((thread: any) => ({
-        id: thread.threadId,
-        firstMessage: thread.firstMessage || 'No messages yet',
-        created_at: thread.createdAt,
-        type: 'room' as const,
-        roomName: roomInfo.room.name,
-        shareCode: roomInfo.room.shareCode
-      }));
-
-      finalSidebarData = {
-        userInfo: {
-          id: '',
-          full_name: searchParams.displayName,
-          email: ''
-        },
-        initialChatPreviews: roomChatPreviews,
-        categorizedChats: { 
-          today: roomChatPreviews.filter((chat: any) => {
-            const chatDate = new Date(chat.created_at);
-            const today = new Date();
-            return chatDate.toDateString() === today.toDateString();
-          }),
-          yesterday: roomChatPreviews.filter((chat: any) => {
-            const chatDate = new Date(chat.created_at);
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            return chatDate.toDateString() === yesterday.toDateString();
-          }),
-          last7Days: roomChatPreviews.filter((chat: any) => {
-            const chatDate = new Date(chat.created_at);
-            const weekAgo = new Date();
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            return chatDate >= weekAgo && chatDate < new Date();
-          }),
-          last30Days: roomChatPreviews.filter((chat: any) => {
-            const chatDate = new Date(chat.created_at);
-            const monthAgo = new Date();
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            return chatDate >= monthAgo && chatDate < new Date();
-          }),
-          last2Months: roomChatPreviews.filter((chat: any) => {
-            const chatDate = new Date(chat.created_at);
-            const twoMonthsAgo = new Date();
-            twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
-            return chatDate >= twoMonthsAgo && chatDate < new Date();
-          }),
-          older: roomChatPreviews.filter((chat: any) => {
-            const chatDate = new Date(chat.created_at);
-            const twoMonthsAgo = new Date();
-            twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
-            return chatDate < twoMonthsAgo;
-          })
-        },
-        documents: [],
-        rooms: [{
-          shareCode: roomInfo.room.shareCode,
-          name: roomInfo.room.name,
-          id: roomInfo.room.id,
-          maxParticipants: roomInfo.room.maxParticipants,
-          tier: roomInfo.room.tier,
-          expiresAt: roomInfo.room.expiresAt,
-          createdAt: roomInfo.room.createdAt
-        }],
-        roomChatsData: roomChatsData
-      };
-    }
 
     return (
         <RoomChatWrapper
@@ -390,7 +288,6 @@ export default async function RoomChatPage(props: {
             initialModelType={modelType}
             initialSelectedOption={selectedOption}
             userData={userInfo}
-            sidebarData={finalSidebarData}
         />
     );
 }

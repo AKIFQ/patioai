@@ -72,7 +72,6 @@ interface ChatProps {
   initialSelectedOption: string;
   roomContext?: RoomContext;
   userData?: UserInfoWithTier;
-  sidebarData?: any;
 }
 
 const ChatComponent: React.FC<ChatProps> = ({
@@ -81,8 +80,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   initialModelType,
   initialSelectedOption,
   roomContext,
-  userData,
-  sidebarData
+  userData
 }) => {
   const param = useParams();
   const router = useRouter();
