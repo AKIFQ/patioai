@@ -153,7 +153,7 @@ const ChatMessage = memo(({
         )}
 
         {/* Message Content with Copy Button */}
-        <div className={`flex items-start ${isMobile ? 'gap-0.5' : 'gap-2 sm:gap-1'} ${isUserMessage ? (isMobile ? 'max-w-[88%]' : 'max-w-[72%] sm:max-w-[70%] md:max-w-[65%]') : 'max-w-full'} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex items-start ${isMobile ? 'gap-0.5' : 'gap-2 sm:gap-1'} ${isUserMessage ? (isMobile ? 'max-w-[88%]' : 'max-w-[72%] sm:max-w-[70%] md:max-w-[65%]') : (isMobile ? 'max-w-[95%]' : 'max-w-full')} ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Message Content Container */}
           <div className={`flex flex-col ${isUserMessage ? 'items-end' : 'items-start'}`}>
 
@@ -178,6 +178,7 @@ const ChatMessage = memo(({
               className={`
                 ${isMobile ? 'rounded-lg' : 'rounded-2xl'} transition-smooth shadow-elevation-1 hover:shadow-elevation-2
                 ${isMobile ? 'px-4 py-3 text-base' : 'px-3 py-2 text-small'} ${interMessage.className}
+                min-w-0 max-w-full overflow-hidden word-wrap-break-word
                 ${isUserMessage
                   ? `bg-primary text-primary-foreground ${isMobile ? 'rounded-br-md' : 'rounded-br-lg'} 
                      shadow-[0_2px_12px_color-mix(in_srgb,var(--primary)_20%,transparent)]
@@ -197,7 +198,7 @@ const ChatMessage = memo(({
             >
               {/* Render text parts first (main message content) */}
               {textParts.length > 0 ? (
-                <div className={`prose ${isMobile ? 'prose-base text-base' : 'prose-sm'} max-w-none dark:prose-invert ${isMobile ? 'prose-p:my-1 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5' : 'prose-p:my-1 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1'}`}>
+                <div className={`prose ${isMobile ? 'prose-base text-base' : 'prose-sm'} max-w-none dark:prose-invert ${isMobile ? 'prose-p:my-1 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 break-words overflow-wrap-anywhere' : 'prose-p:my-1 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1'}`}>
                   {textParts.map((part, partIndex) => (
                     <MemoizedMarkdown
                       key={`text-${partIndex}`}

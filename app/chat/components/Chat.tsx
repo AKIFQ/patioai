@@ -1483,7 +1483,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             )}
           </div>
         ) : (
-          <div className={`flex-1 w-full min-w-0 flex flex-col overflow-hidden relative ${!roomContext ? 'pt-6 sm:pt-8' : ''}`}>
+          <div className={`flex-1 min-h-0 w-full min-w-0 flex flex-col overflow-hidden relative ${!roomContext ? 'pt-6 sm:pt-8' : ''}`}>
             {!roomContext && (
               <div className="pointer-events-none absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background via-background/70 to-transparent backdrop-blur-[2px] z-[1]" />
             )}
@@ -1508,7 +1508,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         )}
       </div>
 
-      <div className="message-input-container sticky bottom-0 w-full z-10 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe">
+      <div className="message-input-container w-full z-10 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe flex-shrink-0">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator

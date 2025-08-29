@@ -386,30 +386,28 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     return () => el.removeEventListener('touchstart', onTouchStart as any);
   }, []);
 
-  // Auto-resize textarea based on content (up to 15 lines)
+  // Auto-resize textarea based on content (up to 10 lines or 20% viewport)
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     
-    // Reset height to auto to get the correct scrollHeight
-    el.style.height = 'auto';
+    // Reset height to get accurate scrollHeight
+    el.style.height = '44px';
     
-    const lineCount = input.split('\n').length;
-    const lineHeight = 24; // Approximate line height in pixels
-    const padding = 20; // Top and bottom padding
+    // Get the actual content height
+    const scrollHeight = el.scrollHeight;
+    const lineHeight = 24; // Line height in pixels (1.5 * 16px font)
+    const maxLines = 10; // Reduced from 15 to 10 lines
+    const viewportMaxHeight = Math.min(window.innerHeight * 0.2, maxLines * lineHeight + 32);
     
-    // Calculate height based on line count (max 15 lines) or scroll height
-    const calculatedHeight = Math.min(
-      lineCount * lineHeight + padding,
-      15 * lineHeight + padding, // Max 15 lines = 360px + padding
-      el.scrollHeight
+    // Calculate new height, ensuring it doesn't exceed limits
+    const newHeight = Math.min(
+      Math.max(44, scrollHeight), // At least 44px
+      viewportMaxHeight // But not more than 20% of viewport or 10 lines
     );
     
-    // Set minimum height and maximum height
-    const minHeight = 44; // Minimum single line height
-    const maxHeight = 380; // 15 lines + padding
-    
-    el.style.height = `${Math.max(minHeight, Math.min(calculatedHeight, maxHeight))}px`;
+    // Apply the calculated height
+    el.style.height = `${newHeight}px`;
   }, [input]);
 
   // Long-press on send button (mobile) to trigger AI quick action (same as Shift+Enter)
@@ -445,6 +443,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                    shadow-elevation-2 hover:shadow-elevation-3 focus-within:shadow-elevation-4
                    flex flex-col transition-smooth message-input-container
                    bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
+        style={{ maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}
       >
         <input
           type="file"
@@ -465,13 +464,17 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                      border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none 
                      bg-transparent text-base sm:text-body placeholder:text-muted-foreground/60
                      placeholder:font-medium leading-relaxed
-                     max-h-[60vh] sm:max-h-[360px] break-words overflow-wrap-anywhere
-                     word-break-break-all min-w-0 max-w-full overflow-y-auto whitespace-pre-wrap
+                     max-h-[20vh] sm:max-h-[240px] break-words overflow-wrap-anywhere word-break-break-word
+                     min-w-0 max-w-full overflow-y-auto whitespace-pre-wrap overflow-x-hidden
                      transition-all duration-200 ease-in-out"
           rows={1}
           style={{
             minHeight: '44px',
-            maxHeight: '380px' // 15 lines + padding
+            maxHeight: 'min(20vh, 240px)', // Limit to 20% of viewport height or 10 lines
+            height: 'auto',
+            maxWidth: '100%',
+            width: '100%',
+            boxSizing: 'border-box'
           }}
         />
 
