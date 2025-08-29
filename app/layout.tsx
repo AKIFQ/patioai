@@ -77,6 +77,10 @@ export const metadata: Metadata = {
     title: 'PatioAI - AI Chat Assistant',
     description: 'Experience the power of AI-driven conversations with PatioAI',
     images: ['/logos/logo-horizontal.png']
+  },
+  other: {
+    'theme-color': '#152722',
+    'msapplication-navbutton-color': '#152722'
   }
 };
 
@@ -88,7 +92,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        {/* iOS PWA Status Bar Styling */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="theme-color" content="#152722" />
+        <meta name="msapplication-navbutton-color" content="#152722" />
+        <meta name="apple-mobile-web-app-title" content="PatioAI" />
       </head>
       <body className={`${jomolhari.className} min-h-screen w-full overflow-x-hidden`}>
         <ThemeProvider
@@ -97,6 +107,8 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          {/* PWA Status Bar Background Fix for iOS */}
+          <div className="pwa-status-bar-bg" />
           <MobileSidebarProvider>
             <main className="w-full min-w-0">{children}</main>
             <Toaster />

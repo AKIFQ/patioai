@@ -31,6 +31,17 @@
   padding-right: env(safe-area-inset-right);
 }
 
+/* PWA Status Bar Background Fix */
+.pwa-status-bar-bg {
+  background-color: var(--background);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  z-index: 9999;
+}
+
 .pt-safe-4 {
   padding-top: max(1rem, env(safe-area-inset-top));
 }
@@ -319,6 +330,17 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Ensure full coverage including status bar area on iOS PWA */
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  
+  /* PWA Status Bar Styling for iOS */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    body {
+      padding-top: env(safe-area-inset-top);
+    }
+  }
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
     text-rendering: optimizeLegibility;
