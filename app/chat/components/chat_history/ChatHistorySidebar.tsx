@@ -175,11 +175,6 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const isMobileSidebarOpen = openMobile;
   const closeMobileSidebar = useCallback(() => setOpenMobile(false), [setOpenMobile]);
   const router = useRouter();
-  // Safe user params for links
-  const safeUserId = userInfo?.id || 'anon';
-  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || 'User';
-  const encodedDisplayName = encodeURIComponent(safeUserDisplay);
-  const encodedSessionId = encodeURIComponent(`auth_${safeUserId}`);
   
   // Get global modal context
   const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
@@ -222,6 +217,16 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const currentChatId = typeof params.id === 'string' ? params.id : undefined;
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
   const displayName = searchParams.get('displayName');
+
+  // Safe user params for links
+  // For anonymous users in room context, use the current displayName from URL
+  const currentDisplayName = searchParams.get('displayName');
+  const currentSessionId = searchParams.get('sessionId');
+  const safeUserId = userInfo?.id || 'anon';
+  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || currentDisplayName || 'User';
+  const safeSessionId = currentSessionId || `auth_${safeUserId}`;
+  const encodedDisplayName = encodeURIComponent(safeUserDisplay);
+  const encodedSessionId = encodeURIComponent(safeSessionId);
 
   // Add SWR for anonymous room threads when in room context
   const { data: anonymousRoomData, mutate: mutateAnonymousThreads } = useSWR(
@@ -920,10 +925,14 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
   const currentChatId = typeof params.id === 'string' ? params.id : undefined;
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
   // Safe user params for links
+  // For anonymous users in room context, use the current displayName from URL
+  const currentDisplayName = searchParams.get('displayName');
+  const currentSessionId = searchParams.get('sessionId');
   const safeUserId = userInfo?.id || 'anon';
-  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || 'User';
+  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || currentDisplayName || 'User';
+  const safeSessionId = currentSessionId || `auth_${safeUserId}`;
   const encodedDisplayName = encodeURIComponent(safeUserDisplay);
-  const encodedSessionId = encodeURIComponent(`auth_${safeUserId}`);
+  const encodedSessionId = encodeURIComponent(safeSessionId);
 
   const handleChatSelect = useCallback(() => {
     close();
