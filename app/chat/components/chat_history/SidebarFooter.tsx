@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Settings, User, LogOut, Palette, CreditCard, Sun, Moon, Monitor } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useSearchParams } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,10 +70,14 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
     </div>
   );
 
+  const searchParams = useSearchParams();
+
   // Show user info for both authenticated and anonymous users
   if (!userInfo?.id) {
-    // For anonymous users, show their display name without sign-in button
-    const displayName = userInfo?.full_name || 'Anonymous User';
+    // For anonymous users, get the actual display name from URL parameters
+    const currentDisplayName = searchParams.get('displayName');
+    const displayName = currentDisplayName || 'Anonymous User';
+    
     return (
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 px-3 py-2">
@@ -87,6 +92,12 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
               Anonymous
             </span>
           </div>
+        </div>
+        {/* Sign-in button for anonymous users */}
+        <div className="px-3 pt-2">
+          <Button asChild size="sm" variant="outline" className="w-full h-8">
+            <Link href="/signin">Sign in</Link>
+          </Button>
         </div>
       </div>
     );
