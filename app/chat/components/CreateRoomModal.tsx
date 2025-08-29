@@ -12,9 +12,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Share2, Plus, Sparkles, Users, Clock, Shield, X } from 'lucide-react';
+import { Share2, Plus, Sparkles, Users, Clock, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ShareRoomModal from './ShareRoomModal';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -132,29 +133,36 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
         <Sheet open={isOpen && !showShareModal} onOpenChange={handleClose}>
           <SheetContent
             side="bottom"
-            className="h-auto max-h-[85vh] p-0 gap-0 flex flex-col rounded-t-xl border-t-2 bg-background"
+            className="h-auto max-h-[85vh] p-0 gap-0 flex flex-col rounded-t-xl border-t-2 bg-background shadow-2xl"
             style={{
               WebkitOverflowScrolling: 'touch',
               touchAction: 'pan-y'
             }}
           >
+            <VisuallyHidden>
+              <SheetTitle>Create Room</SheetTitle>
+            </VisuallyHidden>
             {/* Drag handle */}
             <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-3 mb-4" />
 
             {/* Header */}
             <SheetHeader className="px-6 pb-4 text-center">
               <div className="flex items-center justify-center gap-3 mb-3">
-                <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-                  <Plus className="h-4 w-4 text-amber-600" />
+                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                  {!createdRoom ? (
+                    <Plus className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Sparkles className="h-5 w-5 text-primary" />
+                  )}
                 </div>
               </div>
               <SheetTitle className="text-xl font-medium text-foreground">
-                {!createdRoom ? 'Create Room' : 'Room Created'}
+                {!createdRoom ? 'Create Room' : 'Room Ready'}
               </SheetTitle>
               <p className="text-muted-foreground text-sm">
                 {!createdRoom
-                  ? 'Create a secure chat room for your team'
-                  : 'Share with others to start collaborating'}
+                  ? 'Start a collaborative workspace'
+                  : 'Your workspace is ready for collaboration'}
               </p>
             </SheetHeader>
 
@@ -167,7 +175,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                   </Label>
                   <Input
                     id="roomName"
-                    placeholder="Team Planning"
+                    placeholder="Product Planning"
                     value={roomName}
                     onChange={(e) => setRoomName(e.target.value)}
                     onKeyDown={(e) => {
@@ -175,15 +183,24 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                         handleCreateRoom();
                       }
                     }}
+                    className="text-base h-11 transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
 
                 {/* Room Features */}
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <div>5 participants maximum</div>
-                    <div>Expires in 7 days</div>
-                    <div>Password protected automatically</div>
+                <div className="bg-muted/20 p-4 rounded-lg border border-border/30">
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 opacity-60" />
+                      <span>5 participants max</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 opacity-60" />
+                      <span>Expires in 7 days</span>
+                    </div>
+                    <div>
+                      <span>Auto-generated password</span>
+                    </div>
                   </div>
                 </div>
 
@@ -192,7 +209,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                   <Button
                     onClick={handleCreateRoom}
                     disabled={isCreating || !roomName.trim()}
-                    className="w-full"
+                    className="w-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                   >
                     {isCreating ? 'Creating...' : 'Create Room'}
                   </Button>
@@ -208,13 +225,13 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
             ) : (
               <div className="flex-1 px-6 pb-6 space-y-6">
                 {/* Room Details */}
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-muted/20 p-5 rounded-lg border border-border/30">
+                  <div className="grid grid-cols-2 gap-6 text-sm">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Code
+                        Room Code
                       </Label>
-                      <p className="font-mono text-base mt-1">
+                      <p className="font-mono text-lg font-medium mt-2 text-foreground">
                         {createdRoom.room.shareCode}
                       </p>
                     </div>
@@ -222,19 +239,17 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                       <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         Password
                       </Label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="font-mono text-base">
+                      <div className="flex items-center gap-2 mt-2">
+                        <p className="font-mono text-lg font-medium text-foreground">
                           {showPassword ? createdRoom.room.password : '•••••••'}
                         </p>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="h-6 w-6 p-0"
+                          className="h-7 px-2 text-xs"
                         >
-                          <span className="text-xs">
-                            {showPassword ? 'Hide' : 'Show'}
-                          </span>
+                          {showPassword ? 'Hide' : 'Show'}
                         </Button>
                       </div>
                     </div>
@@ -245,7 +260,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                 <div className="space-y-3 pt-2">
                   <Button
                     onClick={() => setShowShareModal(true)}
-                    className="w-full bg-amber-500 hover:bg-amber-600"
+                    className="w-full bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <Share2 className="h-4 w-4 mr-2" />
                     Share Room
@@ -282,29 +297,29 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
     <>
       {/* Main Create Room Modal */}
       <Dialog open={isOpen && !showShareModal} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-md backdrop-blur-md bg-background/95 border-border/40">
+        <DialogContent className="sm:max-w-lg backdrop-blur-md bg-background/95 border-border/30 shadow-xl">
           {!createdRoom ? (
             <>
-              <DialogHeader className="space-y-3">
+              <DialogHeader className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-                    <Plus className="h-4 w-4 text-amber-600" />
+                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                    <Plus className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <DialogTitle className="text-xl font-medium">Create Room</DialogTitle>
-                    <DialogDescription className="text-muted-foreground/80">
-                      Create a secure chat room for your team
+                    <DialogTitle className="text-xl font-medium text-foreground">Create Room</DialogTitle>
+                    <DialogDescription className="text-sm text-muted-foreground">
+                      Start a collaborative workspace
                     </DialogDescription>
                   </div>
                 </div>
               </DialogHeader>
 
               <div className="space-y-6">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label htmlFor="roomName" className="text-sm font-medium">Room Name</Label>
                   <Input
                     id="roomName"
-                    placeholder="Team Planning"
+                    placeholder="Product Planning"
                     value={roomName}
                     onChange={(e) => setRoomName(e.target.value)}
                     onKeyDown={(e) => {
@@ -312,14 +327,23 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                         handleCreateRoom();
                       }
                     }}
+                    className="text-base h-11 transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
 
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
-                  <div className="text-sm text-muted-foreground/80 space-y-1">
-                    <div>5 participants maximum</div>
-                    <div>Expires in 7 days</div>
-                    <div>Password protected automatically</div>
+                <div className="bg-muted/20 p-4 rounded-lg border border-border/30">
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 opacity-60" />
+                      <span>5 participants max</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 opacity-60" />
+                      <span>Expires in 7 days</span>
+                    </div>
+                    <div>
+                      <span>Auto-generated password</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -328,7 +352,11 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button onClick={handleCreateRoom} disabled={isCreating || !roomName.trim()}>
+                <Button 
+                  onClick={handleCreateRoom} 
+                  disabled={isCreating || !roomName.trim()}
+                  className="transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                >
                   {isCreating ? 'Creating...' : 'Create Room'}
                 </Button>
               </DialogFooter>
@@ -336,40 +364,40 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
           ) : (
             // Show Room Creation Success
             <>
-              <DialogHeader className="space-y-3">
+              <DialogHeader className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
-                    <Plus className="h-4 w-4 text-green-600" />
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Sparkles className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <DialogTitle className="text-xl font-medium">Room Created</DialogTitle>
-                    <DialogDescription className="text-muted-foreground/80">
-                      Share with others to start collaborating
+                    <DialogTitle className="text-xl font-medium text-foreground">Room Ready</DialogTitle>
+                    <DialogDescription className="text-sm text-muted-foreground">
+                      Your workspace is ready for collaboration
                     </DialogDescription>
                   </div>
                 </div>
               </DialogHeader>
 
               <div className="space-y-6">
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-muted/20 p-5 rounded-lg border border-border/30">
+                  <div className="grid grid-cols-2 gap-6 text-sm">
                     <div>
-                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Code</Label>
-                      <p className="font-mono text-base mt-1">{createdRoom.room.shareCode}</p>
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Room Code</Label>
+                      <p className="font-mono text-lg font-medium mt-2 text-foreground">{createdRoom.room.shareCode}</p>
                     </div>
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Password</Label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="font-mono text-base">
+                      <div className="flex items-center gap-2 mt-2">
+                        <p className="font-mono text-lg font-medium text-foreground">
                           {showPassword ? createdRoom.room.password : '•••••••'}
                         </p>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="h-6 w-6 p-0"
+                          className="h-7 px-2 text-xs"
                         >
-                          <span className="text-xs">{showPassword ? 'Hide' : 'Show'}</span>
+                          {showPassword ? 'Hide' : 'Show'}
                         </Button>
                       </div>
                     </div>
@@ -380,13 +408,13 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Crea
               <DialogFooter className="gap-2">
                 <Button 
                   onClick={() => handleJoinRoom(createdRoom.room)}
-                  className="flex-1 bg-green-500 hover:bg-green-600"
+                  className="flex-1 bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   Join Room
                 </Button>
                 <Button
                   onClick={() => setShowShareModal(true)}
-                  className="flex-1 bg-amber-500 hover:bg-amber-600"
+                  className="flex-1 bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Share2 className="h-4 w-4 mr-2" />
                   Share

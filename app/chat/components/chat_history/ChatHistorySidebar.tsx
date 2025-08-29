@@ -7,7 +7,8 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import Image from 'next/image';
 import {
   Tooltip,
@@ -958,6 +959,9 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
       <Sheet open={true} onOpenChange={handleCloseSidebar}>
         <SheetContent side="left" className="w-[280px] p-0">
+          <VisuallyHidden>
+            <SheetTitle>Navigation Menu</SheetTitle>
+          </VisuallyHidden>
           <div className="flex flex-col h-full">
             {/* Header */}
             <div className="flex justify-between items-center p-4 border-b">

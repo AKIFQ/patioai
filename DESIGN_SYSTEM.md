@@ -1,11 +1,12 @@
 # PatioAI Design System
 
 ## Color Palette
-**Brand Colors Only - No Blue**
-- Primary: Amber (`amber-500`, `amber-600`, `amber-50`) all shades of amber 
-- Success: Green (`green-500`, `green-600`, `green-50`) 
-- Danger: Red (`red-500`, `red-600`, `red-50`)
-- Neutral: Gray (`gray-500`, `gray-600`, `gray-50`, `muted-foreground`)
+**Brand Colors Only - Forest & Cream**
+- Primary: Forest Green (`--forest-base`, `--forest-600`, `--forest-700`) 
+- Backgrounds: Cream shades (`--cream-100`, `--cream-200`, `--cream-300`)
+- Success: Forest variants (`--forest-base` for positive states)
+- Warning/Caution: Forest darker shades (`--forest-700`)
+- Neutral: Muted variants (`muted`, `muted-foreground`)
 
 ## Typography
 - Headers: `font-medium` (never `font-bold`)
@@ -32,8 +33,9 @@
 - Single-purpose modals (no multi-step complexity in one modal)
 
 ## Icons & Visual Elements
-- Use brand colors for accent icons (amber for primary actions)
-- Circular backgrounds for app icons: `w-8 h-8 rounded-full bg-white`
+- Use brand colors for accent icons (forest green for primary actions)
+- Circular backgrounds for app icons: `w-8 h-8 rounded-full bg-muted`
+- Forest green for primary action buttons: `bg-primary hover:bg-primary/90`
 - No lock icons, shields, or security decorations
 - Modern social media icons in clean circular containers
 

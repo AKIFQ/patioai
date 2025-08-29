@@ -22,9 +22,11 @@ function SubmitButton() {
       type="submit"
       variant="outline"
       disabled={pending}
-      className="w-full rounded-full"
+      className="w-full h-14 text-red-600 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-700 dark:hover:text-red-300 transition-all duration-200 touch-manipulation"
+      style={{ minHeight: '44px' }}
     >
-      {pending ? 'Signing out...' : 'Sign out'}
+      <LogOut className="h-4 w-4 mr-2" />
+      {pending ? 'Signing out...' : 'Sign Out'}
     </Button>
   );
 } 

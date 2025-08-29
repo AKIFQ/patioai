@@ -11,7 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { useTheme } from 'next-themes';
 import { ModeToggle } from '@/components/ui/toggleButton';
 import SignOut from '@/components/layout/SignOut';
@@ -168,14 +169,9 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
         
         <div className="border-t border-border my-2" />
         
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 h-12 px-3 text-destructive hover:text-destructive hover:bg-destructive/10 touch-manipulation"
-          style={{ minHeight: '44px' }}
-          onClick={() => setIsOpen(false)}
-        >
+        <div className="px-3">
           <SignOut />
-        </Button>
+        </div>
       </div>
     </>
   );
@@ -195,6 +191,9 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
               touchAction: 'pan-y'
             }}
           >
+            <VisuallyHidden>
+              <SheetTitle>User Settings</SheetTitle>
+            </VisuallyHidden>
             {/* Drag handle */}
             <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-4" />
             
@@ -280,16 +279,9 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
                   </div>
                 </div>
 
-                {/* Danger Zone */}
+                {/* Sign Out Section */}
                 <div className="space-y-3">
-                  <Button
-                    variant="outline"
-                    className="w-full h-14 text-red-600 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-700 dark:hover:text-red-300 transition-all duration-200"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </Button>
+                  <SignOut />
                 </div>
               </div>
             </div>
@@ -362,9 +354,9 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           
           <DropdownMenuSeparator />
           
-          <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
+          <div className="px-2 py-1">
             <SignOut />
-          </DropdownMenuItem>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

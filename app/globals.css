@@ -130,6 +130,8 @@
   
   /* Base Forest Green for text */
   --forest-base: #26413C;
+  --forest-600: #1f352f;
+  --forest-700: #182b26;
   --forest-light: rgba(38, 65, 60, 0.8);
   --forest-muted: rgba(38, 65, 60, 0.6);
   --forest-subtle: rgba(38, 65, 60, 0.4);
@@ -258,6 +260,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-forest-base: var(--forest-base);
+  --color-forest-600: var(--forest-600);
+  --color-forest-700: var(--forest-700);
+  --color-forest-light: var(--forest-light);
+  --color-forest-muted: var(--forest-muted);
+  --color-forest-subtle: var(--forest-subtle);
+  --color-forest-faint: var(--forest-faint);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

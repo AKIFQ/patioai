@@ -5,74 +5,104 @@ const supabase = createClient();
 
 export async function getRoomInfo(shareCode: string, currentUserId?: string) {
   try {
-    // Direct query to rooms table
-    const { data: room, error: roomError } = await supabase
-      .from('rooms')
-      .select('*')
-      .eq('share_code', shareCode)
-      .single();
+    // Use the new anonymous-friendly function for getting room info
+    const { data: roomInfoData, error: roomInfoError } = await supabase
+      .rpc('get_room_info_anonymous', { share_code_param: shareCode });
 
-    if (roomError || !room) {
-      console.error('Room not found or error:', roomError);
+    if (roomInfoError || !roomInfoData) {
+      console.error('Room not found or error:', roomInfoError);
       return null;
     }
 
-    // Check if room has expired
-    const now = new Date();
-    const expiresAt = new Date(room.expires_at);
-    if (now > expiresAt) {
-      console.error('Room has expired');
-      return null;
-    }
-
-    // Try to get participants with fallback handling
-    let participants: Array<{
-      sessionId: string;
-      displayName: string;
-      joinedAt: string;
-      userId: string | null;
-    }> = [];
-    let participantCount = 0;
-    
-    try {
-      const { data: participantData, error: participantsError } = await supabase
-        .from('room_participants')
-        .select('session_id, display_name, joined_at, user_id')
-        .eq('room_id', room.id)
-        .order('joined_at', { ascending: true });
-
-      if (!participantsError && participantData) {
-        participants = participantData.map((p: any) => ({
-          sessionId: p.session_id,
-          displayName: p.display_name,
-          joinedAt: p.joined_at,
-          userId: p.user_id
-        }));
-        participantCount = participants.length;
-      }
-    } catch (error) {
-      console.warn('Could not fetch participants due to RLS policies');
-      participants = [];
-      participantCount = 0;
-    }
+    const roomInfo = roomInfoData as any;
 
     return {
       room: {
-        id: room.id,
-        name: room.name,
-        shareCode: room.share_code,
-        maxParticipants: 10, // Default value since column doesn't exist
-        tier: 'free', // Default value since column doesn't exist
-        expiresAt: room.expires_at,
-        createdAt: room.created_at,
-        createdBy: currentUserId && room.created_by === currentUserId ? room.created_by : undefined
+        id: roomInfo.room.id,
+        name: roomInfo.room.name,
+        shareCode: roomInfo.room.shareCode,
+        maxParticipants: roomInfo.room.maxParticipants || 10,
+        tier: 'free', // Default value since column doesn't exist in current schema
+        expiresAt: roomInfo.room.expiresAt,
+        createdAt: roomInfo.room.createdAt,
+        createdBy: currentUserId && roomInfo.room.createdBy === currentUserId ? roomInfo.room.createdBy : undefined
       },
-      participants: participants,
-      participantCount: participantCount
+      participants: roomInfo.participants || [],
+      participantCount: roomInfo.participantCount || 0
     };
   } catch (error) {
     console.error('Error fetching room info:', error);
-    return null;
+    
+    // Fallback to the old method if the new function doesn't exist yet
+    try {
+      const { data: room, error: roomError } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('share_code', shareCode)
+        .single();
+
+      if (roomError || !room) {
+        console.error('Room not found or error:', roomError);
+        return null;
+      }
+
+      // Check if room has expired
+      const now = new Date();
+      const expiresAt = new Date(room.expires_at);
+      if (now > expiresAt) {
+        console.error('Room has expired');
+        return null;
+      }
+
+      // Try to get participants with the updated RLS policies
+      let participants: Array<{
+        sessionId: string;
+        displayName: string;
+        joinedAt: string;
+        userId: string | null;
+      }> = [];
+      let participantCount = 0;
+      
+      try {
+        const { data: participantData, error: participantsError } = await supabase
+          .from('room_participants')
+          .select('session_id, display_name, joined_at, user_id')
+          .eq('room_id', room.id)
+          .order('joined_at', { ascending: true });
+
+        if (!participantsError && participantData) {
+          participants = participantData.map((p: any) => ({
+            sessionId: p.session_id,
+            displayName: p.display_name,
+            joinedAt: p.joined_at,
+            userId: p.user_id
+          }));
+          participantCount = participants.length;
+        }
+      } catch (participantError) {
+        console.warn('Could not fetch participants:', participantError);
+        participants = [];
+        participantCount = 0;
+      }
+
+      return {
+        room: {
+          id: room.id,
+          name: room.name,
+          shareCode: room.share_code,
+          maxParticipants: 10, // Default value since column doesn't exist
+          tier: 'free', // Default value since column doesn't exist
+          expiresAt: room.expires_at,
+          createdAt: room.created_at,
+          createdBy: currentUserId && room.created_by === currentUserId ? room.created_by : undefined
+        },
+        participants: participants,
+        participantCount: participantCount
+      };
+    } catch (fallbackError) {
+      console.error('Fallback method also failed:', fallbackError);
+      return null;
+    }
   }
 }
 

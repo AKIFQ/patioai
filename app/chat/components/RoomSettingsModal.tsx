@@ -7,11 +7,11 @@ import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -202,11 +202,11 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const SettingsHeader = (
     <div className="flex-shrink-0 px-6 py-4 border-b border-border/40">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
-          <Settings className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+          <Settings className="h-4 w-4 text-muted-foreground" />
         </div>
         <div>
-          <DialogTitle className="text-xl font-medium">Room Settings</DialogTitle>
+          <h2 className="text-xl font-medium">Room Settings</h2>
           <p className="text-sm text-muted-foreground/80">Manage your room configuration</p>
         </div>
       </div>
@@ -248,7 +248,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 <Button 
                   size="sm" 
                   onClick={handleUpdateRoomName} 
-                  className="bg-amber-500 hover:bg-amber-600"
+                  className="bg-primary hover:bg-primary/90 transition-all duration-200"
                 >
                   {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
                 </Button>
@@ -265,7 +265,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <div className="flex-1 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg">
+                <div className="flex-1 px-3 py-2 bg-muted/30 border border-border/40 rounded-lg">
                   <div className="text-sm font-medium">{roomContext.roomName}</div>
                 </div>
                 {isCreator && (
@@ -285,14 +285,14 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Share Link</div>
             <div className="flex gap-2">
-              <div className="flex-1 text-sm px-3 py-2 bg-amber-30 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg font-mono break-all">
+              <div className="flex-1 text-sm px-3 py-2 bg-muted/30 border border-border/40 rounded-lg font-mono break-all">
                 {`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
               </div>
               <Button 
                 size="sm" 
                 variant="outline" 
                 onClick={handleCopyShareLink}
-                className={`h-9 w-9 p-0 touch-manipulation ${isCopied ? 'text-green-600' : ''}`}
+                className={`h-9 w-9 p-0 touch-manipulation ${isCopied ? 'text-primary' : ''}`}
                 style={{ minHeight: '36px', minWidth: '36px' }}
               >
                 {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -312,7 +312,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 }
                 setShowShareModal(true);
               }}
-              className="w-full h-9 touch-manipulation flex items-center gap-2 bg-amber-500 text-white hover:bg-amber-600 border-amber-500"
+              className="w-full h-9 touch-manipulation flex items-center gap-2 bg-primary hover:bg-primary/90 transition-all duration-200"
               style={{ minHeight: '36px' }}
             >
               <Share2 className="h-4 w-4" />
@@ -325,7 +325,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Room Password</div>
               <div className="flex gap-2">
-                <div className="flex-1 text-sm px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg font-mono break-all">
+                <div className="flex-1 text-sm px-3 py-2 bg-muted/30 border border-border/40 rounded-lg font-mono break-all">
                   {isLoadingPassword ? (
                     <span className="text-muted-foreground/60">Loading password...</span>
                   ) : roomPassword ? (
@@ -367,14 +367,14 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             {roomContext.participants.map((participant, index) => (
               <div key={index} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 font-medium text-sm flex items-center justify-center border border-amber-200 dark:border-amber-800/50">
+                  <div className="w-8 h-8 rounded-full bg-muted text-muted-foreground font-medium text-sm flex items-center justify-center border border-border/40">
                     {participant.displayName.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{participant.displayName}</span>
                     {participant.displayName === roomContext.createdBy && (
-                      <div className="w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-amber-500" title="Room Creator" />
+                      <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-primary" title="Room Creator" />
                       </div>
                     )}
                   </div>
@@ -385,7 +385,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     variant="ghost"
                     onClick={() => handleRemoveUser(participant.sessionId || '', participant.displayName)}
                     disabled={removingUser === participant.displayName}
-                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 touch-manipulation"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-muted/50 touch-manipulation transition-all duration-200"
                     style={{ minHeight: '32px', minWidth: '32px' }}
                   >
                     {removingUser === participant.displayName ? (
@@ -403,7 +403,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
         {/* Danger Zone */}
         {isCreator && (
           <div className="space-y-4 pb-4">
-            <h3 className="text-sm font-medium text-red-600">Danger Zone</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">Danger Zone</h3>
             
             {!showDeleteConfirm ? (
               <Button
@@ -416,7 +416,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
               </Button>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-red-600 font-medium">
+                <p className="text-sm text-muted-foreground font-medium">
                   Are you sure? This action cannot be undone.
                 </p>
                 <div className="flex gap-2">
@@ -469,6 +469,9 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
               touchAction: 'pan-y'
             }}
           >
+            <VisuallyHidden>
+              <SheetTitle>Room Settings</SheetTitle>
+            </VisuallyHidden>
             {/* Drag handle - make it more prominent */}
             <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-2" />
             {SettingsHeader}
@@ -513,6 +516,9 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           onPointerDownOutside={() => setIsOpen(false)}
           onEscapeKeyDown={() => setIsOpen(false)}
         >
+          <VisuallyHidden>
+            <DialogTitle>Room Settings</DialogTitle>
+          </VisuallyHidden>
           {SettingsHeader}
           {SettingsContent}
         </DialogContent>
