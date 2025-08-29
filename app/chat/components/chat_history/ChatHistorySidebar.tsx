@@ -349,12 +349,15 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       const threadFirstMessages = new Map();
       const threadLatestTimes = new Map();
 
-      // Find the current room
-      const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
+      // Find the current room - use fallback data for anonymous users
+      const availableRooms = (userInfo && userInfo.email) ? (currentRooms || []) : (rooms || []);
+      const availableRoomChatsData = (userInfo && userInfo.email) ? (currentRoomChatsData || []) : (roomChatsData || []);
+      
+      const currentRoom = availableRooms.find((room: any) => room.shareCode === currentRoomShareCode);
 
       if (currentRoom) {
         // Group room messages by thread_id for the current room
-        (currentRoomChatsData || []).forEach((msg: any) => {
+        availableRoomChatsData.forEach((msg: any) => {
           if (msg.room_id === currentRoom.id && msg.thread_id && !msg.is_ai_response) {
             if (!threadFirstMessages.has(msg.thread_id)) {
               threadFirstMessages.set(msg.thread_id, msg);
