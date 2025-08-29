@@ -386,6 +386,32 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     return () => el.removeEventListener('touchstart', onTouchStart as any);
   }, []);
 
+  // Auto-resize textarea based on content (up to 15 lines)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    
+    // Reset height to auto to get the correct scrollHeight
+    el.style.height = 'auto';
+    
+    const lineCount = input.split('\n').length;
+    const lineHeight = 24; // Approximate line height in pixels
+    const padding = 20; // Top and bottom padding
+    
+    // Calculate height based on line count (max 15 lines) or scroll height
+    const calculatedHeight = Math.min(
+      lineCount * lineHeight + padding,
+      15 * lineHeight + padding, // Max 15 lines = 360px + padding
+      el.scrollHeight
+    );
+    
+    // Set minimum height and maximum height
+    const minHeight = 44; // Minimum single line height
+    const maxHeight = 380; // 15 lines + padding
+    
+    el.style.height = `${Math.max(minHeight, Math.min(calculatedHeight, maxHeight))}px`;
+  }, [input]);
+
   // Long-press on send button (mobile) to trigger AI quick action (same as Shift+Enter)
   const sendButtonRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -439,9 +465,14 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                      border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none 
                      bg-transparent text-base sm:text-body placeholder:text-muted-foreground/60
                      placeholder:font-medium leading-relaxed
-                     max-h-[40vh] sm:max-h-40 break-words overflow-wrap-anywhere
-                     word-break-break-all min-w-0 max-w-full overflow-hidden whitespace-pre-wrap"
+                     max-h-[60vh] sm:max-h-[360px] break-words overflow-wrap-anywhere
+                     word-break-break-all min-w-0 max-w-full overflow-y-auto whitespace-pre-wrap
+                     transition-all duration-200 ease-in-out"
           rows={1}
+          style={{
+            minHeight: '44px',
+            maxHeight: '380px' // 15 lines + padding
+          }}
         />
 
         {/* Bottom controls row with buttons */}

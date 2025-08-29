@@ -42,6 +42,67 @@
   z-index: 9999;
 }
 
+/* Mobile keyboard and input handling */
+@supports (height: 100dvh) {
+  .mobile-chat-container {
+    height: 100dvh;
+  }
+}
+
+/* Ensure proper spacing for mobile keyboards */
+.pb-safe {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+/* Enhanced message input container for mobile */
+.message-input-container {
+  /* Proper border and shadow for mobile */
+  border-top: 1px solid hsl(var(--border) / 0.3);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  /* Ensure bottom spacing */
+  margin-bottom: 0.5rem;
+}
+
+/* Mobile viewport adjustments for keyboard */
+@media (max-width: 768px) {
+  .mobile-chat-container {
+    height: 100vh;
+    height: 100dvh;
+    /* Better keyboard handling */
+    min-height: -webkit-fill-available;
+  }
+  
+  /* Ensure input area stays visible when keyboard appears */
+  .message-input-container {
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    /* Hardware acceleration for smoother keyboard transitions */
+    transform: translateZ(0);
+    /* Enhanced border and shadow for mobile */
+    border-top: 1px solid hsl(var(--border) / 0.4);
+    box-shadow: 0 -6px 25px rgba(0, 0, 0, 0.15);
+    /* Ensure proper bottom spacing on mobile */
+    margin-bottom: 1rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  
+  /* Better textarea handling on mobile */
+  .message-input-container textarea {
+    -webkit-appearance: none;
+    appearance: none;
+    font-size: 16px; /* Prevents zoom on iOS */
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Ensure proper spacing when keyboard is visible */
+  .pb-safe {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+}
+
 .pt-safe-4 {
   padding-top: max(1rem, env(safe-area-inset-top));
 }
@@ -339,13 +400,12 @@
   @supports (padding-top: env(safe-area-inset-top)) {
     body {
       padding-top: env(safe-area-inset-top);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+      font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-  }
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 }
 
