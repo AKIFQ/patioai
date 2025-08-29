@@ -282,6 +282,11 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   // Process room threads based on current context
   const processedThreads = React.useMemo(() => {
+    // Anonymous users shouldn't see any room threads in their sidebar
+    if (!userInfo) {
+      return [];
+    }
+    
     if (!currentRoomShareCode) {
       // Home context: Show all room threads grouped by room
       const roomsLookup = new Map();
@@ -832,6 +837,11 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
   // Process room threads based on current context (same logic as desktop)
   const processedThreads = React.useMemo(() => {
+    // Anonymous users shouldn't see any room threads in their sidebar
+    if (!userInfo) {
+      return [];
+    }
+    
     if (!currentRoomShareCode) {
       // Home context: Show all room threads grouped by room
       const roomsLookup = new Map();
