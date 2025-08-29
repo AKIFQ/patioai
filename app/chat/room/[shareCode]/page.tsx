@@ -299,6 +299,21 @@ export default async function RoomChatPage(props: {
         console.warn('Failed to fetch room threads for anonymous user:', error);
       }
 
+      // Convert room threads to the format expected by the sidebar
+      // The sidebar expects raw message data, not processed thread data
+      const roomChatsData = roomThreads.flatMap((thread: any) => {
+        // Create a message entry for each thread (the first message)
+        return [{
+          id: `thread_${thread.threadId}`,
+          room_id: roomInfo.room.id,
+          thread_id: thread.threadId,
+          content: thread.firstMessage || 'No messages yet',
+          sender_name: thread.senderName || 'Anonymous',
+          created_at: thread.createdAt,
+          is_ai_response: false // First message is always from user
+        }];
+      });
+
       // Create chat previews from room threads
       const roomChatPreviews = roomThreads.map((thread: any) => ({
         id: thread.threadId,
@@ -363,7 +378,7 @@ export default async function RoomChatPage(props: {
           expiresAt: roomInfo.room.expiresAt,
           createdAt: roomInfo.room.createdAt
         }],
-        roomChatsData: roomThreads
+        roomChatsData: roomChatsData
       };
     }
 
