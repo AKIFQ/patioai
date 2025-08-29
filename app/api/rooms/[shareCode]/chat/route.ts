@@ -350,10 +350,11 @@ console.log(` [${requestId}] Room chat API received:`, {
         .from('room_participants')
         .select('*')
         .eq('room_id', room.id)
-        .eq('display_name', displayName)
+        .eq('display_name', displayName.trim())
         .single();
         
       participant = nameParticipant;
+      console.log(`[${requestId}] Anonymous user check: looking for "${displayName.trim()}" in room ${room.id}`);
     }
 
     if (!participant) {

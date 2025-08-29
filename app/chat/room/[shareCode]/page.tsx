@@ -210,27 +210,27 @@ export default async function RoomChatPage(props: {
         console.error('Error ensuring user in room:', error);
     }
 
+        const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
+    
     // If user just signed in (has auth but was previously anonymous), update their participant record
     if (userInfo && searchParams.sessionId?.startsWith('session_')) {
-        try {
-            // Update the anonymous participant to authenticated
-            await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    roomId: roomInfo?.room.id,
-                    sessionId: searchParams.sessionId,
-                    displayName: userInfo.user_metadata?.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
-                })
-            });
-        } catch (error) {
-            console.warn('Could not update participant record:', error);
-        }
+      try {
+        // Update the anonymous participant to authenticated
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            roomId: roomInfo?.room.id,
+            sessionId: searchParams.sessionId,
+            displayName: userInfo.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
+          })
+        });
+      } catch (error) {
+        console.warn('Could not update participant record:', error);
+      }
     }
-
-    const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
     if (!roomInfo) {
         // Room not found or deleted - redirect to main chat page
         redirect(`/chat`);
@@ -278,31 +278,93 @@ export default async function RoomChatPage(props: {
     console.log('Room page rendering with chatSessionId:', chatSessionId);
     console.log('Room messages count:', roomMessages.length);
 
-    // Create sidebar data for anonymous users
+        // Create sidebar data for anonymous users
     let finalSidebarData = props.sidebarData;
 
     if (!userInfo && searchParams.displayName) {
-        // For anonymous users, create minimal sidebar data with room info
-        finalSidebarData = {
-            userInfo: {
-                id: '',
-                full_name: searchParams.displayName,
-                email: ''
-            },
-            initialChatPreviews: [],
-            categorizedChats: { today: [], yesterday: [], last7Days: [], last30Days: [], last2Months: [], older: [] },
-            documents: [],
-            rooms: [{
-                shareCode: roomInfo.room.shareCode,
-                name: roomInfo.room.name,
-                id: roomInfo.room.id,
-                maxParticipants: roomInfo.room.maxParticipants,
-                tier: roomInfo.room.tier,
-                expiresAt: roomInfo.room.expiresAt,
-                createdAt: roomInfo.room.createdAt
-            }],
-            roomChatsData: []
-        };
+      // For anonymous users, fetch room threads and create sidebar data
+      let roomThreads = [];
+      
+      try {
+        const threadsResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/${shareCode}/threads?displayName=${encodeURIComponent(searchParams.displayName)}`,
+          { cache: 'no-store' }
+        );
+        
+        if (threadsResponse.ok) {
+          const threadsData = await threadsResponse.json();
+          roomThreads = threadsData.threads || [];
+        }
+      } catch (error) {
+        console.warn('Failed to fetch room threads for anonymous user:', error);
+      }
+
+      // Create chat previews from room threads
+      const roomChatPreviews = roomThreads.map((thread: any) => ({
+        id: thread.threadId,
+        firstMessage: thread.firstMessage || 'No messages yet',
+        created_at: thread.createdAt,
+        type: 'room' as const,
+        roomName: roomInfo.room.name,
+        shareCode: roomInfo.room.shareCode
+      }));
+
+      finalSidebarData = {
+        userInfo: {
+          id: '',
+          full_name: searchParams.displayName,
+          email: ''
+        },
+        initialChatPreviews: roomChatPreviews,
+        categorizedChats: { 
+          today: roomChatPreviews.filter((chat: any) => {
+            const chatDate = new Date(chat.created_at);
+            const today = new Date();
+            return chatDate.toDateString() === today.toDateString();
+          }),
+          yesterday: roomChatPreviews.filter((chat: any) => {
+            const chatDate = new Date(chat.created_at);
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            return chatDate.toDateString() === yesterday.toDateString();
+          }),
+          last7Days: roomChatPreviews.filter((chat: any) => {
+            const chatDate = new Date(chat.created_at);
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            return chatDate >= weekAgo && chatDate < new Date();
+          }),
+          last30Days: roomChatPreviews.filter((chat: any) => {
+            const chatDate = new Date(chat.created_at);
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            return chatDate >= monthAgo && chatDate < new Date();
+          }),
+          last2Months: roomChatPreviews.filter((chat: any) => {
+            const chatDate = new Date(chat.created_at);
+            const twoMonthsAgo = new Date();
+            twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
+            return chatDate >= twoMonthsAgo && chatDate < new Date();
+          }),
+          older: roomChatPreviews.filter((chat: any) => {
+            const chatDate = new Date(chat.created_at);
+            const twoMonthsAgo = new Date();
+            twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
+            return chatDate < twoMonthsAgo;
+          })
+        },
+        documents: [],
+        rooms: [{
+          shareCode: roomInfo.room.shareCode,
+          name: roomInfo.room.name,
+          id: roomInfo.room.id,
+          maxParticipants: roomInfo.room.maxParticipants,
+          tier: roomInfo.room.tier,
+          expiresAt: roomInfo.room.expiresAt,
+          createdAt: roomInfo.room.createdAt
+        }],
+        roomChatsData: roomThreads
+      };
     }
 
     return (

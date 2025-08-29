@@ -96,11 +96,10 @@ export default function RoomChatWrapper({
           prevContext.shareCode !== newContext.shareCode ||
           prevContext.displayName !== newContext.displayName ||
           prevContext.chatSessionId !== newContext.chatSessionId) {
-        console.log('🔄 Room context updated:', {
+console.log(' Room context updated:', {
           shareCode,
           threadId: finalThreadId,
-          displayName,
-          roomName: newContext.roomName
+          displayName
         });
         return newContext;
       }
@@ -126,12 +125,9 @@ export default function RoomChatWrapper({
   // Use the loaded messages (now properly filtered by thread on server-side)
   const chatMessages = initialMessages;
 
-console.log('🎯 Room chat rendering:', {
+console.log(' Room chat rendering:', {
     threadId: roomContext.chatSessionId,
-    messageCount: chatMessages.length,
-    roomContext: !!roomContext,
-    shareCode: roomContext.shareCode,
-    displayName: roomContext.displayName
+    messageCount: chatMessages.length
   });
 
   return (

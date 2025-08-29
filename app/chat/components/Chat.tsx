@@ -239,10 +239,8 @@ const newUrl = `${window.location.pathname}?${newParams.toString()}`;
   // Determine API endpoint based on model type and room context
   const getApiEndpoint = () => {
     if (roomContext) {
-      console.log('🔗 Using room API endpoint:', `/api/rooms/${roomContext.shareCode}/chat`);
-      return `/api/rooms/${roomContext.shareCode}/chat`;
+return `/api/rooms/${roomContext.shareCode}/chat`;
     }
-    console.log('🔗 Using personal chat API endpoint:', '/api/chat');
     return '/api/chat';
   };
 
@@ -348,7 +346,6 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
       }
 
       logger.debug('Chat submission started atomically', { messageId });
-      console.log('🔍 handleSubmit - roomContext exists:', !!roomContext, 'apiEndpoint:', apiEndpoint);
       if (roomContext) {
         if (triggerAI) {
           // For room chats with AI response: Direct API call with loading state
@@ -519,7 +516,6 @@ throw new Error(`API call failed: ${response.status}`);
         // Real-time will handle showing the messages
 
       } else {
-        console.log('⚠️ handleSubmit - No roomContext, falling back to individual chat logic');
         // For individual chats: Update URL immediately to prevent re-renders
         if (window.location.pathname === '/chat' && stableChatId) {
 const newUrl = `/chat/${stableChatId}${window.location.search}`;
