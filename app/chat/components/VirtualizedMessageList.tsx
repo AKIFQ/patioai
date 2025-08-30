@@ -113,41 +113,50 @@ const VirtualizedMessageList = memo(({
   // Determine which rendering mode to use
   const isVirtualized = messages.length >= 20;
   
-  // Track scroll position for both virtualized and non-virtualized lists
+  // Optimize: Debounced scroll position tracking for better performance
+  const debouncedScrollHandler = useCallback(() => {
+    const scrollElement = isVirtualized ? parentRef.current : scrollRef.current;
+    if (!scrollElement) return;
+    
+    const scrollTop = scrollElement.scrollTop;
+    const isScrolledToTop = scrollTop <= 5; // Small tolerance for floating point precision
+    setIsAtTop(isScrolledToTop);
+
+    // Also track bottom state for virtualized list so the down-arrow hides when at bottom
+    if (isVirtualized) {
+      const distanceFromBottom = scrollElement.scrollHeight - scrollTop - scrollElement.clientHeight;
+      setVirtualizedIsAtBottom(distanceFromBottom <= 8);
+    }
+  }, [isVirtualized]);
+
   useEffect(() => {
     const scrollElement = isVirtualized ? parentRef.current : scrollRef.current;
     if (!scrollElement) return;
     
+    let scrollTimeout: NodeJS.Timeout;
     const handleScroll = () => {
-      const scrollTop = scrollElement.scrollTop;
-      const isScrolledToTop = scrollTop <= 5; // Small tolerance for floating point precision
-      setIsAtTop(isScrolledToTop);
-
-      // Also track bottom state for virtualized list so the down-arrow hides when at bottom
-      if (isVirtualized) {
-        const distanceFromBottom = scrollElement.scrollHeight - scrollTop - scrollElement.clientHeight;
-        setVirtualizedIsAtBottom(distanceFromBottom <= 8);
-      }
+      // Debounce scroll events to improve performance
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(debouncedScrollHandler, 16); // ~60fps update rate
     };
     
-    scrollElement.addEventListener('scroll', handleScroll);
+    scrollElement.addEventListener('scroll', handleScroll, { passive: true });
     // Initial check
-    handleScroll();
+    debouncedScrollHandler();
     
-    return () => scrollElement.removeEventListener('scroll', handleScroll);
-  }, [isVirtualized, messages.length]); // Re-run when virtualization mode changes
+    return () => {
+      scrollElement.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+    };
+  }, [isVirtualized, messages.length, debouncedScrollHandler]); // Re-run when virtualization mode changes
   
-  // Reset to top when new messages are loaded (from pagination)
+  // Reset scroll position tracking when messages change (consolidated)
   useEffect(() => {
     if (messages.length > 0) {
-      // When messages change, check if we're at the top
-      const scrollElement = isVirtualized ? parentRef.current : scrollRef.current;
-      if (scrollElement) {
-        const scrollTop = scrollElement.scrollTop;
-        setIsAtTop(scrollTop <= 5);
-      }
+      // Recompute scroll positions when message count changes
+      debouncedScrollHandler();
     }
-  }, [messages.length, isVirtualized]);
+  }, [messages.length, debouncedScrollHandler]);
   
   // TanStack auto-scroll functions
   const scrollToBottomVirtual = useCallback(() => {
@@ -183,7 +192,7 @@ const VirtualizedMessageList = memo(({
     }
   }, [messages.length, isAutoScrolling, virtualizedIsAutoScrolling, isVirtualized, scrollToBottomVirtual, scrollToBottom]);
 
-  // Ensure auto-scroll keeps following during streaming when message content grows
+  // Optimize: Auto-scroll during streaming (debounced and selective dependencies)
   useEffect(() => {
     if (!streamingMessageId) return;
     const timeoutId = setTimeout(() => {
@@ -192,18 +201,11 @@ const VirtualizedMessageList = memo(({
       } else if (!isVirtualized && isAutoScrolling) {
         scrollToBottom();
       }
-    }, 50);
+    }, 150); // Increased debounce from 50ms to 150ms for better performance
     return () => clearTimeout(timeoutId);
-  }, [messages, streamingMessageId, isReasoningStreaming, streamingReasoning, isVirtualized, virtualizedIsAutoScrolling, isAutoScrolling, scrollToBottomVirtual, scrollToBottom]);
+  }, [streamingMessageId, isReasoningStreaming, isVirtualized, virtualizedIsAutoScrolling, isAutoScrolling, scrollToBottomVirtual, scrollToBottom]); // Removed messages and streamingReasoning to reduce triggers
 
-  // Recompute bottom state after message count changes (virtualized only)
-  useEffect(() => {
-    if (!isVirtualized) return;
-    const el = parentRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setVirtualizedIsAtBottom(distanceFromBottom <= 8);
-  }, [messages.length, isVirtualized]);
+  // Removed redundant useEffect - bottom state is now handled in debounced scroll handler
 
 
   // Don't virtualize if there are few messages
@@ -240,15 +242,7 @@ const VirtualizedMessageList = memo(({
                 ? (message as any).senderName === currentUserDisplayName
                 : message.role === 'user';
               
-              // Debug logging for anonymous user message display
-              if (isRoomChat && message.role === 'user') {
-                console.log('🔍 Message sender comparison:', {
-                  messageSenderName: (message as any).senderName,
-                  currentUserDisplayName,
-                  isUserMessage,
-                  messageContent: message.content.substring(0, 30) + '...'
-                });
-              }
+              // Debug logging removed for performance
               
               // Check if this message is currently streaming
               const isStreaming = streamingMessageId === message.id;
@@ -324,15 +318,7 @@ const VirtualizedMessageList = memo(({
               ? (message as any).senderName === currentUserDisplayName
               : message.role === 'user';
             
-            // Debug logging for anonymous user message display
-            if (isRoomChat && message.role === 'user') {
-              console.log('🔍 Virtualized message sender comparison:', {
-                messageSenderName: (message as any).senderName,
-                currentUserDisplayName,
-                isUserMessage,
-                messageContent: message.content.substring(0, 30) + '...'
-              });
-            }
+            // Debug logging removed for performance
 
             // Check if this message is currently streaming
             const isStreaming = streamingMessageId === message.id;
