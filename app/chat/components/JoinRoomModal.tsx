@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ExternalLink, UserPlus, Clipboard, ArrowRight, Sparkles } from 'lucide-react';
@@ -99,14 +100,17 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
             touchAction: 'pan-y'
           }}
         >
+          <VisuallyHidden>
+            <SheetTitle>Join Room</SheetTitle>
+          </VisuallyHidden>
           {/* Drag handle */}
           <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mt-3 mb-4" />
 
           {/* Header */}
           <SheetHeader className="px-6 pb-4 text-center">
             <div className="flex items-center justify-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-                <UserPlus className="h-4 w-4 text-amber-600" />
+              <div className="w-8 h-8 rounded-full bg-forest-faint flex items-center justify-center">
+                <UserPlus className="h-4 w-4 text-forest-base" />
               </div>
             </div>
             <SheetTitle className="text-xl font-medium text-foreground">
@@ -150,11 +154,11 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
               {roomLink.trim() && (
                 <div className="text-xs">
                   {extractShareCodeFromLink(roomLink) ? (
-                    <span className="text-green-600 font-medium">
+                    <span className="text-forest-600 font-medium">
                       Valid format: {extractShareCodeFromLink(roomLink)}
                     </span>
                   ) : (
-                    <span className="text-red-600 font-medium">
+                    <span className="text-forest-700 font-medium">
                       Invalid format - check the link
                     </span>
                   )}
@@ -175,7 +179,7 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
               <Button
                 onClick={handleNext}
                 disabled={!roomLink.trim() || !extractShareCodeFromLink(roomLink)}
-                className="w-full bg-amber-500 hover:bg-amber-600"
+                className="w-full bg-forest-base hover:bg-forest-600"
               >
                 Next
               </Button>
@@ -200,8 +204,8 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
       <DialogContent className="sm:max-w-md backdrop-blur-md bg-background/95 border-border/40">
         <DialogHeader className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-              <UserPlus className="h-4 w-4 text-amber-600" />
+            <div className="w-8 h-8 rounded-full bg-forest-faint flex items-center justify-center">
+              <UserPlus className="h-4 w-4 text-forest-base" />
             </div>
             <div>
               <DialogTitle className="text-xl font-medium">Join Room</DialogTitle>
@@ -243,11 +247,11 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
             {roomLink.trim() && (
               <div className="text-xs">
                 {extractShareCodeFromLink(roomLink) ? (
-                  <span className="text-green-600 font-medium">
+                  <span className="text-forest-600 font-medium">
                     Valid format: {extractShareCodeFromLink(roomLink)}
                   </span>
                 ) : (
-                  <span className="text-red-600 font-medium">
+                  <span className="text-forest-700 font-medium">
                     Invalid format - check the link
                   </span>
                 )}
@@ -271,7 +275,7 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
           <Button
             onClick={handleNext}
             disabled={!roomLink.trim() || !extractShareCodeFromLink(roomLink)}
-            className="bg-amber-500 hover:bg-amber-600"
+            className="bg-forest-base hover:bg-forest-600"
           >
             Next
           </Button>

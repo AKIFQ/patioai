@@ -37,17 +37,11 @@ ON room_messages (room_id);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session_count 
 ON chat_messages (chat_session_id);
 
--- Partial index for recent messages (last 30 days) - most commonly accessed
--- This will be much smaller and faster for recent message queries
-CREATE INDEX IF NOT EXISTS idx_room_messages_recent 
-ON room_messages (room_id, thread_id, created_at DESC) 
-WHERE created_at >= (NOW() - INTERVAL '30 days');
-
 -- Partial index for AI responses for analytics
 -- This supports queries filtering for AI vs user messages
-CREATE INDEX IF NOT EXISTS idx_room_messages_ai_recent 
+CREATE INDEX IF NOT EXISTS idx_room_messages_ai_responses 
 ON room_messages (room_id, created_at DESC) 
-WHERE is_ai_response = true AND created_at >= (NOW() - INTERVAL '30 days');
+WHERE is_ai_response = true;
 
 -- Index for efficient sender-based queries (useful for user message filtering)
 CREATE INDEX IF NOT EXISTS idx_room_messages_sender 
@@ -63,4 +57,3 @@ COMMENT ON INDEX idx_room_messages_thread_created IS 'Optimizes pagination queri
 COMMENT ON INDEX idx_room_messages_room_created IS 'Optimizes pagination queries by room_id with created_at ordering';  
 COMMENT ON INDEX idx_room_messages_room_thread_created IS 'Optimizes complex pagination queries with both room and thread filtering';
 COMMENT ON INDEX idx_chat_messages_session_created IS 'Optimizes regular chat pagination by session with created_at ordering';
-COMMENT ON INDEX idx_room_messages_recent IS 'Optimized partial index for recent messages (30 days) - fastest for common queries';

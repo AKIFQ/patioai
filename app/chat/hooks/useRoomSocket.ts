@@ -80,6 +80,42 @@ export function useRoomSocket({
   const isTypingActiveRef = useRef(false);
   const messageQueueRef = useRef<MessageQueue | null>(null);
 
+  // Use refs to stabilize callback dependencies and prevent socket re-initialization
+  const callbacksRef = useRef({
+    onNewMessage,
+    onTypingUpdate,
+    onParticipantChange,
+    onStreamStart,
+    onStreamChunk,
+    onStreamEnd,
+    onReasoningStart,
+    onReasoningChunk,
+    onReasoningEnd,
+    onContentStart,
+    onCrossThreadActivity,
+    onAIError,
+    onRoomLimitReached
+  });
+
+  // Update refs when callbacks change (without triggering useEffect)
+  useEffect(() => {
+    callbacksRef.current = {
+      onNewMessage,
+      onTypingUpdate,
+      onParticipantChange,
+      onStreamStart,
+      onStreamChunk,
+      onStreamEnd,
+      onReasoningStart,
+      onReasoningChunk,
+      onReasoningEnd,
+      onContentStart,
+      onCrossThreadActivity,
+      onAIError,
+      onRoomLimitReached
+    };
+  });
+
   // Handle new room messages from Socket.IO
   const handleNewRoomMessage = useCallback((data: any) => {
     if (process.env.NODE_ENV === 'development') console.debug('RAW SOCKET ROOM MESSAGE:', data);
@@ -125,8 +161,8 @@ export function useRoomSocket({
       })
     };
 
-    onNewMessage(message);
-  }, [displayName, chatSessionId, onNewMessage]);
+    callbacksRef.current.onNewMessage(message);
+  }, [displayName, chatSessionId]);
 
   // Handle typing updates from Socket.IO - only for SAME thread
   const handleTypingUpdate = useCallback((data: any) => {
@@ -135,23 +171,23 @@ export function useRoomSocket({
     // Only show typing if it's from the SAME thread
     if (data.threadId && chatSessionId && data.threadId !== chatSessionId) {
       if (process.env.NODE_ENV === 'development') console.debug('Ignoring typing from different thread:', data.threadId, 'vs', chatSessionId);
-      onTypingUpdate([]); // Clear typing indicators for different threads
+      callbacksRef.current.onTypingUpdate([]); // Clear typing indicators for different threads
       return;
     }
     
     const typingUsers = data.users || [];
     const filteredUsers = typingUsers.filter((name: string) => name && name !== displayName);
     if (process.env.NODE_ENV === 'development') console.debug('Typing users updated for same thread:', filteredUsers);
-    onTypingUpdate(filteredUsers);
-  }, [displayName, chatSessionId, onTypingUpdate]);
+    callbacksRef.current.onTypingUpdate(filteredUsers);
+  }, [displayName, chatSessionId]);
 
   // Handle participant changes from Socket.IO
   const handleParticipantChange = useCallback((data: any) => {
     // Participant change
-    if (onParticipantChange) {
-      onParticipantChange([]);
+    if (callbacksRef.current.onParticipantChange) {
+      callbacksRef.current.onParticipantChange([]);
     }
-  }, [onParticipantChange]);
+  }, []);
 
   // Handle room deletion from Socket.IO
   const handleRoomDeleted = useCallback((data: any) => {
@@ -350,8 +386,8 @@ export function useRoomSocket({
         addTrackedListener('user-removed-from-room', (data: any) => {
           console.log('User removed from room:', data);
           // Update participant list if provided
-          if (onParticipantChange && data.updatedParticipants) {
-            onParticipantChange(data.updatedParticipants);
+          if (callbacksRef.current.onParticipantChange && data.updatedParticipants) {
+            callbacksRef.current.onParticipantChange?.(data.updatedParticipants);
           }
           // If current user was removed, redirect them (but only if they were actively in the room)
           if (data.removedUser?.displayName === displayName) {
@@ -379,7 +415,7 @@ export function useRoomSocket({
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(true);
 if (process.env.NODE_ENV === 'development') console.info(' ai-stream-start', payload);
-          onStreamStart?.(threadId);
+          callbacksRef.current.onStreamStart?.(threadId);
         };
         addTrackedListener('ai-stream-start', aiStreamStartHandler);
         
@@ -439,7 +475,7 @@ if (process.env.NODE_ENV === 'development') console.info(' model used:', payload
           const threadId = payload.threadId || chatSessionId || '';
           const { chunk } = payload;
           if (chatSessionId && threadId !== chatSessionId) return;
-          onStreamChunk?.(threadId, chunk);
+          callbacksRef.current.onStreamChunk?.(threadId, chunk);
         };
         const aiStreamEndHandler = (payload: { threadId?: string; text: string; reasoning?: string; timestamp?: number; modelUsed?: string; usage?: any }) => {
           const threadId = payload.threadId || chatSessionId || '';
@@ -447,7 +483,7 @@ if (process.env.NODE_ENV === 'development') console.info(' model used:', payload
           if (chatSessionId && threadId !== chatSessionId) return;
           setIsAIStreaming(false);
 if (process.env.NODE_ENV === 'development') console.info(' ai-stream-end', { model: payload?.modelUsed, usage: payload?.usage });
-          onStreamEnd?.(threadId, text, reasoning);
+          callbacksRef.current.onStreamEnd?.(threadId, text, reasoning);
         };
         
         addTrackedListener('ai-content-start', aiContentStartHandler);
@@ -463,14 +499,14 @@ console.error('🔥 AI Error received:', payload);
           setIsAIStreaming(false); // Stop the thinking state
           
           // Call the error callback if provided
-          if (onAIError) {
-            onAIError(payload);
+          if (callbacksRef.current.onAIError) {
+            callbacksRef.current.onAIError(payload);
           }
           
           // Handle room limit reached specifically
-          if (payload.roomLimitExceeded && onRoomLimitReached) {
+          if (payload.roomLimitExceeded && callbacksRef.current.onRoomLimitReached) {
             const limitType = payload.error.includes('reasoning') ? 'ai_responses' : 'ai_responses';
-            onRoomLimitReached(limitType, {
+            callbacksRef.current.onRoomLimitReached(limitType, {
               currentUsage: payload.currentUsage || 0,
               limit: payload.limit || 0,
               resetTime: payload.resetTime,
@@ -615,7 +651,7 @@ console.warn(` Failed to remove listener ${event}:`, error);
       
 // Room socket cleanup completed
     };
-  }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange, onStreamStart, onStreamChunk, onStreamEnd]);
+  }, [shareCode, displayName, chatSessionId, socket, isConnected, handleNewRoomMessage, handleTypingUpdate, handleParticipantChange]);
 
   const invokeAI = useCallback((payload: {
     shareCode: string;

@@ -7,7 +7,8 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import Image from 'next/image';
 import {
   Tooltip,
@@ -146,6 +147,19 @@ const fetchRoomChats = async () => {
   return data.roomChatsData || [];
 };
 
+// Function to fetch room threads for anonymous users
+const fetchRoomThreadsForAnonymous = async (shareCode: string, displayName: string) => {
+  const response = await fetch(`/api/rooms/${shareCode}/threads?displayName=${encodeURIComponent(displayName)}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch room threads');
+  }
+  const data = await response.json();
+  return {
+    threads: data.threads || [],
+    room: data.room
+  };
+};
+
 const CombinedDrawer: FC<CombinedDrawerProps> = ({
   userInfo,
   initialChatPreviews,
@@ -161,11 +175,6 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const isMobileSidebarOpen = openMobile;
   const closeMobileSidebar = useCallback(() => setOpenMobile(false), [setOpenMobile]);
   const router = useRouter();
-  // Safe user params for links
-  const safeUserId = userInfo?.id || 'anon';
-  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || 'User';
-  const encodedDisplayName = encodeURIComponent(safeUserDisplay);
-  const encodedSessionId = encodeURIComponent(`auth_${safeUserId}`);
   
   // Get global modal context
   const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
@@ -183,8 +192,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   // Use SWR to manage room data with fallback to initial rooms
   const { data: currentRooms, mutate: mutateRooms, isLoading: isLoadingRooms } = useSWR(
-    'rooms', // Always use consistent key
-    (userInfo && userInfo.email) ? fetchRooms : () => Promise.resolve([]), // Conditional function instead of conditional key
+    (userInfo && userInfo.email) ? 'rooms' : null, // Only fetch for authenticated users
+    (userInfo && userInfo.email) ? fetchRooms : null,
     {
       fallbackData: rooms,
       revalidateOnFocus: false,
@@ -194,8 +203,8 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   // Add SWR for room chat data with real-time updates
   const { data: currentRoomChatsData, mutate: mutateRoomChats } = useSWR(
-    'roomChats',
-    (userInfo && userInfo.email) ? fetchRoomChats : () => Promise.resolve([]),
+    (userInfo && userInfo.email) ? 'roomChats' : null, // Only fetch for authenticated users
+    (userInfo && userInfo.email) ? fetchRoomChats : null,
     {
       fallbackData: roomChatsData,
       revalidateOnFocus: false,
@@ -207,6 +216,31 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const searchParams = useSearchParams();
   const currentChatId = typeof params.id === 'string' ? params.id : undefined;
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
+  const displayName = searchParams.get('displayName');
+
+  // Safe user params for links
+  // For anonymous users in room context, use the current displayName from URL
+  const currentDisplayName = searchParams.get('displayName');
+  const currentSessionId = searchParams.get('sessionId');
+  const safeUserId = userInfo?.id || 'anon';
+  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || currentDisplayName || 'User';
+  const safeSessionId = currentSessionId || `auth_${safeUserId}`;
+  const encodedDisplayName = encodeURIComponent(safeUserDisplay);
+  const encodedSessionId = encodeURIComponent(safeSessionId);
+
+  // Add SWR for anonymous room threads when in room context
+  const { data: anonymousRoomData, mutate: mutateAnonymousThreads } = useSWR(
+    (!userInfo?.email && currentRoomShareCode && displayName) 
+      ? `anonymousRoomThreads_${currentRoomShareCode}_${displayName}` 
+      : null,
+    (!userInfo?.email && currentRoomShareCode && displayName) 
+      ? () => fetchRoomThreadsForAnonymous(currentRoomShareCode, displayName)
+      : null,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false
+    }
+  );
 
   // Only chat data needs infinite loading
   const {
@@ -255,7 +289,40 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const handleThreadCreated = useCallback(() => {
     // Refresh room chat data when a new thread is created
     mutateRoomChats();
-  }, [mutateRoomChats]);
+    // Also refresh anonymous room threads if applicable
+    if (!userInfo?.email && currentRoomShareCode && displayName) {
+      mutateAnonymousThreads();
+    }
+  }, [mutateRoomChats, mutateAnonymousThreads, userInfo, currentRoomShareCode, displayName]);
+
+  // Define available rooms for use in multiple places
+  // For anonymous users in room context, include the fetched room data
+  const availableRooms = React.useMemo(() => {
+    if (userInfo && userInfo.email) {
+      return currentRooms || [];
+    } else {
+      const baseRooms = rooms || [];
+      // If we have anonymous room data, ensure the current room is included
+      if (anonymousRoomData?.room && currentRoomShareCode) {
+        const existingRoom = baseRooms.find((room: any) => 
+          (room.shareCode || room.share_code) === currentRoomShareCode
+        );
+        if (!existingRoom) {
+          return [...baseRooms, {
+            id: anonymousRoomData.room.id,
+            name: anonymousRoomData.room.name,
+            shareCode: anonymousRoomData.room.shareCode,
+            share_code: anonymousRoomData.room.shareCode,
+            tier: 'free', // Default for anonymous users
+            participantCount: 1,
+            maxParticipants: 10,
+            isCreator: false
+          }];
+        }
+      }
+      return baseRooms;
+    }
+  }, [userInfo, currentRooms, rooms, anonymousRoomData, currentRoomShareCode]);
 
   // Listen for room thread creation events from sidebar socket
   React.useEffect(() => {
@@ -281,10 +348,14 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   // Process room threads based on current context
   const processedThreads = React.useMemo(() => {
+    // Use appropriate data source based on user authentication
+    const availableRooms = (userInfo && userInfo.email) ? (currentRooms || []) : (rooms || []);
+    const availableRoomChatsData = (userInfo && userInfo.email) ? (currentRoomChatsData || []) : (roomChatsData || []);
+
     if (!currentRoomShareCode) {
       // Home context: Show all room threads grouped by room
       const roomsLookup = new Map();
-      (currentRooms || []).forEach((room: any) => {
+      availableRooms.forEach((room: any) => {
         roomsLookup.set(room.id, room);
       });
 
@@ -292,7 +363,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       const threadLatestTimes = new Map();
 
       // Group room messages by thread_id and find the first user message for each thread
-      (currentRoomChatsData || []).forEach((msg: any) => {
+      availableRoomChatsData.forEach((msg: any) => {
         if (msg.thread_id && !msg.is_ai_response) {
           if (!threadFirstMessages.has(msg.thread_id)) {
             threadFirstMessages.set(msg.thread_id, msg);
@@ -312,7 +383,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       threadFirstMessages.forEach((firstMsg, threadId) => {
         const roomData = roomsLookup.get(firstMsg.room_id);
 
-        if (roomData && roomData.shareCode) {
+        if (roomData && (roomData.shareCode || roomData.share_code)) {
           // Use the first few words of the first user message as the title
           let title = 'New Chat';
           if (firstMsg.content) {
@@ -329,7 +400,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             created_at: firstMsg.created_at,
             type: 'room' as const,
             roomName: roomData.name,
-            shareCode: roomData.shareCode
+            shareCode: roomData.shareCode || roomData.share_code
           });
         }
       });
@@ -344,16 +415,31 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       return allRoomThreads;
     } else {
       // Room context: Show only threads for the current room
+      
+      // For anonymous users, use the fetched thread data directly
+      if (!userInfo?.email && anonymousRoomData?.threads) {
+        return anonymousRoomData.threads.map((thread: any) => ({
+          id: thread.threadId,
+          firstMessage: thread.firstMessage,
+          created_at: thread.createdAt,
+          type: 'room' as const,
+          roomName: anonymousRoomData.room?.name || 'Room',
+          shareCode: currentRoomShareCode
+        }));
+      }
+
+      // For authenticated users, process room chat data
       const roomThreads: any[] = [];
       const threadFirstMessages = new Map();
       const threadLatestTimes = new Map();
 
-      // Find the current room
-      const currentRoom = (currentRooms || []).find((room: any) => room.shareCode === currentRoomShareCode);
+      const currentRoom = availableRooms.find((room: any) => 
+        (room.shareCode || room.share_code) === currentRoomShareCode
+      );
 
       if (currentRoom) {
         // Group room messages by thread_id for the current room
-        (currentRoomChatsData || []).forEach((msg: any) => {
+        availableRoomChatsData.forEach((msg: any) => {
           if (msg.room_id === currentRoom.id && msg.thread_id && !msg.is_ai_response) {
             if (!threadFirstMessages.has(msg.thread_id)) {
               threadFirstMessages.set(msg.thread_id, msg);
@@ -386,7 +472,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
             created_at: firstMsg.created_at,
             type: 'room' as const,
             roomName: currentRoom.name,
-            shareCode: currentRoom.shareCode
+            shareCode: currentRoom.shareCode || currentRoom.share_code
           });
         });
 
@@ -400,7 +486,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
       return roomThreads;
     }
-  }, [currentRoomShareCode, currentRoomChatsData, currentRooms]);
+  }, [currentRoomShareCode, currentRoomChatsData, currentRooms, rooms, roomChatsData, userInfo, anonymousRoomData]);
 
   // On mobile, reuse the SAME sidebar as an overlay, controlled by the shared context
   // We render the sidebar only when open to avoid layout shift
@@ -607,12 +693,44 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
         <div className="border-b border-border">
           <div className="px-3 sm:px-4 py-2">
             {!userInfo?.email ? (
-              <div className="text-center py-4 sm:py-6 space-y-2 sm:space-y-3">
-                <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
-                <Button asChild size="sm" variant="outline" className="h-8">
-                  <Link href="/signin">Sign in</Link>
-                </Button>
-              </div>
+              // For anonymous users, show current room if in room context, otherwise show sign in prompt
+              currentRoomShareCode ? (
+                <div className="max-h-32 overflow-y-auto">
+                  <div className="space-y-1">
+                    {availableRooms.filter((room: any) => 
+                      (room.shareCode || room.share_code) === currentRoomShareCode
+                    ).map((room: any) => (
+                      <div
+                        key={room.id}
+                        className="block w-full text-left p-2 sm:p-3 rounded-lg bg-primary/10 text-primary"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="font-medium text-sm truncate">
+                            {room.name}
+                          </span>
+                          <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium ml-auto">
+                            Current
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                          <span>Anonymous user</span>
+                          <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
+                            {room.tier}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 sm:py-6 space-y-2 sm:space-y-3">
+                  <p className="text-sm text-muted-foreground/80">Sign in to view rooms</p>
+                  <Button asChild size="sm" variant="outline" className="h-8">
+                    <Link href="/signin">Sign in</Link>
+                  </Button>
+                </div>
+              )
             ) : isLoadingRooms ? (
               <div className="text-center py-4 sm:py-6">
                 <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2 sm:mb-3 text-muted-foreground/60" />
@@ -807,10 +925,14 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
   const currentChatId = typeof params.id === 'string' ? params.id : undefined;
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
   // Safe user params for links
+  // For anonymous users in room context, use the current displayName from URL
+  const currentDisplayName = searchParams.get('displayName');
+  const currentSessionId = searchParams.get('sessionId');
   const safeUserId = userInfo?.id || 'anon';
-  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || 'User';
+  const safeUserDisplay = userInfo?.full_name || userInfo?.email?.split('@')[0] || currentDisplayName || 'User';
+  const safeSessionId = currentSessionId || `auth_${safeUserId}`;
   const encodedDisplayName = encodeURIComponent(safeUserDisplay);
-  const encodedSessionId = encodeURIComponent(`auth_${safeUserId}`);
+  const encodedSessionId = encodeURIComponent(safeSessionId);
 
   const handleChatSelect = useCallback(() => {
     close();
@@ -958,6 +1080,9 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
 
       <Sheet open={true} onOpenChange={handleCloseSidebar}>
         <SheetContent side="left" className="w-[280px] p-0">
+          <VisuallyHidden>
+            <SheetTitle>Navigation Menu</SheetTitle>
+          </VisuallyHidden>
           <div className="flex flex-col h-full">
             {/* Header */}
             <div className="flex justify-between items-center p-4 border-b">

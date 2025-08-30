@@ -69,10 +69,10 @@ async function checkUserRemovalStatus(shareCode: string, displayName: string, us
         }
 
         if (removedParticipant) {
-            return { 
-                isRemoved: true, 
+            return {
+                isRemoved: true,
                 roomName: roomInfo.room.name,
-                shareCode: shareCode 
+                shareCode: shareCode
             };
         }
 
@@ -154,6 +154,12 @@ export default async function RoomChatPage(props: {
         redirect(`/room/${shareCode}`);
     }
 
+    // Prevent "User" from being used as a display name - redirect to join form
+    if (searchParams.displayName === 'User') {
+        console.log('Redirecting user with invalid "User" display name to join form');
+        redirect(`/room/${shareCode}`);
+    }
+
     // Check if room is expired first
     const expirationCheck = await checkRoomExpiration(shareCode);
 
@@ -210,6 +216,8 @@ export default async function RoomChatPage(props: {
         console.error('Error ensuring user in room:', error);
     }
 
+    const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
+
     // If user just signed in (has auth but was previously anonymous), update their participant record
     if (userInfo && searchParams.sessionId?.startsWith('session_')) {
         try {
@@ -222,15 +230,13 @@ export default async function RoomChatPage(props: {
                 body: JSON.stringify({
                     roomId: roomInfo?.room.id,
                     sessionId: searchParams.sessionId,
-                    displayName: userInfo.user_metadata?.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
+                    displayName: userInfo.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
                 })
             });
         } catch (error) {
             console.warn('Could not update participant record:', error);
         }
     }
-
-    const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
     if (!roomInfo) {
         // Room not found or deleted - redirect to main chat page
         redirect(`/chat`);
@@ -278,32 +284,7 @@ export default async function RoomChatPage(props: {
     console.log('Room page rendering with chatSessionId:', chatSessionId);
     console.log('Room messages count:', roomMessages.length);
 
-    // Create sidebar data for anonymous users
-    let finalSidebarData = props.sidebarData;
 
-    if (!userInfo && searchParams.displayName) {
-        // For anonymous users, create minimal sidebar data with room info
-        finalSidebarData = {
-            userInfo: {
-                id: '',
-                full_name: searchParams.displayName,
-                email: ''
-            },
-            initialChatPreviews: [],
-            categorizedChats: { today: [], yesterday: [], last7Days: [], last30Days: [], last2Months: [], older: [] },
-            documents: [],
-            rooms: [{
-                shareCode: roomInfo.room.shareCode,
-                name: roomInfo.room.name,
-                id: roomInfo.room.id,
-                maxParticipants: roomInfo.room.maxParticipants,
-                tier: roomInfo.room.tier,
-                expiresAt: roomInfo.room.expiresAt,
-                createdAt: roomInfo.room.createdAt
-            }],
-            roomChatsData: []
-        };
-    }
 
     return (
         <RoomChatWrapper
@@ -313,7 +294,6 @@ export default async function RoomChatPage(props: {
             initialModelType={modelType}
             initialSelectedOption={selectedOption}
             userData={userInfo}
-            sidebarData={finalSidebarData}
         />
     );
 }

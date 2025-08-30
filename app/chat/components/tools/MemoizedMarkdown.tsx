@@ -214,8 +214,8 @@ const MemoizedMarkdownBlock = memo(
           },
           // Tables
           table: ({ children }) => (
-            <div className="block py-2 overflow-x-auto">
-              <table className="w-full border-collapse break-normal text-[0.85rem]">
+            <div className="block py-2 overflow-x-auto max-w-full">
+              <table className="w-full border-collapse break-normal text-[0.85rem] min-w-full">
                 {children}
               </table>
             </div>
@@ -226,7 +226,7 @@ const MemoizedMarkdownBlock = memo(
           th: ({ children }) => (
             <th
               scope="row"
-              className="border border-border p-1 text-left text-[0.9em] break-normal font-semibold hyphens-auto overflow-wrap-normal"
+              className="border border-border p-1 text-left text-[0.9em] break-words font-semibold hyphens-auto overflow-wrap-anywhere"
             >
               {children}
             </th>
@@ -234,14 +234,14 @@ const MemoizedMarkdownBlock = memo(
           td: ({ children }) => (
             <td
               scope="row"
-              className="border border-border p-1 text-left text-[0.9em] break-normal font-normal hyphens-auto overflow-wrap-normal"
+              className="border border-border p-1 text-left text-[0.9em] break-words font-normal hyphens-auto overflow-wrap-anywhere"
             >
               {children}
             </td>
           ),
           // Paragraphs and text formatting
           p: ({ children }) => (
-            <p className={compact ? 'mb-2 last:mb-0' : 'mb-4 last:mb-0'}>{children}</p>
+            <p className={`${compact ? 'mb-2 last:mb-0 text-base leading-relaxed' : 'mb-4 last:mb-0'} break-words overflow-wrap-anywhere`}>{children}</p>
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           strong: ({ children }) => (
@@ -251,30 +251,30 @@ const MemoizedMarkdownBlock = memo(
           hr: () => <hr className="my-6 border-t border-border" />,
           // Lists
           ul: ({ children }) => (
-            <ul className="list-disc pl-6 mb-4 space-y-1">{children}</ul>
+            <ul className={`list-disc ${compact ? 'pl-4 mb-2 space-y-1' : 'pl-6 mb-4 space-y-1'}`}>{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal pl-6 mb-4 space-y-1">{children}</ol>
+            <ol className={`list-decimal ${compact ? 'pl-4 mb-2 space-y-1' : 'pl-6 mb-4 space-y-1'}`}>{children}</ol>
           ),
-          li: ({ children }) => <li className="mb-1">{children}</li>,
+          li: ({ children }) => <li className={`${compact ? 'mb-0.5 text-base' : 'mb-1'} break-words`}>{children}</li>,
           // Headings
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold mb-4 mt-6">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 className={compact ? 'text-base font-semibold mb-1.5 mt-3' : 'text-xl font-bold mb-3 mt-5'}>{children}</h2>
+            <h2 className={compact ? 'text-lg font-semibold mb-2 mt-3 break-words' : 'text-xl font-bold mb-3 mt-5'}>{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 className={compact ? 'text-sm font-semibold mb-1.5 mt-3' : 'text-lg font-bold mb-2 mt-4'}>{children}</h3>
+            <h3 className={compact ? 'text-base font-semibold mb-1.5 mt-2 break-words' : 'text-lg font-bold mb-2 mt-4'}>{children}</h3>
           ),
           h4: ({ children }) => (
-            <h4 className={compact ? 'text-[13px] font-semibold mb-1.5 mt-3' : 'text-base font-bold mb-2 mt-4'}>{children}</h4>
+            <h4 className={compact ? 'text-sm font-semibold mb-1 mt-2 break-words' : 'text-base font-bold mb-2 mt-4'}>{children}</h4>
           ),
           h5: ({ children }) => (
-            <h5 className={compact ? 'text-[12px] font-semibold mb-1 mt-2' : 'text-sm font-bold mb-2 mt-3'}>{children}</h5>
+            <h5 className={compact ? 'text-sm font-semibold mb-1 mt-1.5 break-words' : 'text-sm font-bold mb-2 mt-3'}>{children}</h5>
           ),
           h6: ({ children }) => (
-            <h6 className={compact ? 'text-[11px] font-semibold mb-1 mt-2' : 'text-xs font-bold mb-2 mt-3'}>{children}</h6>
+            <h6 className={compact ? 'text-xs font-semibold mb-0.5 mt-1 break-words' : 'text-xs font-bold mb-2 mt-3'}>{children}</h6>
           ),
           // Block elements
           blockquote: ({ children }) => (
@@ -312,7 +312,7 @@ const MemoizedMarkdownBlock = memo(
             if (inline) {
               return (
                 <code
-                  className={`bg-muted px-1 py-0.5 rounded ${className}`}
+                  className={`bg-muted px-1 py-0.5 rounded ${compact ? 'text-sm' : 'text-sm'} break-words overflow-wrap-anywhere ${className}`}
                   {...props}
                 >
                   {children}
@@ -321,12 +321,12 @@ const MemoizedMarkdownBlock = memo(
             }
 
             return (
-              <div className="relative rounded w-full pt-5 my-2">
-                <span className="absolute top-0 left-2 text-xs uppercase text-muted-foreground">
+              <div className={`relative rounded w-full ${compact ? 'pt-3 my-1' : 'pt-5 my-2'} max-w-full`}>
+                <span className={`absolute top-0 left-2 ${compact ? 'text-[9px]' : 'text-xs'} uppercase text-muted-foreground`}>
                   {language}
                 </span>
-                <pre className="m-0 overflow-x-auto bg-muted p-4 rounded-md">
-                  <code className={className} {...props}>
+                <pre className={`m-0 overflow-x-auto bg-muted ${compact ? 'p-3' : 'p-3 sm:p-4'} rounded-md ${compact ? 'text-sm' : 'text-sm'} max-w-full`}>
+                  <code className={`${className} break-words whitespace-pre-wrap block overflow-wrap-anywhere`} {...props}>
                     {children}
                   </code>
                 </pre>

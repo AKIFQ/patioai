@@ -30,7 +30,6 @@ interface RoomChatWrapperProps {
   initialModelType: string;
   initialSelectedOption: string;
   userData?: any;
-  sidebarData?: any;
 }
 
 export default function RoomChatWrapper({
@@ -39,8 +38,7 @@ export default function RoomChatWrapper({
   initialMessages,
   initialModelType,
   initialSelectedOption,
-  userData,
-  sidebarData
+  userData
 }: RoomChatWrapperProps) {
   
   const searchParams = useSearchParams();
@@ -52,6 +50,8 @@ export default function RoomChatWrapper({
     // Get URL parameters - simplified to just what we need
     const displayName = searchParams.get('displayName');
     const threadId = searchParams.get('threadId') || searchParams.get('chatSession'); // Support both new and legacy params
+
+
 
     // If no display name, redirect to join page
     if (!displayName) {
@@ -147,7 +147,6 @@ console.error(' Room Chat Error:', { error, errorInfo, errorId, shareCode, roomC
             initialSelectedOption={initialSelectedOption}
             roomContext={roomContext}
             userData={userData}
-            sidebarData={sidebarData}
           />
         </div>
       </div>

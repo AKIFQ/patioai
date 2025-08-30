@@ -170,7 +170,6 @@ const ChatHistorySection: FC<ChatHistorySectionProps> = ({
         onOpenChange={setDeleteConfirmationOpen}
       >
         <DialogContent>
-          <DialogTitle className="sr-only">Confirm Deletion</DialogTitle>
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
             <DialogDescription>

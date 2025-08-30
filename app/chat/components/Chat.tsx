@@ -72,7 +72,6 @@ interface ChatProps {
   initialSelectedOption: string;
   roomContext?: RoomContext;
   userData?: UserInfoWithTier;
-  sidebarData?: any;
 }
 
 const ChatComponent: React.FC<ChatProps> = ({
@@ -81,8 +80,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   initialModelType,
   initialSelectedOption,
   roomContext,
-  userData,
-  sidebarData
+  userData
 }) => {
   const param = useParams();
   const router = useRouter();
@@ -107,16 +105,14 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [reasoningMode, setReasoningMode] = useState(false);
 
   // Auto-enable reasoning mode when DeepSeek R1 is selected
+  // GROUP 2: Reasoning mode management (optimized - removed circular dependency)
   useEffect(() => {
-    console.log('🧠 Reasoning mode check:', { optimisticOption, reasoningMode });
     if (optimisticOption === 'deepseek-r1-full' || optimisticOption === 'deepseek/deepseek-r1') {
-      console.log('✅ Auto-enabling reasoning mode for DeepSeek R1');
       setReasoningMode(true);
-    } else if (reasoningMode && optimisticOption !== 'deepseek-r1-full' && optimisticOption !== 'deepseek/deepseek-r1') {
-      console.log('❌ Disabling reasoning mode for non-R1 model');
+    } else if (optimisticOption !== 'deepseek-r1-full' && optimisticOption !== 'deepseek/deepseek-r1') {
       setReasoningMode(false);
     }
-  }, [optimisticOption, reasoningMode]);
+  }, [optimisticOption]); // Removed reasoningMode from deps to prevent circular updates
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -144,6 +140,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [isRoomLoading, setIsRoomLoading] = useState(false);
 
   // Sync realtimeMessages with paginated messages for room chats
+  // GROUP 3: Message state management
   useEffect(() => {
     if (roomContext && roomPagination.messages.length > 0) {
       setRealtimeMessages(roomPagination.messages);
@@ -196,6 +193,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     isSubmitting
   } = useChatSubmissionState();
 
+  // GROUP 1: Client initialization and URL management
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
     setIsClient(true);
@@ -222,29 +220,27 @@ const newUrl = `${window.location.pathname}?${newParams.toString()}`;
     }
   }, [isClient, roomContext]);
 
-  const handleModelTypeChange = async (newValue: string) => {
+  const handleModelTypeChange = useCallback(async (newValue: string) => {
     startTransition(async () => {
       setOptimisticModelType(newValue);
       await setModelSettings(newValue, optimisticOption);
     });
-  };
+  }, [optimisticOption]);
 
-  const handleOptionChange = async (newValue: string) => {
+  const handleOptionChange = useCallback(async (newValue: string) => {
     startTransition(async () => {
       setOptimisticOption(newValue);
       await setModelSettings(optimisticModelType, newValue);
     });
-  };
+  }, [optimisticModelType]);
 
-  // Determine API endpoint based on model type and room context
-  const getApiEndpoint = () => {
+  // Determine API endpoint based on model type and room context (memoized)
+  const apiEndpoint = useMemo(() => {
     if (roomContext) {
-return `/api/rooms/${roomContext.shareCode}/chat`;
+      return `/api/rooms/${roomContext.shareCode}/chat`;
     }
     return '/api/chat';
-  };
-
-  const apiEndpoint = getApiEndpoint();
+  }, [roomContext?.shareCode]);
 
   // Get messages from chat
 const chatId_debug = roomContext ? `room_${roomContext.shareCode}` : chatId;
@@ -310,6 +306,7 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 
   // Streaming debug logging removed for production
 
+  // GROUP 4: Room loading state management
   // Optimized loading timeout for room chats
   useEffect(() => {
     // Early exit for maximum efficiency
@@ -419,19 +416,20 @@ throw new Error(`API call failed: ${response.status}`);
             // Prepare chat history for context (last 10 messages)
             const chatHistory = realtimeMessages
               .slice(-10) // Last 10 messages for context
-              .map(msg => ({
-                role: msg.role,
-                content: msg.senderName && msg.role === 'user'
+              .map(msg => {
+                const formattedContent = msg.senderName && msg.role === 'user'
                   ? `${msg.senderName}: ${msg.content}`
-                  : msg.content
-              }));
+                  : msg.content;
+                
+                // Debug logging removed for performance
+                
+                return {
+                  role: msg.role,
+                  content: formattedContent
+                };
+              });
 
-            // Debug logging for room AI invocation
-            console.log('🚀 Invoking AI with:', {
-              modelId: optimisticOption,
-              reasoningMode: reasoningModeEnabled,
-              roomContext: roomContext.shareCode
-            });
+            // Debug logging removed for performance
             invokeAIRef.current({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
@@ -809,7 +807,7 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
 
   // Room rate limiting error handlers
   const handleAIError = useCallback((error: any) => {
-    console.log('🚨 AI Error in Chat:', error);
+    // Debug logging removed for performance
     
     if (error.roomLimitExceeded) {
       const resetTime = error.resetTime ? new Date(error.resetTime).toLocaleTimeString() : 'soon';
@@ -838,7 +836,7 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
   }, [router]);
 
   const handleRoomLimitReached = useCallback((limitType: 'messages' | 'ai_responses' | 'threads', details: any) => {
-    console.log('🚨 Room Limit Reached in Chat:', limitType, details);
+    // Debug logging removed for performance
     
     const resetTime = details.resetTime ? new Date(details.resetTime).toLocaleTimeString() : 'soon';
     
@@ -969,12 +967,14 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     isAIStreaming = false
   } = (realtimeHook as any) || {};
 
+  // GROUP 5: Reference management
   // Avoid temporal-dead-zone issues by referencing invokeAI via a ref
   const invokeAIRef = useRef<any>(null);
   useEffect(() => {
     invokeAIRef.current = invokeAI;
   }, [invokeAI]);
 
+  // GROUP 6: Socket event listeners
   // Listen for dev-only modelUsed announcements via socket
   useEffect(() => {
     const w = (window as any);
@@ -1004,7 +1004,6 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     if (roomContext) {
       if (currentChat && currentChat.length > 0) {
         // Initialize with current chat messages
-        // Debug logging removed
         setRealtimeMessages(currentChat);
       } else {
         // Start with empty array for fresh sessions
@@ -1013,37 +1012,21 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     }
   }, [roomContext, currentChat]);
 
-  // For room chats, ONLY use real-time messages (no optimistic updates)
-  // This prevents duplicates for the sender
+  // Message clearing logic for regular chats (consolidated)
   useEffect(() => {
-    if (roomContext) {
-      // For room chats, ignore useChat messages completely
-      // Only use real-time messages to ensure consistency across all users
-      // Debug logging removed
-
-      // Don't merge - real-time messages are the single source of truth
-      // This ensures User A and User B see exactly the same messages
+    if (!roomContext) {
+      // Clear messages when switching to a different chat (only for regular chats)
+      if (currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
+        setMessages([]);
+      }
+      // Force clear messages when component mounts with a new chat ID
+      else if (!currentChat) {
+        setMessages([]);
+      }
     }
-  }, [roomContext, messages]);
+  }, [chatId, currentChatId, roomContext, currentChat, setMessages]);
 
-  // Ensure messages are cleared when chat ID changes (atomicity)
-  useEffect(() => {
-    // Clear messages when switching to a different chat (only for regular chats)
-    if (!roomContext && currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
-      // Debug logging removed
-      setMessages([]);
-    }
-  }, [chatId, currentChatId, roomContext, setMessages]);
-
-  // Force clear messages when component mounts with a new chat ID
-  useEffect(() => {
-    if (!roomContext && !currentChat) {
-      // Debug logging removed
-      setMessages([]);
-    }
-  }, [chatId, roomContext, currentChat, setMessages]);
-
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     setIsCreatingNewChat(true);
 
     try {
@@ -1084,8 +1067,9 @@ console.error('Error creating new chat:', error);
     } finally {
       setIsCreatingNewChat(false);
     }
-  };
+  }, [roomContext, mutate, setMessages, router]);
 
+  // GROUP 7: Touch gesture handling
   // Modern smooth finger-tracking swipe gestures
   useEffect(() => {
     const el = touchAreaRef.current;
@@ -1214,7 +1198,7 @@ console.error('Error creating new chat:', error);
   }, [isMobile, openMobile, setOpenMobile]);
 
   return (
-    <div ref={touchAreaRef} className="flex h-full w-full flex-col relative">
+    <div ref={touchAreaRef} className="flex h-full w-full flex-col relative mobile-chat-container">
       {/* Swipe overlay indicator (only during active swipe) */}
       {isSwipeActive && (
         <div
@@ -1239,19 +1223,19 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Mobile Header with Hamburger Menu - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border/50 h-14 shadow-sm w-full md:hidden">
-        <div className="flex items-center justify-between w-full h-full px-4">
+              <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md h-12 shadow-sm w-full md:hidden pt-safe">
+        <div className="flex items-center justify-between w-full h-full px-2">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* Hamburger Menu Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="h-9 w-9 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
+              className="h-7 w-7 text-foreground transition-colors flex-shrink-0 shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
               aria-label="Toggle sidebar"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-4 w-4" />
             </Button>
 
             {/* PatioAI Logo */}
@@ -1259,20 +1243,20 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               <Image
                 src="/icons/icon-512x512.png"
                 alt="PatioAI"
-                width={24}
-                height={24}
+                width={20}
+                height={20}
                 className="rounded-md"
               />
             </div>
 
             {/* Room Name */}
-            <h1 className="text-lg font-semibold tracking-tight truncate text-foreground">
+            <h1 className="text-sm font-medium tracking-tight truncate text-foreground">
               {roomContext ? roomContext.roomName : 'Chat with AI'}
             </h1>
           </div>
 
           {/* Right side - Activity Indicators + New Chat Button */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Mobile cross-thread activity indicators */}
             {roomContext && crossThreadActivities.some(activity =>
               activity.threadId !== (roomContext.chatSessionId || '') &&
@@ -1291,12 +1275,12 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               size="sm"
               onClick={handleNewChat}
               disabled={isCreatingNewChat}
-              className="h-8 px-3 text-sm font-medium hover:bg-muted/50 transition-colors rounded-lg"
+              className="h-6 w-6 p-0 text-xs font-medium transition-colors shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
             >
               {isCreatingNewChat ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3 w-3" />
               )}
             </Button>
 
@@ -1316,7 +1300,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Desktop Chat Header - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (
@@ -1330,7 +1314,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
                 {/* Indicators on the right */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Participant count - styled indicator */}
-                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full border border-green-200/50 dark:border-green-800/30">
+                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50/80 dark:bg-green-950/30 rounded-full">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                     <span className="text-xs font-medium text-green-700 dark:text-green-300">
                       {roomContext.participants.length} online
@@ -1379,7 +1363,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               size="sm"
               onClick={handleNewChat}
               disabled={isCreatingNewChat}
-              className="h-7 sm:h-8 px-1.5 sm:px-2 md:px-3 text-xs sm:text-sm font-medium hover:bg-muted/50 transition-colors flex-shrink-0"
+              className="h-7 sm:h-8 px-1.5 sm:px-2 md:px-3 text-xs sm:text-sm font-medium transition-colors flex-shrink-0 shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
             >
               {isCreatingNewChat ? (
                 <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
@@ -1414,7 +1398,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             size="sm"
             onClick={handleNewChat}
             disabled={isCreatingNewChat}
-            className="h-8 px-3 text-sm font-medium hover:bg-muted/50 rounded-lg"
+            className="h-8 px-3 text-sm font-medium shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
             aria-label="New Chat"
           >
             {isCreatingNewChat ? (
@@ -1471,7 +1455,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             )}
           </div>
         ) : (
-          <div className={`flex-1 w-full min-w-0 flex flex-col overflow-hidden relative ${!roomContext ? 'pt-6 sm:pt-8' : ''}`}>
+          <div className={`flex-1 min-h-0 w-full min-w-0 flex flex-col overflow-hidden relative ${!roomContext ? 'pt-6 sm:pt-8' : ''}`}>
             {!roomContext && (
               <div className="pointer-events-none absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background via-background/70 to-transparent backdrop-blur-[2px] z-[1]" />
             )}
@@ -1496,7 +1480,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         )}
       </div>
 
-      <div className="sticky bottom-0 w-full z-5 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent">
+      <div className="message-input-container w-full z-10 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe flex-shrink-0">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator

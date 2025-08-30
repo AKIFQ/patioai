@@ -6,7 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Check, X } from 'lucide-react';
+import { Loader2, Check, X, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import ForgotPassword from '../ForgotPassword';
 import { GoogleIcon } from '../CustomIcons';
 import { signup } from '../action';
@@ -18,11 +18,14 @@ import {
   PopoverContent,
   PopoverTrigger
 } from '@/components/ui/popover';
+import { toast } from 'sonner';
 
 export default function SignInCard() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [emailError, setEmailError] = useState(false);
   const [emailErrorMessage, setEmailErrorMessage] = useState('');
@@ -34,6 +37,8 @@ export default function SignInCard() {
   const [open, setOpen] = useState(false);
   const [showPasswordRequirements, setShowPasswordRequirements] =
     useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [passwordRequirements, setPasswordRequirements] = useState({
     length: false,
     uppercase: false,
@@ -52,18 +57,48 @@ export default function SignInCard() {
   }>({ type: null, message: '' });
 
   const handleSubmit = async (formData: FormData) => {
-    if (validateInputs()) {
+    if (!validateInputs()) return;
+    
+    setIsSubmitting(true);
+    
+    try {
       const result = await signup(formData);
 
-      setAlertMessage({
-        type: result.success ? 'success' : 'error',
-        message: result.message
-      });
+      if (result.success) {
+        // Show success toast
+        toast.success(result.message, {
+          icon: <CheckCircle className="h-4 w-4" />,
+          duration: 6000,
+        });
 
-      // Clear message after 5 seconds
-      setTimeout(() => {
-        setAlertMessage({ type: null, message: '' });
-      }, 5000);
+        // Clear form on success
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setFullName('');
+      } else {
+        // Show error toast
+        toast.error(result.message, {
+          icon: <AlertCircle className="h-4 w-4" />,
+          duration: 5000,
+        });
+        
+        setAlertMessage({
+          type: 'error',
+          message: result.message
+        });
+
+        // Clear alert message after 5 seconds
+        setTimeout(() => {
+          setAlertMessage({ type: null, message: '' });
+        }, 5000);
+      }
+    } catch (error) {
+      toast.error('Something went wrong. Please try again.', {
+        icon: <AlertCircle className="h-4 w-4" />,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

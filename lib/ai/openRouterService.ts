@@ -14,7 +14,7 @@ export class OpenRouterService {
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: apiKey,
       headers: {
-        'HTTP-Referer': process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+        'HTTP-Referer': process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat',
         'X-Title': 'PatioAI'
       }
     });

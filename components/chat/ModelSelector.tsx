@@ -57,7 +57,7 @@ export function ModelSelector({
     };
 
     return (
-      <Badge className={`${colors[model.costTier]} border-0 shadow-elevation-1 rounded-full text-xs font-medium`}>
+      <Badge className={`${colors[model.costTier]} border-0 shadow-elevation-1 rounded-full text-[9px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5`}>
         {model.costTier === 'free' ? 'Free' : `$${model.inputCost.toFixed(4)}/1K`}
       </Badge>
     );
@@ -68,16 +68,16 @@ export function ModelSelector({
     return (
       <div className="flex items-center gap-2">
         <Select value="auto" onValueChange={() => {}}>
-          <SelectTrigger className="h-8 px-3 text-xs rounded-full border-0 
+          <SelectTrigger className="h-6 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs rounded-full border-0 
                                             bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)]
-                                            transition-smooth shadow-elevation-1 hover:shadow-elevation-2 w-20">
+                                            transition-smooth shadow-elevation-1 hover:shadow-elevation-2 w-12 sm:w-20 max-w-full">
             <SelectValue>
-              <span className="text-xs">Auto</span>
+              <span className="text-[10px] sm:text-xs">Auto</span>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="w-40 border-0 bg-[var(--elevation-2)] backdrop-blur-md shadow-elevation-3 rounded-xl">
+          <SelectContent className="w-28 sm:w-40 border-0 bg-[var(--elevation-2)] backdrop-blur-md shadow-elevation-3 rounded-xl">
             <SelectItem value="auto">
-              <span className="text-sm">Auto</span>
+              <span className="text-xs sm:text-sm">Auto</span>
             </SelectItem>
           </SelectContent>
         </Select>
@@ -93,13 +93,13 @@ export function ModelSelector({
   return (
     <>
       <Select value={currentModelKey} onValueChange={handleModelSelect}>
-        <SelectTrigger className="w-64 border-0 bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)]
-                                   transition-smooth shadow-elevation-1 hover:shadow-elevation-2 rounded-xl h-8">
+        <SelectTrigger className="w-32 sm:w-64 max-w-full border-0 bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)]
+                                   transition-smooth shadow-elevation-1 hover:shadow-elevation-2 rounded-xl h-6 sm:h-8">
           <SelectValue>
             {availableModels[currentModelKey] && (
-              <div className="flex items-center gap-2">
-                {availableModels[currentModelKey].name}
-                {getCostBadge(availableModels[currentModelKey])}
+              <div className="flex items-center gap-1 sm:gap-2 min-w-0 max-w-full">
+                <span className="text-[10px] sm:text-sm truncate min-w-0 flex-1">{availableModels[currentModelKey].name}</span>
+                <div className="hidden sm:block flex-shrink-0">{getCostBadge(availableModels[currentModelKey])}</div>
               </div>
             )}
           </SelectValue>

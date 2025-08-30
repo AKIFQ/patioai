@@ -23,7 +23,7 @@ const jomolhari = Jomolhari({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000/'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat/'),
   title: {
     default: 'PatioAI',
     template: '%s | PatioAI'
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000/',
+    url: process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat/',
     title: 'PatioAI',
     description: 'Experience the power of AI-driven conversations with PatioAI',
     siteName: 'PatioAI',
@@ -77,6 +77,10 @@ export const metadata: Metadata = {
     title: 'PatioAI - AI Chat Assistant',
     description: 'Experience the power of AI-driven conversations with PatioAI',
     images: ['/logos/logo-horizontal.png']
+  },
+  other: {
+    'theme-color': '#152722',
+    'msapplication-navbutton-color': '#152722'
   }
 };
 
@@ -88,15 +92,23 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        {/* iOS PWA Status Bar Styling */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="theme-color" content="#152722" />
+        <meta name="msapplication-navbutton-color" content="#152722" />
+        <meta name="apple-mobile-web-app-title" content="PatioAI" />
       </head>
       <body className={`${jomolhari.className} min-h-screen w-full overflow-x-hidden`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
+          {/* PWA Status Bar Background Fix for iOS */}
+          <div className="pwa-status-bar-bg" />
           <MobileSidebarProvider>
             <main className="w-full min-w-0">{children}</main>
             <Toaster />
