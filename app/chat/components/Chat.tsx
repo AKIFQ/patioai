@@ -1232,7 +1232,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="h-7 w-7 text-foreground hover:bg-muted/50 transition-colors rounded-lg flex-shrink-0"
+              className="h-7 w-7 text-foreground transition-colors flex-shrink-0 shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
               aria-label="Toggle sidebar"
             >
               <Menu className="h-4 w-4" />
@@ -1275,7 +1275,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               size="sm"
               onClick={handleNewChat}
               disabled={isCreatingNewChat}
-              className="h-6 w-6 p-0 text-xs font-medium hover:bg-muted/50 transition-colors rounded-lg"
+              className="h-6 w-6 p-0 text-xs font-medium transition-colors shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
             >
               {isCreatingNewChat ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -1363,7 +1363,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
               size="sm"
               onClick={handleNewChat}
               disabled={isCreatingNewChat}
-              className="h-7 sm:h-8 px-1.5 sm:px-2 md:px-3 text-xs sm:text-sm font-medium hover:bg-muted/50 transition-colors flex-shrink-0"
+              className="h-7 sm:h-8 px-1.5 sm:px-2 md:px-3 text-xs sm:text-sm font-medium transition-colors flex-shrink-0 shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
             >
               {isCreatingNewChat ? (
                 <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
@@ -1398,7 +1398,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
             size="sm"
             onClick={handleNewChat}
             disabled={isCreatingNewChat}
-            className="h-8 px-3 text-sm font-medium hover:bg-muted/50 rounded-lg"
+            className="h-8 px-3 text-sm font-medium shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
             aria-label="New Chat"
           >
             {isCreatingNewChat ? (

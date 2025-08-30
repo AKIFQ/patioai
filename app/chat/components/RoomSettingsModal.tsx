@@ -454,7 +454,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 w-9 p-0 hover:bg-muted/50 transition-colors touch-manipulation"
+              className="h-9 w-9 p-0 transition-colors touch-manipulation shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
               aria-label="Room settings"
               style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
             >
@@ -503,7 +503,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 hover:bg-muted/50 transition-colors flex-shrink-0 touch-manipulation"
+            className="h-8 w-8 transition-colors flex-shrink-0 touch-manipulation shadow-none hover:shadow-none focus-visible:shadow-none rounded-none hover:bg-transparent border-0 !shadow-none hover:!shadow-none focus-visible:!shadow-none"
             aria-label="Room settings"
             style={{ minHeight: '44px', minWidth: '44px' }} // iOS touch target minimum
           >
