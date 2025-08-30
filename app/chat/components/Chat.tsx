@@ -105,16 +105,14 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [reasoningMode, setReasoningMode] = useState(false);
 
   // Auto-enable reasoning mode when DeepSeek R1 is selected
+  // GROUP 2: Reasoning mode management (optimized - removed circular dependency)
   useEffect(() => {
-    console.log('🧠 Reasoning mode check:', { optimisticOption, reasoningMode });
     if (optimisticOption === 'deepseek-r1-full' || optimisticOption === 'deepseek/deepseek-r1') {
-      console.log('✅ Auto-enabling reasoning mode for DeepSeek R1');
       setReasoningMode(true);
-    } else if (reasoningMode && optimisticOption !== 'deepseek-r1-full' && optimisticOption !== 'deepseek/deepseek-r1') {
-      console.log('❌ Disabling reasoning mode for non-R1 model');
+    } else if (optimisticOption !== 'deepseek-r1-full' && optimisticOption !== 'deepseek/deepseek-r1') {
       setReasoningMode(false);
     }
-  }, [optimisticOption, reasoningMode]);
+  }, [optimisticOption]); // Removed reasoningMode from deps to prevent circular updates
 
   // Real-time state for room chats
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -142,6 +140,7 @@ const ChatComponent: React.FC<ChatProps> = ({
   const [isRoomLoading, setIsRoomLoading] = useState(false);
 
   // Sync realtimeMessages with paginated messages for room chats
+  // GROUP 3: Message state management
   useEffect(() => {
     if (roomContext && roomPagination.messages.length > 0) {
       setRealtimeMessages(roomPagination.messages);
@@ -194,6 +193,7 @@ const ChatComponent: React.FC<ChatProps> = ({
     isSubmitting
   } = useChatSubmissionState();
 
+  // GROUP 1: Client initialization and URL management
   // Prevent hydration issues with real-time connection status
   useEffect(() => {
     setIsClient(true);
@@ -220,29 +220,27 @@ const newUrl = `${window.location.pathname}?${newParams.toString()}`;
     }
   }, [isClient, roomContext]);
 
-  const handleModelTypeChange = async (newValue: string) => {
+  const handleModelTypeChange = useCallback(async (newValue: string) => {
     startTransition(async () => {
       setOptimisticModelType(newValue);
       await setModelSettings(newValue, optimisticOption);
     });
-  };
+  }, [optimisticOption]);
 
-  const handleOptionChange = async (newValue: string) => {
+  const handleOptionChange = useCallback(async (newValue: string) => {
     startTransition(async () => {
       setOptimisticOption(newValue);
       await setModelSettings(optimisticModelType, newValue);
     });
-  };
+  }, [optimisticModelType]);
 
-  // Determine API endpoint based on model type and room context
-  const getApiEndpoint = () => {
+  // Determine API endpoint based on model type and room context (memoized)
+  const apiEndpoint = useMemo(() => {
     if (roomContext) {
-return `/api/rooms/${roomContext.shareCode}/chat`;
+      return `/api/rooms/${roomContext.shareCode}/chat`;
     }
     return '/api/chat';
-  };
-
-  const apiEndpoint = getApiEndpoint();
+  }, [roomContext?.shareCode]);
 
   // Get messages from chat
 const chatId_debug = roomContext ? `room_${roomContext.shareCode}` : chatId;
@@ -308,6 +306,7 @@ const newUrl = `/chat/${stableChatId}${window.location.search}`;
 
   // Streaming debug logging removed for production
 
+  // GROUP 4: Room loading state management
   // Optimized loading timeout for room chats
   useEffect(() => {
     // Early exit for maximum efficiency
@@ -422,15 +421,7 @@ throw new Error(`API call failed: ${response.status}`);
                   ? `${msg.senderName}: ${msg.content}`
                   : msg.content;
                 
-                // Debug logging for message formatting
-                if (msg.role === 'user' && roomContext) {
-                  console.log('🔍 Formatting user message for API:', {
-                    originalContent: msg.content,
-                    senderName: msg.senderName,
-                    formattedContent,
-                    roomDisplayName: roomContext.displayName
-                  });
-                }
+                // Debug logging removed for performance
                 
                 return {
                   role: msg.role,
@@ -438,12 +429,7 @@ throw new Error(`API call failed: ${response.status}`);
                 };
               });
 
-            // Debug logging for room AI invocation
-            console.log('🚀 Invoking AI with:', {
-              modelId: optimisticOption,
-              reasoningMode: reasoningModeEnabled,
-              roomContext: roomContext.shareCode
-            });
+            // Debug logging removed for performance
             invokeAIRef.current({
               shareCode: roomContext.shareCode,
               threadId: roomContext.chatSessionId!,
@@ -821,7 +807,7 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
 
   // Room rate limiting error handlers
   const handleAIError = useCallback((error: any) => {
-    console.log('🚨 AI Error in Chat:', error);
+    // Debug logging removed for performance
     
     if (error.roomLimitExceeded) {
       const resetTime = error.resetTime ? new Date(error.resetTime).toLocaleTimeString() : 'soon';
@@ -850,7 +836,7 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
   }, [router]);
 
   const handleRoomLimitReached = useCallback((limitType: 'messages' | 'ai_responses' | 'threads', details: any) => {
-    console.log('🚨 Room Limit Reached in Chat:', limitType, details);
+    // Debug logging removed for performance
     
     const resetTime = details.resetTime ? new Date(details.resetTime).toLocaleTimeString() : 'soon';
     
@@ -981,12 +967,14 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     isAIStreaming = false
   } = (realtimeHook as any) || {};
 
+  // GROUP 5: Reference management
   // Avoid temporal-dead-zone issues by referencing invokeAI via a ref
   const invokeAIRef = useRef<any>(null);
   useEffect(() => {
     invokeAIRef.current = invokeAI;
   }, [invokeAI]);
 
+  // GROUP 6: Socket event listeners
   // Listen for dev-only modelUsed announcements via socket
   useEffect(() => {
     const w = (window as any);
@@ -1016,7 +1004,6 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     if (roomContext) {
       if (currentChat && currentChat.length > 0) {
         // Initialize with current chat messages
-        // Debug logging removed
         setRealtimeMessages(currentChat);
       } else {
         // Start with empty array for fresh sessions
@@ -1025,37 +1012,21 @@ content: isFirstChunk ? chunk : `${m.content}${chunk}`
     }
   }, [roomContext, currentChat]);
 
-  // For room chats, ONLY use real-time messages (no optimistic updates)
-  // This prevents duplicates for the sender
+  // Message clearing logic for regular chats (consolidated)
   useEffect(() => {
-    if (roomContext) {
-      // For room chats, ignore useChat messages completely
-      // Only use real-time messages to ensure consistency across all users
-      // Debug logging removed
-
-      // Don't merge - real-time messages are the single source of truth
-      // This ensures User A and User B see exactly the same messages
+    if (!roomContext) {
+      // Clear messages when switching to a different chat (only for regular chats)
+      if (currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
+        setMessages([]);
+      }
+      // Force clear messages when component mounts with a new chat ID
+      else if (!currentChat) {
+        setMessages([]);
+      }
     }
-  }, [roomContext, messages]);
+  }, [chatId, currentChatId, roomContext, currentChat, setMessages]);
 
-  // Ensure messages are cleared when chat ID changes (atomicity)
-  useEffect(() => {
-    // Clear messages when switching to a different chat (only for regular chats)
-    if (!roomContext && currentChatId && chatId !== currentChatId && !chatId.startsWith('room_')) {
-      // Debug logging removed
-      setMessages([]);
-    }
-  }, [chatId, currentChatId, roomContext, setMessages]);
-
-  // Force clear messages when component mounts with a new chat ID
-  useEffect(() => {
-    if (!roomContext && !currentChat) {
-      // Debug logging removed
-      setMessages([]);
-    }
-  }, [chatId, roomContext, currentChat, setMessages]);
-
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     setIsCreatingNewChat(true);
 
     try {
@@ -1096,8 +1067,9 @@ console.error('Error creating new chat:', error);
     } finally {
       setIsCreatingNewChat(false);
     }
-  };
+  }, [roomContext, mutate, setMessages, router]);
 
+  // GROUP 7: Touch gesture handling
   // Modern smooth finger-tracking swipe gestures
   useEffect(() => {
     const el = touchAreaRef.current;
