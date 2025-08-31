@@ -26,43 +26,69 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
     const initSocket = async () => {
       // First try to use the global room socket if available
       const globalSocket = (window as any).__patio_socket;
-      if (globalSocket && globalSocket.connected) {
+      if (globalSocket) {
+        console.log('🔌 Using existing global socket for sidebar');
         sidebarSocketRef.current = globalSocket;
+        setSocketReady(true);
+        return;
+      }
+
+      // Wait a bit and try again for global socket (it might be initializing)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const retryGlobalSocket = (window as any).__patio_socket;
+      if (retryGlobalSocket) {
+        console.log('🔌 Using global socket for sidebar (retry)');
+        sidebarSocketRef.current = retryGlobalSocket;
         setSocketReady(true);
         return;
       }
 
       // If we already have a sidebar socket, use it
       if (sidebarSocketRef.current && sidebarSocketRef.current.connected) {
+        console.log('🔌 Using existing sidebar socket');
         setSocketReady(true);
         return;
       }
 
-      // Create a dedicated sidebar socket
+      // Create a dedicated sidebar socket as fallback
       try {
-        const { io } = await import('socket.io-client');
+        console.log('🔌 Creating dedicated sidebar socket...');
+        const socketIO = await import('socket.io-client');
 
         // Use the displayName as the token for authentication (same as room socket pattern)
         const urlParams = new URLSearchParams(window.location.search);
         const displayName = urlParams.get('displayName');
         const socketToken = displayName || userId;
 
-        const socket = io(window.location.origin, {
+        const socket = socketIO.default(window.location.origin, {
           auth: { token: socketToken },
-          transports: ['websocket', 'polling'],
+          transports: ['polling', 'websocket'], // Prioritize polling for Railway
+          timeout: 45000,
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 2000,
+          reconnectionDelayMax: 10000
         });
 
         socket.on('connect', () => {
+          console.log('✅ Sidebar socket connected successfully');
           setSocketReady(true);
         });
 
-        socket.on('connect_error', () => {
-          // Silent fail - sidebar socket is not critical
+        socket.on('connect_error', (error: any) => {
+          console.error('❌ Sidebar socket connection error:', error);
+          setSocketReady(false);
+        });
+
+        socket.on('disconnect', (reason: any) => {
+          console.log('🔌 Sidebar socket disconnected:', reason);
+          setSocketReady(false);
         });
 
         sidebarSocketRef.current = socket;
       } catch (error) {
-        // Silent fail - sidebar socket is not critical
+        console.error('❌ Failed to create sidebar socket:', error);
+        setSocketReady(false);
       }
     };
 

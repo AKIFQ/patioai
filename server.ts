@@ -38,18 +38,22 @@ app.prepare().then(() => {
     }
   });
 
-  // Initialize Socket.IO with production-ready configuration
+  // Initialize Socket.IO with production-ready configuration optimized for Railway
   const io = new SocketIOServer(server, {
     cors: {
       origin: [config.socketIO.clientUrl],
       methods: ["GET", "POST"],
       credentials: true
     },
-    transports: ['websocket', 'polling'],
-    pingTimeout: config.socketIO.timeout,
+    transports: ['polling', 'websocket'], // Prioritize polling for Railway stability
+    pingTimeout: 60000, // Increased for Railway's infrastructure
     pingInterval: 25000,
-    connectTimeout: config.socketIO.timeout,
-    allowEIO3: true
+    connectTimeout: 45000, // Increased timeout for Railway
+    allowEIO3: true,
+    upgradeTimeout: 30000, // Add upgrade timeout for WebSocket
+    maxHttpBufferSize: 1e6, // Add buffer size limit
+    allowUpgrades: true, // Allow transport upgrades
+    cookie: false // Disable socket.io cookies for Railway
   });
 
   // Authentication middleware
