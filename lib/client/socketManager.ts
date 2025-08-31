@@ -65,7 +65,7 @@ class SocketManager {
       socket.on('connect', () => {
         clearTimeout(timeoutId);
         // Debug logging removed
-        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        if (typeof window !== 'undefined') {
           (window as any).__patio_socket = socket;
         }
         resolve(socket);
