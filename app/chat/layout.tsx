@@ -253,6 +253,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
         <SidebarProvider className="h-full w-full flex">
           <SidebarSocketWrapper
             userId={userData?.id || ''}
+            displayName={userData?.full_name || userData?.email?.split('@')[0] || ''}
             userRooms={(userData?.rooms || []).map(room => ({
               shareCode: room.shareCode,
               name: room.name,

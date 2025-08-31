@@ -2,6 +2,7 @@
 
 import useSWR from 'swr';
 import { useSidebarSocket } from '../hooks/useSidebarSocket';
+import { getSocketToken } from '@/lib/utils/userIdentification';
 
 // Fetch function to get current user rooms
 const fetchRooms = async () => {
@@ -15,11 +16,12 @@ const fetchRooms = async () => {
 
 interface SidebarSocketWrapperProps {
   userId: string;
+  displayName?: string; // Add displayName for authenticated users
   userRooms: { shareCode: string; name: string; expiresAt?: string }[];
   children: React.ReactNode;
 }
 
-export default function SidebarSocketWrapper({ userId, userRooms, children }: SidebarSocketWrapperProps) {
+export default function SidebarSocketWrapper({ userId, displayName, userRooms, children }: SidebarSocketWrapperProps) {
 
   // Use SWR to get the most up-to-date room data, with server-side data as fallback
   const { data: currentRooms } = useSWR(
@@ -51,6 +53,7 @@ export default function SidebarSocketWrapper({ userId, userRooms, children }: Si
   // Initialize sidebar Socket.IO updates
   useSidebarSocket({
     userId: userId,
+    displayName: displayName,
     userRooms: activeRooms,
     onThreadCreated: (threadData) => {
       // Dispatch window event for RoomsSection

@@ -66,9 +66,14 @@ app.prepare().then(() => {
         return next(new Error('Authentication token required'));
       }
 
-      // TODO: Validate token with existing auth system
-      // For now, we'll accept any token to maintain MVP approach
-      (socket as AuthenticatedSocket).userId = token; // Simplified for MVP
+      // Use unified user identification system
+      const { parseSocketToken } = await import('./lib/utils/userIdentification');
+      const userIdentity = parseSocketToken(token);
+      
+      // Attach user identity to socket for consistent identification
+      (socket as AuthenticatedSocket).userId = userIdentity.socketId;
+      (socket as any).userIdentity = userIdentity;
+      
       next();
     } catch (error) {
       console.error('Socket authentication error:', error);

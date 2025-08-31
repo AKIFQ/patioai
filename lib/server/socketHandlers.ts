@@ -637,12 +637,16 @@ console.error('Error getting sidebar data:', error);
     socket.on('join-user-channel', () => {
       try {
         // Join user's personal channel for sidebar updates
-socket.join(`user:${socket.userId}`);
+const channelName = `user:${socket.userId}`;
+        socket.join(channelName);
+        
+        console.log(`🔗 Socket ${socket.id} joined user channel: ${channelName}`);
         // Debug logging removed
 
         // Confirm channel join
         socket.emit('user-channel-joined', {
           userId: socket.userId,
+          channelName,
           timestamp: new Date().toISOString()
         });
       } catch (error) {

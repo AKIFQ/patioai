@@ -123,21 +123,39 @@ console.warn('Socket.IO not initialized, cannot emit API event');
   // Debug logging removed
 }
 
-// Helper function to emit user-specific events
-export function emitUserEvent(userId: string, eventType: string, data: any) {
+// Helper function to emit user-specific events with unified identification
+export function emitUserEvent(userIdOrDisplayName: string, eventType: string, data: any) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
     console.warn('Socket.IO not initialized, cannot emit user event');
     return;
   }
 
-  // Get user channel info to count connected sockets
-  const userSockets = socketIO.sockets.adapter.rooms.get(`user:${userId}`);
-  const connectedSockets = userSockets ? userSockets.size : 0;
+  // Import user identification utilities
+  const { createUserIdentity, getUserChannels } = require('../utils/userIdentification');
   
-  console.log(`👤 Emitting ${eventType} to user:${userId} (${connectedSockets} connected sockets)`);
-
-  emitAPIEvent(eventType, data, `user:${userId}`);
+  // Determine if this is a UUID (authenticated) or display name (anonymous)
+  const isUUID = userIdOrDisplayName.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  const userIdentity = createUserIdentity(
+    isUUID ? userIdOrDisplayName : null,
+    isUUID ? userIdOrDisplayName : userIdOrDisplayName
+  );
+  
+  const channels = getUserChannels(userIdentity);
+  let totalConnectedSockets = 0;
+  
+  // Emit to all possible channels and count connected sockets
+  for (const channel of channels) {
+    const userSockets = socketIO.sockets.adapter.rooms.get(channel);
+    const connectedSockets = userSockets ? userSockets.size : 0;
+    totalConnectedSockets += connectedSockets;
+    
+    if (connectedSockets > 0) {
+      emitAPIEvent(eventType, data, channel);
+    }
+  }
+  
+  console.log(`👤 Emitting ${eventType} to user:${userIdOrDisplayName} (${totalConnectedSockets} connected sockets across ${channels.length} channels)`);
 }
 
 // Helper function to emit room-specific events

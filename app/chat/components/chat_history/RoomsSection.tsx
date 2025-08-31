@@ -18,7 +18,7 @@ import { Users, Crown, Clock, MessageSquare, Plus, ChevronDown, ChevronRight, Al
 import { fetchRoomChatSessions } from '../../room/[shareCode]/fetch';
 import ShareRoomModal from '../ShareRoomModal';
 import { useSiteUrl } from '@/hooks/useSiteUrl';
-import { useSocket } from '@/lib/client/socketManager';
+// Removed useSocket import - using unified socket via sidebar
 
 interface RoomChatSession {
   id: string;
@@ -62,7 +62,7 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
   const searchParams = useSearchParams();
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
   const siteUrl = useSiteUrl();
-  const socket = useSocket();
+  // Socket connection handled by SidebarSocketWrapper - no duplicate needed
 
   const toggleRoomExpansion = async (shareCode: string) => {
     const newExpanded = new Set(expandedRooms);

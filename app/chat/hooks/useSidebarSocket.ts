@@ -1,67 +1,23 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { mutate } from 'swr';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/client/client';
+import { useSocket } from '@/hooks/useSocket';
 
 const supabase = createClient();
 
 interface SidebarSocketProps {
   userId: string;
+  displayName?: string;
   userRooms: { shareCode: string; name: string; expiresAt?: string }[];
   onThreadCreated?: (threadData: any) => void;
 }
 
-export function useSidebarSocket({ userId, userRooms, onThreadCreated }: SidebarSocketProps) {
+export function useSidebarSocket({ userId, displayName, userRooms, onThreadCreated }: SidebarSocketProps) {
   const seenThreadsRef = useRef<Set<string>>(new Set());
-
-  const sidebarSocketRef = useRef<any>(null);
-  const [socketReady, setSocketReady] = useState(false);
-
-
-
-  // Initialize socket in a separate useEffect
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const initSocket = async () => {
-      // First try to use the global room socket if available
-      const globalSocket = (window as any).__patio_socket;
-      if (globalSocket) {
-        console.log('🔌 Using existing global socket for sidebar');
-        sidebarSocketRef.current = globalSocket;
-        setSocketReady(true);
-        return;
-      }
-
-      // Wait a bit and try again for global socket (it might be initializing)
-      const maxRetries = 5;
-      for (let i = 0; i < maxRetries; i++) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const retryGlobalSocket = (window as any).__patio_socket;
-        if (retryGlobalSocket) {
-          console.log(`🔌 Using global socket for sidebar (retry ${i + 1})`);
-          sidebarSocketRef.current = retryGlobalSocket;
-          setSocketReady(true);
-          return;
-        }
-      }
-
-      console.warn('⚠️ Global socket not found after retries, sidebar updates may not work');
-      // Don't create a fallback socket - the main socket should always be available
-      setSocketReady(false);
-    };
-
-    initSocket();
-
-    return () => {
-      // Cleanup dedicated socket if we created one
-      if (sidebarSocketRef.current && sidebarSocketRef.current !== (window as any).__patio_socket) {
-        sidebarSocketRef.current.disconnect();
-      }
-      sidebarSocketRef.current = null;
-      setSocketReady(false);
-    };
-  }, [userId]);
+  const eventListenersSetupRef = useRef(false);
+  
+  // Use proper authenticated socket connection
+  const { socket, isConnected } = useSocket(userId, displayName);
 
   const handleNewRoomMessage = useCallback(async (data: any) => {
     // Data structure from Socket.IO should match the Supabase realtime payload structure
@@ -138,9 +94,11 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
       }
 
       // Dispatch custom event to trigger room chat data refresh
-      window.dispatchEvent(new CustomEvent('roomThreadCreated', {
-        detail: threadData
-      }));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('roomThreadCreated', {
+          detail: threadData
+        }));
+      }
 
       // Call custom handler if provided
       if (onThreadCreated) {
@@ -149,202 +107,122 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
     }
   }, [onThreadCreated, userRooms]);
 
-  const handleNewChatMessage = useCallback(async (data: any) => {
-    // Data structure from Socket.IO should match the Supabase realtime payload structure
-    const newMessage = data.new || data;
-
-    // Only handle user messages (not AI responses) to detect new chats
-    if (!newMessage.is_user_message) {
+  const handleThreadCreated = useCallback((data: any) => {
+    // CRITICAL: Verify room isolation - only process events from rooms the user has access to
+    if (!data.shareCode) {
       return;
     }
 
-    // Use SWR mutate to update only the sidebar data
-    try {
-      await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-    } catch (error) {
-      // Silent fail
+    const userHasAccess = userRooms.some(room => room.shareCode === data.shareCode);
+    if (!userHasAccess) {
+      return;
     }
 
-    // Call custom handler if provided
-    if (onThreadCreated) {
-      onThreadCreated({
-        threadId: newMessage.chat_session_id,
-        type: 'regular',
-        firstMessage: newMessage.content,
-        createdAt: newMessage.created_at
-      });
+    // Mark thread as seen to prevent duplicate processing
+    if (data.threadId) {
+      seenThreadsRef.current.add(data.threadId);
     }
-  }, [onThreadCreated]);
 
-  const handleSidebarRefreshRequested = useCallback(() => {
-    mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-  }, []);
-
-  const triggerSidebarRefresh = useCallback(() => {
-    const socket = sidebarSocketRef.current;
-    if (socket) {
-      socket.emit('request-sidebar-refresh');
-    }
-    // Always trigger SWR mutate as well for immediate updates
+    // Force immediate sidebar refresh for new threads
     mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
     mutate('chatPreviews');
     mutate('roomChats');
-  }, []);
 
-  useEffect(() => {
-    // Only run when socket is ready
-    if (!socketReady || !sidebarSocketRef.current || !userId) {
-      return;
-    }
-
-    const socket = sidebarSocketRef.current;
-
-    // Reset seen threads when rooms change
-    seenThreadsRef.current.clear();
-
-    // Define handlers that can be properly cleaned up
-    const handleThreadCreated = (data: any) => {
-      // CRITICAL: Verify room isolation - only process events from rooms the user has access to
-      if (!data.shareCode) {
-        return;
-      }
-
-      const userHasAccess = userRooms.some(room => room.shareCode === data.shareCode);
-      if (!userHasAccess) {
-        return;
-      }
-
-      // Mark thread as seen to prevent duplicate processing
-      seenThreadsRef.current.add(data.threadId);
-
-      // Force immediate sidebar refresh for new threads
-      mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-      mutate('chatPreviews');
-      mutate('roomChats');
-
-      // Dispatch custom event to trigger room chat data refresh
+    // Dispatch custom event to trigger room chat data refresh
+    if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('roomThreadCreated', {
         detail: data
       }));
+    }
 
-      if (onThreadCreated) {
-        onThreadCreated(data);
-      }
-    };
+    if (onThreadCreated) {
+      onThreadCreated(data);
+    }
+  }, [userRooms, onThreadCreated]);
 
-    const handleRoomMessageCreated = (data: any) => {
-      handleNewRoomMessage(data);
-    };
+  // Set up event listeners on the authenticated socket
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userId || !socket || !isConnected || eventListenersSetupRef.current) {
+      return;
+    }
 
-    const handleChatMessageCreated = (data: any) => {
-      handleNewChatMessage(data);
-    };
+    const setupSocketListeners = () => {
 
-    const handleSidebarRefreshRequestedEvent = (data: any) => {
-      handleSidebarRefreshRequested();
-    };
+      console.log('🔌 Setting up sidebar event listeners on authenticated socket');
+      
+      // Set up event listeners
+      socket.on('room-message-created', handleNewRoomMessage);
+      socket.on('thread-created', handleThreadCreated);
 
-    // Set up event listeners
-    socket.on('room-message-created', handleRoomMessageCreated);
-    socket.on('chat-message-created', handleChatMessageCreated);
-    socket.on('sidebar-refresh-requested', handleSidebarRefreshRequestedEvent);
-    socket.on('thread-created', handleThreadCreated);
+      // Join user's personal channel for direct notifications
+      socket.emit('join-user-channel');
 
-    // Join user's personal channel for direct notifications
-    socket.emit('join-user-channel');
+      // Listen for user channel join confirmation
+      socket.on('user-channel-joined', (data: any) => {
+        console.log('✅ Joined user channel for sidebar updates:', data.channelName);
+      });
 
-    // Test socket connection
-    socket.emit('ping', { message: 'sidebar-socket-test', timestamp: Date.now() });
+      eventListenersSetupRef.current = true;
 
-    // Listen for pong response
-    const handlePong = () => {
-      // Connection confirmed
-    };
-    socket.on('pong', handlePong);
+      // Pre-populate seen threads to avoid false positives
+      const populateSeenThreads = async () => {
+        try {
+          if (supabase && userRooms && userRooms.length > 0) {
+            const { data: rooms } = await supabase
+              .from('rooms')
+              .select('id, share_code')
+              .in('share_code', userRooms.map(r => r.shareCode));
 
-    // Listen for user channel join confirmation
-    const handleUserChannelJoined = () => {
-      // Channel joined successfully
-    };
-    socket.on('user-channel-joined', handleUserChannelJoined);
+            if (rooms && rooms.length > 0) {
+              const roomIds = rooms.map(r => r.id);
 
-    // Pre-populate seen threads to avoid false positives
+              const { data: existingMessages } = await supabase
+                .from('room_messages')
+                .select('thread_id, room_id')
+                .in('room_id', roomIds)
+                .not('thread_id', 'is', null);
 
-    const populateSeenThreads = async () => {
-      try {
-        if (supabase && userRooms && userRooms.length > 0) {
-          const { data: rooms } = await supabase
-            .from('rooms')
-            .select('id, share_code')
-            .in('share_code', userRooms.map(r => r.shareCode));
-
-          if (rooms && rooms.length > 0) {
-            const roomIds = rooms.map(r => r.id);
-
-            const { data: existingMessages } = await supabase
-              .from('room_messages')
-              .select('thread_id, room_id')
-              .in('room_id', roomIds)
-              .not('thread_id', 'is', null);
-
-            if (existingMessages) {
-              existingMessages.forEach(msg => {
-                const roomData = rooms.find(r => r.id === msg.room_id);
-                if (roomData && userRooms.some(ur => ur.shareCode === roomData.share_code)) {
-                  if (msg.thread_id) {
-                    seenThreadsRef.current.add(msg.thread_id);
+              if (existingMessages) {
+                existingMessages.forEach(msg => {
+                  const roomData = rooms.find(r => r.id === msg.room_id);
+                  if (roomData && userRooms.some(ur => ur.shareCode === roomData.share_code)) {
+                    if (msg.thread_id) {
+                      seenThreadsRef.current.add(msg.thread_id);
+                    }
                   }
-                }
-              });
+                });
+              }
             }
           }
+        } catch (error) {
+          // Silent fail - not critical
         }
-      } catch (error) {
-        // Silent fail - not critical
-      }
+      };
+
+      populateSeenThreads();
     };
 
-    populateSeenThreads();
-
-    // Listen for manual thread refresh events
-    const handleForceThreadRefresh = (event: CustomEvent) => {
-      const threadData = event.detail;
-
-      if (threadData.threadId) {
-        seenThreadsRef.current.add(threadData.threadId);
-      }
-
-      mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
-      mutate('chatPreviews');
-
-      if (onThreadCreated) {
-        onThreadCreated(threadData);
-      }
-    };
-
-    window.addEventListener('forceThreadRefresh', handleForceThreadRefresh as EventListener);
+    // Start setup
+    setupSocketListeners();
 
     return () => {
-      if (socket) {
-        socket.off('room-message-created', handleRoomMessageCreated);
-        socket.off('chat-message-created', handleChatMessageCreated);
-        socket.off('sidebar-refresh-requested', handleSidebarRefreshRequestedEvent);
+      if (socket && eventListenersSetupRef.current) {
+        console.log('🧹 Cleaning up sidebar event listeners');
+        socket.off('room-message-created', handleNewRoomMessage);
         socket.off('thread-created', handleThreadCreated);
-        socket.off('pong', handlePong);
-        socket.off('user-channel-joined', handleUserChannelJoined);
+        socket.off('user-channel-joined');
+        eventListenersSetupRef.current = false;
       }
-
-      window.removeEventListener('forceThreadRefresh', handleForceThreadRefresh as EventListener);
       seenThreadsRef.current.clear();
     };
-  }, [socketReady, userId, userRooms, handleNewRoomMessage, handleNewChatMessage, handleSidebarRefreshRequested]);
+  }, [userId, socket, isConnected, userRooms, handleNewRoomMessage, handleThreadCreated]);
 
   // Fallback polling mechanism when socket is not available
   useEffect(() => {
-    // Only run on client side
     if (typeof window === 'undefined') return;
 
-    if (!socketReady && userRooms && userRooms.length > 0) {
+    if (!isConnected && userRooms && userRooms.length > 0) {
+      console.log('⏳ Sidebar socket not connected, using polling fallback');
       const pollInterval = setInterval(() => {
         // Trigger SWR revalidation to check for new threads
         mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
@@ -356,10 +234,20 @@ export function useSidebarSocket({ userId, userRooms, onThreadCreated }: Sidebar
         clearInterval(pollInterval);
       };
     }
-  }, [socketReady, userRooms]);
+  }, [isConnected, userRooms]);
+
+  const triggerSidebarRefresh = useCallback(() => {
+    if (socket) {
+      socket.emit('request-sidebar-refresh');
+    }
+    // Always trigger SWR mutate as well for immediate updates
+    mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+    mutate('chatPreviews');
+    mutate('roomChats');
+  }, [socket]);
 
   return {
     triggerSidebarRefresh,
-    isConnected: socketReady && sidebarSocketRef.current && sidebarSocketRef.current.connected
+    isConnected
   };
 }

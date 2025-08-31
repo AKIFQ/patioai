@@ -4,6 +4,7 @@ import SocketManager from '../lib/client/socketManager';
 import type { HealthMetrics } from '../lib/client/connectionHealthMonitor';
 import { ConnectionHealthMonitor } from '../lib/client/connectionHealthMonitor';
 import { logger } from '../lib/utils/logger';
+import { getSocketToken } from '../lib/utils/userIdentification';
 
 interface UseSocketReturn {
   socket: Socket | null;
@@ -15,7 +16,7 @@ interface UseSocketReturn {
   disconnect: () => void;
 }
 
-export function useSocket(token?: string): UseSocketReturn {
+export function useSocket(userIdOrDisplayName?: string, displayName?: string): UseSocketReturn {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
@@ -27,8 +28,8 @@ export function useSocket(token?: string): UseSocketReturn {
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics | null>(null);
 
   const connect = useCallback(async () => {
-    if (!token) {
-      setError('Authentication token required');
+    if (!userIdOrDisplayName) {
+      setError('User identification required');
       setConnectionStatus('error');
       return;
     }
@@ -36,6 +37,14 @@ export function useSocket(token?: string): UseSocketReturn {
     try {
       setConnectionStatus('connecting');
       setError(null);
+      
+      // Generate unified socket token
+      const token = getSocketToken(
+        userIdOrDisplayName.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) 
+          ? userIdOrDisplayName 
+          : null,
+        displayName || userIdOrDisplayName
+      );
       
       const socketManager = SocketManager.getInstance();
       const connectedSocket = await socketManager.connect(token);
@@ -77,7 +86,7 @@ export function useSocket(token?: string): UseSocketReturn {
       setConnectionStatus('error');
       setIsConnected(false);
     }
-  }, [token]);
+  }, [userIdOrDisplayName, displayName]);
 
   const disconnect = useCallback(() => {
     const socketManager = SocketManager.getInstance();
@@ -149,7 +158,7 @@ export function useSocket(token?: string): UseSocketReturn {
   }, [socket, connect]);
 
   useEffect(() => {
-    if (token && connectionStatus === 'disconnected' && shouldStayConnectedRef.current) {
+    if (userIdOrDisplayName && connectionStatus === 'disconnected' && shouldStayConnectedRef.current) {
       connect();
     }
 
@@ -165,13 +174,13 @@ export function useSocket(token?: string): UseSocketReturn {
         }
       }
     };
-  }, [token, connect, disconnect, connectionStatus]);
+  }, [userIdOrDisplayName, connect, disconnect, connectionStatus]);
 
   // Update connection status based on socket state with auto-reconnection
   useEffect(() => {
     if (socket) {
       const handleConnect = () => {
-        logger.info('Socket connected successfully', { token: token?.substring(0, 10) + '...' });
+        logger.info('Socket connected successfully', { user: userIdOrDisplayName?.substring(0, 10) + '...' });
         setIsConnected(true);
         setConnectionStatus('connected');
         setError(null);
@@ -183,7 +192,7 @@ export function useSocket(token?: string): UseSocketReturn {
       };
 
       const handleDisconnect = (reason: string) => {
-        logger.warn('Socket disconnected', { reason, token: token?.substring(0, 10) + '...' });
+        logger.warn('Socket disconnected', { reason, user: userIdOrDisplayName?.substring(0, 10) + '...' });
         setIsConnected(false);
         setConnectionStatus('disconnected');
         
@@ -193,7 +202,7 @@ export function useSocket(token?: string): UseSocketReturn {
       };
 
       const handleError = (err: Error) => {
-        logger.error('Socket connection error', { token: token?.substring(0, 10) + '...' }, err);
+        logger.error('Socket connection error', { user: userIdOrDisplayName?.substring(0, 10) + '...' }, err);
         setError(err.message);
         setConnectionStatus('error');
         setIsConnected(false);
