@@ -195,47 +195,51 @@ export default async function RoomChatPage(props: {
     // Get current user info to check if they're the creator
     const userInfo = await getUserInfo();
 
-    // Check if user was removed from the room and redirect if so
-    try {
-        const removalStatus = await checkUserRemovalStatus(shareCode, searchParams.displayName, userInfo?.id);
-        if (removalStatus.isRemoved) {
-            redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(removalStatus.roomName || 'Unknown Room')}`);
-        }
-    } catch (error) {
-        console.error('Error checking removal status:', error);
+    // CRITICAL: Parallelize database operations to prevent 6+ second delays
+    const [removalStatus, roomInfo] = await Promise.all([
+        checkUserRemovalStatus(shareCode, searchParams.displayName, userInfo?.id).catch(error => {
+            console.error('Error checking removal status:', error);
+            return { isRemoved: false };
+        }),
+        getRoomInfo(shareCode, userInfo?.id).catch(error => {
+            console.error('Error getting room info:', error);
+            throw error; // Room info is required
+        })
+    ]);
+
+    // Handle removal redirect first
+    if (removalStatus.isRemoved) {
+        const roomName = (removalStatus as any)?.roomName || 'Unknown Room';
+        redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(roomName)}`);
     }
 
-    // Ensure the user is added to the room participants (only if not removed)
+    // CRITICAL: Keep this blocking to prevent message send failures
     try {
         await ensureUserInRoom(shareCode, searchParams.displayName, userInfo?.id);
-    } catch (error) {
+    } catch (error: any) {
         if (error.message === 'REMOVED_FROM_ROOM') {
-            const roomInfo = await getRoomInfo(shareCode);
-            redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(roomInfo?.room.name || 'Unknown Room')}`);
+            const roomName = roomInfo?.room?.name || 'Unknown Room';
+            redirect(`/room/${shareCode}/removed?roomName=${encodeURIComponent(roomName)}`);
         }
         console.error('Error ensuring user in room:', error);
     }
 
-    const roomInfo = await getRoomInfo(shareCode, userInfo?.id);
-
-    // If user just signed in (has auth but was previously anonymous), update their participant record
+    // If user just signed in, update participant record (non-blocking)
     if (userInfo && searchParams.sessionId?.startsWith('session_')) {
-        try {
-            // Update the anonymous participant to authenticated
-            await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    roomId: roomInfo?.room.id,
-                    sessionId: searchParams.sessionId,
-                    displayName: userInfo.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
-                })
-            });
-        } catch (error) {
+        // CRITICAL: Make this non-blocking to prevent page render delays
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rooms/update-participant`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                roomId: roomInfo?.room.id,
+                sessionId: searchParams.sessionId,
+                displayName: userInfo.full_name || userInfo.email?.split('@')[0] || searchParams.displayName
+            })
+        }).catch(error => {
             console.warn('Could not update participant record:', error);
-        }
+        });
     }
     if (!roomInfo) {
         // Room not found or deleted - redirect to main chat page

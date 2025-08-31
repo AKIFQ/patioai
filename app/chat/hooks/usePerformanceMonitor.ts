@@ -12,6 +12,8 @@ interface PerformanceMetrics {
 export function usePerformanceMonitor(componentName: string) {
   const renderStartTime = useRef<number>(0);
   const metricsRef = useRef<PerformanceMetrics[]>([]);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isEnabledRef = useRef<boolean>(false);
 
   // Start performance measurement
   const startMeasurement = useCallback(() => {
@@ -20,7 +22,13 @@ export function usePerformanceMonitor(componentName: string) {
 
   // End performance measurement
   const endMeasurement = useCallback((messageCount = 0) => {
+    if (renderStartTime.current === 0) return; // No measurement started
+    
     const renderTime = performance.now() - renderStartTime.current;
+    renderStartTime.current = 0; // Reset
+    
+    // Only track if performance monitoring is enabled
+    if (!isEnabledRef.current) return;
     
     const metrics: PerformanceMetrics = {
       renderTime,
@@ -28,19 +36,23 @@ export function usePerformanceMonitor(componentName: string) {
       timestamp: Date.now()
     };
 
-    // Add memory usage if available
-    if ('memory' in performance) {
-      metrics.memoryUsage = (performance as any).memory.usedJSHeapSize;
+    // Add memory usage if available and in development
+    if (process.env.NODE_ENV === 'development' && 'memory' in performance) {
+      try {
+        metrics.memoryUsage = (performance as any).memory.usedJSHeapSize;
+      } catch {
+        // Ignore memory access errors
+      }
     }
 
     metricsRef.current.push(metrics);
 
-    // Keep only last 100 measurements
-    if (metricsRef.current.length > 100) {
-      metricsRef.current = metricsRef.current.slice(-100);
+    // Keep only last 50 measurements (reduced from 100)
+    if (metricsRef.current.length > 50) {
+      metricsRef.current = metricsRef.current.slice(-50);
     }
 
-    // Log slow renders in development
+    // Log slow renders only in development and if render time is significant
     if (process.env.NODE_ENV === 'development' && renderTime > 100) {
       console.warn(`Slow render detected in ${componentName}:`, {
         renderTime: `${renderTime.toFixed(2)}ms`,
@@ -70,20 +82,41 @@ export function usePerformanceMonitor(componentName: string) {
     };
   }, [componentName]);
 
-  // Report performance metrics periodically
+  // Initialize monitoring state
   useEffect(() => {
-    const interval = setInterval(() => {
-      const stats = getStats();
-      if (stats && stats.measurements > 0) {
-        // Only log in development or if explicitly enabled
-        if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_ENABLE_PERF_LOGGING === 'true') {
-          console.log(`Performance stats for ${componentName}:`, stats);
-        }
-      }
-    }, 30000); // Report every 30 seconds
+    isEnabledRef.current = 
+      process.env.NODE_ENV === 'development' || 
+      process.env.NEXT_PUBLIC_ENABLE_PERF_LOGGING === 'true';
+  }, []);
 
-    return () => clearInterval(interval);
+  // Report performance metrics periodically (only if enabled)
+  useEffect(() => {
+    if (!isEnabledRef.current) return;
+    
+    intervalRef.current = setInterval(() => {
+      const stats = getStats();
+      if (stats && stats.measurements > 5) { // Only log if we have meaningful data
+        console.log(`Performance stats for ${componentName}:`, stats);
+      }
+    }, 60000); // Report every 60 seconds (reduced frequency)
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [componentName, getStats]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      metricsRef.current = []; // Clear metrics to prevent memory leaks
+    };
+  }, []);
 
   return {
     startMeasurement,

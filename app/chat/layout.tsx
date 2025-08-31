@@ -255,7 +255,8 @@ export default async function Layout(props: { children: React.ReactNode }) {
             userId={userData?.id || ''}
             userRooms={(userData?.rooms || []).map(room => ({
               shareCode: room.shareCode,
-              name: room.name
+              name: room.name,
+              expiresAt: room.expiresAt
             }))}
           >
             <ChatHistoryDrawer

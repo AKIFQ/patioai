@@ -18,6 +18,7 @@ export const useReasoningStream = (messages: Message[], status: string) => {
 
   const lastMessageRef = useRef<Message | null>(null);
   const reasoningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reasoningCacheRef = useRef<Map<string, string>>(new Map()); // Cache extracted reasoning
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -61,24 +62,43 @@ export const useReasoningStream = (messages: Message[], status: string) => {
       }
     }
 
-    // Fallback: extract reasoning markers from content for providers that inline thoughts
+    // Optimized reasoning extraction with caching
     const messageContent = lastMessage.content || '';
-    const hasReasoningMarkers =
-      messageContent.includes('<thinking>') ||
-      messageContent.includes('**Reasoning:**') ||
-      messageContent.includes('**Thinking:**');
-
-    if (hasReasoningMarkers && reasoningState.streamingMessageId === lastMessage.id) {
-      let reasoning = '';
-      if (messageContent.includes('<thinking>')) {
-        const thinkingMatch = /<thinking>(.*?)<\/thinking>/s.exec(messageContent);
-        reasoning = thinkingMatch ? thinkingMatch[1].trim() : '';
-      } else if (messageContent.includes('**Reasoning:**')) {
-        const reasoningMatch = messageContent.split('**Reasoning:**')[1];
-        reasoning = reasoningMatch ? reasoningMatch.split('\n\n')[0].trim() : '';
-      } else if (messageContent.includes('**Thinking:**')) {
-        const thinkingMatch = messageContent.split('**Thinking:**')[1];
-        reasoning = thinkingMatch ? thinkingMatch.split('\n\n')[0].trim() : '';
+    const contentHash = `${lastMessage.id}_${messageContent.length}`;
+    
+    if (reasoningState.streamingMessageId === lastMessage.id && messageContent.length > 0) {
+      // Check cache first
+      let reasoning = reasoningCacheRef.current.get(contentHash);
+      
+      if (reasoning === undefined) {
+        // Extract reasoning only if not cached
+        reasoning = '';
+        
+        // Optimized marker detection - check most common first
+        if (messageContent.includes('<thinking>')) {
+          const startIdx = messageContent.indexOf('<thinking>');
+          const endIdx = messageContent.indexOf('</thinking>', startIdx);
+          if (startIdx !== -1 && endIdx !== -1) {
+            reasoning = messageContent.slice(startIdx + 10, endIdx).trim();
+          }
+        } else if (messageContent.includes('**Reasoning:**')) {
+          const startIdx = messageContent.indexOf('**Reasoning:**') + 14;
+          const endIdx = messageContent.indexOf('\n\n', startIdx);
+          reasoning = messageContent.slice(startIdx, endIdx === -1 ? undefined : endIdx).trim();
+        } else if (messageContent.includes('**Thinking:**')) {
+          const startIdx = messageContent.indexOf('**Thinking:**') + 13;
+          const endIdx = messageContent.indexOf('\n\n', startIdx);
+          reasoning = messageContent.slice(startIdx, endIdx === -1 ? undefined : endIdx).trim();
+        }
+        
+        // Cache the result
+        reasoningCacheRef.current.set(contentHash, reasoning);
+        
+        // Limit cache size
+        if (reasoningCacheRef.current.size > 50) {
+          const firstKey = reasoningCacheRef.current.keys().next().value;
+          reasoningCacheRef.current.delete(firstKey);
+        }
       }
 
       if (reasoning && reasoning !== reasoningState.streamingReasoning) {
@@ -111,12 +131,13 @@ export const useReasoningStream = (messages: Message[], status: string) => {
     lastMessageRef.current = lastMessage;
   }, [messages, status, reasoningState.streamingMessageId, reasoningState.streamingReasoning]);
 
-  // Cleanup timeout on unmount
+  // Cleanup timeout and cache on unmount
   useEffect(() => {
     return () => {
       if (reasoningTimeoutRef.current) {
         clearTimeout(reasoningTimeoutRef.current);
       }
+      reasoningCacheRef.current.clear();
     };
   }, []);
 

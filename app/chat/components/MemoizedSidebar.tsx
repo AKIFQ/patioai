@@ -6,7 +6,7 @@ import SidebarSocketWrapper from './SidebarSocketWrapper';
 
 interface MemoizedSidebarProps {
   userId: string;
-  userRooms: { shareCode: string; name: string }[];
+  userRooms: { shareCode: string; name: string; expiresAt?: string }[];
   children: React.ReactNode;
 }
 

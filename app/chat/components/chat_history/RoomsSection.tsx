@@ -18,6 +18,7 @@ import { Users, Crown, Clock, MessageSquare, Plus, ChevronDown, ChevronRight, Al
 import { fetchRoomChatSessions } from '../../room/[shareCode]/fetch';
 import ShareRoomModal from '../ShareRoomModal';
 import { useSiteUrl } from '@/hooks/useSiteUrl';
+import { useSocket } from '@/lib/client/socketManager';
 
 interface RoomChatSession {
   id: string;
@@ -61,6 +62,7 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
   const searchParams = useSearchParams();
   const currentRoomShareCode = typeof params.shareCode === 'string' ? params.shareCode : undefined;
   const siteUrl = useSiteUrl();
+  const socket = useSocket();
 
   const toggleRoomExpansion = async (shareCode: string) => {
     const newExpanded = new Set(expandedRooms);
@@ -70,18 +72,52 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
     } else {
       newExpanded.add(shareCode);
       
-      // Load chat sessions if not already loaded
-      if (!roomSessions[shareCode] && !loadingSessions[shareCode]) {
+      // CRITICAL: Only load chat sessions if we don't have ANY existing data (including real-time updates)
+      const existingSessions = roomSessions[shareCode];
+      if (!existingSessions && !loadingSessions[shareCode]) {
+        console.log('📎 Loading sessions for room:', shareCode, '(no existing data)');
         setLoadingSessions(prev => ({ ...prev, [shareCode]: true }));
         try {
           const sessions = await fetchRoomChatSessions(shareCode);
-          setRoomSessions(prev => ({ ...prev, [shareCode]: sessions }));
+          
+          // CRITICAL: Merge with any real-time updates that arrived during loading
+          setRoomSessions(prev => {
+            const currentSessions = prev[shareCode] || [];
+            
+            // If we received real-time updates during loading, merge them
+            if (currentSessions.length > 0) {
+              console.log('🔄 Merging real-time updates with fetched sessions');
+              const mergedSessions = [...currentSessions];
+              
+              // Add any sessions from API that aren't already in real-time updates
+              sessions.forEach(apiSession => {
+                if (!currentSessions.some(rtSession => rtSession.id === apiSession.id)) {
+                  mergedSessions.push(apiSession);
+                }
+              });
+              
+              // Sort by creation date (newest first)
+              mergedSessions.sort((a, b) => 
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              );
+              
+              return { ...prev, [shareCode]: mergedSessions };
+            } else {
+              // No real-time updates, use API data
+              return { ...prev, [shareCode]: sessions };
+            }
+          });
         } catch (error) {
           console.error('Failed to load room sessions:', error);
-          setRoomSessions(prev => ({ ...prev, [shareCode]: [] }));
+          // Don't overwrite existing real-time data on error
+          if (!roomSessions[shareCode]) {
+            setRoomSessions(prev => ({ ...prev, [shareCode]: [] }));
+          }
         } finally {
           setLoadingSessions(prev => ({ ...prev, [shareCode]: false }));
         }
+      } else if (existingSessions && existingSessions.length > 0) {
+        console.log('✨ Room', shareCode, 'already has', existingSessions.length, 'sessions (including real-time updates)');
       }
     }
     
@@ -105,6 +141,85 @@ export default function RoomsSection({ rooms, onRoomSelect, userInfo }: RoomsSec
     setSelectedRoomForShare(room);
     setShowShareModal(true);
   };
+
+  // Real-time thread updates via custom event (handled by useSidebarSocket)
+  useEffect(() => {
+    const handleRoomThreadCreated = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('🔥 RoomsSection: Received roomThreadCreated event:', data);
+      
+      const newThread: RoomChatSession = {
+        id: data.threadId,
+        chat_title: data.firstMessage && data.firstMessage.length > 50 
+          ? data.firstMessage.substring(0, 50) + '...' 
+          : data.firstMessage || `Chat by ${data.senderName}`,
+        display_name: data.senderName,
+        created_at: data.createdAt,
+        updated_at: data.createdAt
+      };
+      
+      // CRITICAL: Update roomSessions state with new thread (works for both expanded and collapsed rooms)
+      setRoomSessions(prev => {
+        const currentSessions = prev[data.shareCode] || [];
+        
+        // Check if thread already exists to avoid duplicates
+        if (currentSessions.some(session => session.id === data.threadId)) {
+          console.log('⚠️ Thread already exists, skipping duplicate:', data.threadId);
+          return prev;
+        }
+        
+        // Add new thread at the beginning (most recent first)
+        const updatedSessions = [newThread, ...currentSessions];
+        
+        // CRITICAL: Also ensure the room is marked as having sessions loaded
+        // This prevents fetchRoomChatSessions from overwriting our real-time update
+        setLoadingSessions(loadingPrev => ({ ...loadingPrev, [data.shareCode]: false }));
+        
+        console.log(`✅ Added new thread ${data.threadId} to room ${data.shareCode} sidebar`);
+        
+        return {
+          ...prev,
+          [data.shareCode]: updatedSessions
+        };
+      });
+    };
+
+    // Listen for custom roomThreadCreated event dispatched by useSidebarSocket
+    window.addEventListener('roomThreadCreated', handleRoomThreadCreated as EventListener);
+
+    return () => {
+      window.removeEventListener('roomThreadCreated', handleRoomThreadCreated as EventListener);
+    };
+  }, []);
+
+  // Fallback: Periodic refresh for active rooms to catch any missed updates
+  useEffect(() => {
+    if (!socket?.isConnected) return;
+
+    const refreshInterval = setInterval(() => {
+      // Only refresh expanded rooms to avoid unnecessary API calls
+      expandedRooms.forEach(async (shareCode) => {
+        try {
+          const sessions = await fetchRoomChatSessions(shareCode);
+          setRoomSessions(prev => {
+            const currentSessions = prev[shareCode] || [];
+            
+            // Only update if we got more sessions than we currently have
+            if (sessions.length > currentSessions.length) {
+              console.log(`🔄 Fallback refresh found ${sessions.length - currentSessions.length} new threads for room ${shareCode}`);
+              return { ...prev, [shareCode]: sessions };
+            }
+            
+            return prev;
+          });
+        } catch (error) {
+          console.warn('Fallback refresh failed for room:', shareCode, error);
+        }
+      });
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, [expandedRooms, socket?.isConnected]);
 
   // Helper function to check if room is expired
   const isRoomExpired = (expiresAt: string) => {

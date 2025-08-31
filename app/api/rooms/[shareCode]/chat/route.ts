@@ -108,21 +108,27 @@ console.log(` [${messageId}] Message saved successfully:`, {
       try {
         const { data: sidebarParticipants } = await supabase
           .from('room_participants')
-          .select('user_id')
-          .eq('room_id', roomId)
-          .not('user_id', 'is', null); // Only get authenticated users
+          .select('user_id, display_name')
+          .eq('room_id', roomId);
 
         if (sidebarParticipants && sidebarParticipants.length > 0) {
           const { emitUserEvent } = await import('@/lib/server/socketEmitter');
           
           for (const participant of sidebarParticipants) {
+            // CRITICAL: Emit to both user_id AND display_name channels
+            // This covers both authenticated users and the socket authentication mismatch
             if (participant.user_id) {
-              // Emit to each participant's personal channel
-              emitUserEvent(`auth_${participant.user_id}`, 'thread-created', threadEventData);
+              // Authenticated user - emit to user ID channel
+              emitUserEvent(participant.user_id, 'thread-created', threadEventData);
+            }
+            
+            if (participant.display_name) {
+              // Also emit to display name channel (this is what the socket is actually authenticated with)
+              emitUserEvent(participant.display_name, 'thread-created', threadEventData);
             }
           }
           
-console.log(` Emitted thread-created to ${sidebarParticipants.length} user channels for sidebar updates`);
+console.log(` Emitted thread-created to ${sidebarParticipants.length} participant channels for sidebar updates`);
         }
       } catch (error) {
         console.error('Error emitting thread-created to user channels:', error);

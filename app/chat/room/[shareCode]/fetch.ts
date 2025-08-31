@@ -232,8 +232,65 @@ export async function fetchRoomMessagesPaginated(
 }
 
 export async function fetchRoomChatSessions(shareCode: string, userId?: string): Promise<any[]> {
-  // Note: room_chat_sessions table doesn't exist in current schema
-  // This function is disabled until the proper table is created
-  console.warn('fetchRoomChatSessions: room_chat_sessions table not found in schema');
-  return [];
+  try {
+    const roomInfo = await getRoomInfo(shareCode);
+    if (!roomInfo) {
+      return [];
+    }
+
+    // Get unique threads from room_messages table
+    const { data: threads, error } = await supabase
+      .from('room_messages')
+      .select(`
+        thread_id,
+        sender_name,
+        created_at,
+        content
+      `)
+      .eq('room_id', roomInfo.room.id)
+      .not('thread_id', 'is', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching room threads:', error);
+      return [];
+    }
+
+    if (!threads || threads.length === 0) {
+      return [];
+    }
+
+    // Group by thread_id and get the most recent message for each thread
+    const threadMap = new Map<string, any>();
+    
+    threads.forEach((message: any) => {
+      const threadId = message.thread_id;
+      if (!threadMap.has(threadId)) {
+        // Extract title from first few words of content
+        const content = message.content || '';
+        const title = content.length > 50 
+          ? content.substring(0, 50) + '...' 
+          : content || `Chat by ${message.sender_name}`;
+        
+        threadMap.set(threadId, {
+          id: threadId,
+          chat_title: title,
+          display_name: message.sender_name || 'Unknown',
+          created_at: message.created_at,
+          updated_at: message.created_at
+        });
+      }
+    });
+
+    // Convert to array and sort by creation date (newest first)
+    const result = Array.from(threadMap.values()).sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    console.log(`Found ${result.length} threads for room ${shareCode}`);
+    return result;
+  } catch (error) {
+    console.error('Error in fetchRoomChatSessions:', error);
+    return [];
+  }
 }

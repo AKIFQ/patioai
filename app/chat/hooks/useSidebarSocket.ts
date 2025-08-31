@@ -1,5 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
-import { useSocket } from '../../../hooks/useSocket';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { mutate } from 'swr';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/client/client';
@@ -8,30 +7,105 @@ const supabase = createClient();
 
 interface SidebarSocketProps {
   userId: string;
-  userRooms: { shareCode: string; name: string }[];
+  userRooms: { shareCode: string; name: string; expiresAt?: string }[];
   onThreadCreated?: (threadData: any) => void;
 }
 
 export function useSidebarSocket({ userId, userRooms, onThreadCreated }: SidebarSocketProps) {
-  const { socket, isConnected } = useSocket(userId);
   const seenThreadsRef = useRef<Set<string>>(new Set());
   const router = useRouter();
+  const sidebarSocketRef = useRef<any>(null);
+  const [socketReady, setSocketReady] = useState(false);
+
+  // Helper function to check if a room is expired
+  const isRoomExpired = (room: { expiresAt?: string }) => {
+    if (!room.expiresAt) return false;
+    return new Date() > new Date(room.expiresAt);
+  };
+
+  // Initialize socket in a separate useEffect
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const initSocket = async () => {
+      console.log('🔗 SIDEBAR: Initializing socket...');
+      
+      // First try to use the global room socket if available
+      const globalSocket = (window as any).__patio_socket;
+      if (globalSocket && globalSocket.connected) {
+        console.log('🔗 SIDEBAR: Using existing global socket');
+        sidebarSocketRef.current = globalSocket;
+        setSocketReady(true);
+        return;
+      }
+
+      // If we already have a sidebar socket, use it
+      if (sidebarSocketRef.current && sidebarSocketRef.current.connected) {
+        console.log('🔗 SIDEBAR: Using existing sidebar socket');
+        setSocketReady(true);
+        return;
+      }
+
+      // Create a dedicated sidebar socket
+      console.log('🔗 SIDEBAR: Creating dedicated sidebar socket');
+      try {
+        const { io } = await import('socket.io-client');
+
+        // Use the displayName as the token for authentication (same as room socket pattern)
+        const urlParams = new URLSearchParams(window.location.search);
+        const displayName = urlParams.get('displayName');
+        const socketToken = displayName || userId;
+
+        console.log('🔗 SIDEBAR: Socket token:', socketToken);
+
+        const socket = io(window.location.origin, {
+          auth: { token: socketToken },
+          transports: ['websocket', 'polling'],
+        });
+
+        socket.on('connect', () => {
+          console.log('✅ SIDEBAR: Dedicated socket connected');
+          setSocketReady(true);
+        });
+
+        socket.on('connect_error', (error) => {
+          console.error('❌ SIDEBAR: Socket connection error:', error);
+        });
+
+        sidebarSocketRef.current = socket;
+      } catch (error) {
+        console.error('❌ SIDEBAR: Failed to create socket:', error);
+      }
+    };
+
+    initSocket();
+
+    return () => {
+      // Cleanup dedicated socket if we created one
+      if (sidebarSocketRef.current && sidebarSocketRef.current !== (window as any).__patio_socket) {
+        console.log('🧹 SIDEBAR: Disconnecting dedicated socket');
+        sidebarSocketRef.current.disconnect();
+      }
+      sidebarSocketRef.current = null;
+      setSocketReady(false);
+    };
+  }, [userId]);
 
   const handleNewRoomMessage = useCallback(async (data: any) => {
-// Debug logging removed for production
+    console.log('🔍 SIDEBAR: Processing room message for thread detection:', data);
 
     // Data structure from Socket.IO should match the Supabase realtime payload structure
     const newMessage = data.new || data;
 
     // Only handle user messages (not AI responses) to detect new threads
     if (newMessage.is_ai_response) {
-// Skipping AI message
+      console.log('⏭️ SIDEBAR: Skipping AI message');
       return;
     }
 
     // CRITICAL: Verify room isolation - only process messages from rooms the user has access to
     if (!newMessage.room_id) {
-console.warn(' SIDEBAR: Message missing room_id, skipping for security');
+      console.warn('⚠️ SIDEBAR: Message missing room_id, skipping for security');
       return;
     }
 
@@ -52,14 +126,14 @@ console.warn(' SIDEBAR: Message missing room_id, skipping for security');
     }
 
     if (!roomData) {
-console.warn(' SIDEBAR: Could not find room data for room ID:', newMessage.room_id);
+      console.warn('⚠️ SIDEBAR: Could not find room data for room ID:', newMessage.room_id);
       return;
     }
 
     // CRITICAL: Verify user has access to this room
     const userHasAccess = userRooms.some(room => room.shareCode === roomData.share_code);
     if (!userHasAccess) {
-console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code, 'Ignoring message for security');
+      console.warn('⚠️ SIDEBAR: User does not have access to room:', roomData.share_code, 'Ignoring message for security');
       return;
     }
 
@@ -67,7 +141,7 @@ console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code
 
     // Check if this is a new thread we haven't seen before
     if (!seenThreadsRef.current.has(threadId)) {
-      // New room thread detected
+      console.log('🆕 SIDEBAR: New room thread detected:', threadId);
 
       // Mark this thread as seen
       seenThreadsRef.current.add(threadId);
@@ -82,16 +156,16 @@ console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code
         createdAt: newMessage.created_at
       };
 
-// New thread created in room
+      console.log('✨ SIDEBAR: New thread created in room:', roomData.name);
 
       // CRITICAL: Refresh sidebar data for new thread
-// Refreshing sidebar for new thread
+      console.log('🔄 SIDEBAR: Refreshing sidebar for new thread');
       try {
         // Use multiple strategies to ensure sidebar refresh
         await mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
         await mutate('chatPreviews'); // Also try direct key
         await mutate('roomChats'); // CRITICAL: Refresh room chat data
-// Triggered SWR mutate
+        console.log('✅ SIDEBAR: Triggered SWR mutate');
       } catch (error) {
         console.warn('SIDEBAR: Could not mutate SWR cache for room thread:', error);
       }
@@ -99,14 +173,14 @@ console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code
       // Also trigger a broader refresh to ensure all sidebar data is updated
       try {
         await mutate((key) => typeof key === 'string' && key.includes('chat'));
-// Triggered broad refresh
+        console.log('✅ SIDEBAR: Triggered broad refresh');
       } catch (error) {
         console.warn('SIDEBAR: Could not trigger broad refresh:', error);
       }
 
       // Dispatch custom event to trigger room chat data refresh
-      window.dispatchEvent(new CustomEvent('roomThreadCreated', { 
-        detail: threadData 
+      window.dispatchEvent(new CustomEvent('roomThreadCreated', {
+        detail: threadData
       }));
 
       // Call custom handler if provided
@@ -114,7 +188,7 @@ console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code
         onThreadCreated(threadData);
       }
     } else {
-// Thread already seen, skipping
+      console.log('⏭️ SIDEBAR: Thread already seen, skipping:', threadId);
     }
   }, [onThreadCreated, userRooms]);
 
@@ -163,114 +237,158 @@ console.warn(' SIDEBAR: User does not have access to room:', roomData.share_code
 
   // Trigger sidebar refresh function (maintains same API as current)
   const triggerSidebarRefresh = useCallback(() => {
-    if (socket && isConnected) {
+    const socket = sidebarSocketRef.current;
+    console.log('🔄 SIDEBAR: Triggering sidebar refresh', { socketAvailable: !!socket });
+    if (socket) {
       socket.emit('request-sidebar-refresh');
-    } else {
-      console.warn('Socket not connected, cannot trigger sidebar refresh');
-      // Fallback to direct SWR mutate
-      mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
     }
-  }, [socket, isConnected]);
+    // Always trigger SWR mutate as well for immediate updates
+    mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+    mutate('chatPreviews');
+    mutate('roomChats');
+  }, []);
 
   useEffect(() => {
-    if (!userId || !socket || !isConnected) {
-// Not setting up sidebar socket
+    // Only run when socket is ready
+    if (!socketReady || !sidebarSocketRef.current || !userId) {
+      console.log('⏸️ SIDEBAR: Not setting up sidebar socket - missing requirements', {
+        socketReady,
+        hasSocket: !!sidebarSocketRef.current,
+        hasUserId: !!userId
+      });
       return;
     }
 
-// Setting up sidebar socket
+    const socket = sidebarSocketRef.current;
+    console.log('🔍 SIDEBAR: Setting up socket event listeners:', {
+      userId: !!userId,
+      socket: !!socket,
+      userRoomsCount: userRooms?.length || 0
+    });
+
+    // Setting up sidebar socket
     if (userRooms && userRooms.length > 0) {
-// User rooms loaded
+      // User rooms loaded
     } else {
-// No user rooms found
+      // No user rooms found
     }
 
     // Reset seen threads when rooms change
     seenThreadsRef.current.clear();
 
-    // Join user's personal channel for sidebar updates
-    socket.emit('join-user-channel');
+    // CRITICAL: No need to join channels - leverage existing room socket connections
+    // The room socket is already connected and receiving events
+    console.log('✅ SIDEBAR: Leveraging existing room socket connections');
 
     // Set up event listeners (matching server-side event names)
-// Setting up event listeners
-    
-    // Add connection verification
-    socket.on('connect', () => {
-// Socket connected
-      socket.emit('join-user-channel'); // Re-join on reconnect
-    });
-    socket.on('room-message-created', (data) => {
-// Received room-message-created event
-      handleNewRoomMessage(data);
-    });
-    socket.on('chat-message-created', (data) => {
-// Received chat-message-created event
-      handleNewChatMessage(data);
-    });
-    socket.on('sidebar-refresh-requested', (data) => {
-// Received sidebar-refresh-requested event
-      handleSidebarRefreshRequested();
-    });
-    socket.on('thread-created', (data) => {
-// Received thread-created event
-      
+    console.log('🎧 Setting up sidebar socket event listeners on global socket');
+
+    // Define handlers that can be properly cleaned up
+    const handleThreadCreated = (data: any) => {
+      console.log('🔥 SIDEBAR: Received thread-created event:', data);
+
       // CRITICAL: Verify room isolation - only process events from rooms the user has access to
       if (!data.shareCode) {
-console.warn(' SIDEBAR: thread-created event missing shareCode, ignoring for security');
+        console.warn('⚠️ SIDEBAR: thread-created event missing shareCode, ignoring for security');
         return;
       }
 
       const userHasAccess = userRooms.some(room => room.shareCode === data.shareCode);
       if (!userHasAccess) {
-console.warn(' SIDEBAR: User does not have access to room:', data.shareCode, 'Ignoring thread-created event for security');
+        console.warn('⚠️ SIDEBAR: User does not have access to room:', data.shareCode, 'Ignoring thread-created event for security');
         return;
       }
-      
-// Thread-created event verified
-      
+
+      console.log('✅ SIDEBAR: Thread-created event verified for room:', data.shareCode);
+
+      // Mark thread as seen to prevent duplicate processing
+      seenThreadsRef.current.add(data.threadId);
+
       // Force immediate sidebar refresh for new threads
-// Refreshing sidebar data
+      console.log('🔄 SIDEBAR: Refreshing sidebar data for new thread');
       mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
       mutate('chatPreviews');
       mutate('roomChats'); // Also refresh room chat data
-      
+
       // Dispatch custom event to trigger room chat data refresh
-      window.dispatchEvent(new CustomEvent('roomThreadCreated', { 
-        detail: data 
+      window.dispatchEvent(new CustomEvent('roomThreadCreated', {
+        detail: data
       }));
-      
+
       if (onThreadCreated) {
         onThreadCreated(data);
       }
-    });
+    };
 
+    const handleRoomMessageCreated = (data: any) => {
+      console.log('📨 SIDEBAR: Received room-message-created event:', data);
+      handleNewRoomMessage(data);
+    };
 
+    const handleChatMessageCreated = (data: any) => {
+      // Received chat-message-created event
+      handleNewChatMessage(data);
+    };
+
+    const handleSidebarRefreshRequestedEvent = (data: any) => {
+      // Received sidebar-refresh-requested event
+      handleSidebarRefreshRequested();
+    };
+
+    // No need to join channels - the room socket already handles this
+    // We just need to listen for the thread-created events
+    socket.on('room-message-created', handleRoomMessageCreated);
+    socket.on('chat-message-created', handleChatMessageCreated);
+    socket.on('sidebar-refresh-requested', handleSidebarRefreshRequestedEvent);
+    socket.on('thread-created', handleThreadCreated);
 
     // FIXED: Do NOT auto-join all user rooms - this was causing massive performance issues
     // Users should only join rooms when they explicitly navigate to them
     // The sidebar only needs the personal notification channel for updates
-// Setting up notification channels
+    // Setting up notification channels
 
     // CRITICAL: Also join user's personal channel for direct notifications
+    // The room socket is authenticated with displayName, so we need to use the same identifier
+    // Get the displayName from URL params if available, otherwise use userId
+    const urlParams = new URLSearchParams(window.location.search);
+    const displayName = urlParams.get('displayName');
+    const socketUserId = displayName || userId;
+    
+    console.log('🔗 SIDEBAR: Joining user channel for socketUserId:', socketUserId, { displayName, userId });
     socket.emit('join-user-channel');
-    
+
     // Test socket connection with a simple ping
-// Testing socket connection
+    console.log('🏓 Testing socket connection');
     socket.emit('ping', { message: 'sidebar-socket-test', timestamp: Date.now() });
-    
+
     // Listen for pong response
     const handlePong = (data: any) => {
-// Received pong response
+      console.log('🏓 Received pong response:', data);
     };
     socket.on('pong', handlePong);
+
+    // Listen for user channel join confirmation
+    const handleUserChannelJoined = (data: any) => {
+      console.log('✅ SIDEBAR: User channel joined successfully:', data);
+      console.log('🔍 SIDEBAR: Socket userId on server:', data.userId);
+      console.log('🔍 SIDEBAR: Expected userId for events:', userId);
+    };
+    socket.on('user-channel-joined', handleUserChannelJoined);
+
+    // Room status logging
+    if (userRooms && userRooms.length > 0) {
+      const activeRooms = userRooms.filter(room => !isRoomExpired(room));
+      const expiredRooms = userRooms.filter(room => isRoomExpired(room));
+      console.log(`📊 SIDEBAR: Monitoring ${activeRooms.length} active rooms, ${expiredRooms.length} expired`);
+    }
 
     // Pre-populate seen threads with existing threads to avoid false positives
     // CRITICAL: Only load threads from rooms the user has access to
     const populateSeenThreads = async () => {
       try {
         if (supabase && userRooms && userRooms.length > 0) {
-// Pre-populating seen threads
-          
+          // Pre-populating seen threads
+
           const { data: rooms } = await supabase
             .from('rooms')
             .select('id, share_code')
@@ -278,8 +396,8 @@ console.warn(' SIDEBAR: User does not have access to room:', data.shareCode, 'Ig
 
           if (rooms && rooms.length > 0) {
             const roomIds = rooms.map(r => r.id);
-// Found room IDs for authorized rooms
-            
+            // Found room IDs for authorized rooms
+
             const { data: existingMessages } = await supabase
               .from('room_messages')
               .select('thread_id, room_id')
@@ -295,10 +413,10 @@ console.warn(' SIDEBAR: User does not have access to room:', data.shareCode, 'Ig
                     seenThreadsRef.current.add(msg.thread_id);
                   }
                 } else {
-console.warn(' SIDEBAR: Skipping thread from unauthorized room:', msg.room_id);
+                  console.warn(' SIDEBAR: Skipping thread from unauthorized room:', msg.room_id);
                 }
               });
-// Pre-populated existing threads
+              // Pre-populated existing threads
             }
           }
         }
@@ -312,17 +430,17 @@ console.warn(' SIDEBAR: Skipping thread from unauthorized room:', msg.room_id);
     // Listen for manual thread refresh events
     const handleForceThreadRefresh = (event: CustomEvent) => {
       const threadData = event.detail;
-// Force thread refresh triggered
-      
+      // Force thread refresh triggered
+
       // Mark thread as seen and trigger refresh
       if (threadData.threadId) {
         seenThreadsRef.current.add(threadData.threadId);
       }
-      
+
       // Force sidebar refresh
       mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
       mutate('chatPreviews');
-      
+
       // Call custom handler
       if (onThreadCreated) {
         onThreadCreated(threadData);
@@ -333,27 +451,47 @@ console.warn(' SIDEBAR: Skipping thread from unauthorized room:', msg.room_id);
 
     return () => {
       console.log('🧹 SIDEBAR: Cleaning up sidebar socket listeners');
-      socket.off('connect');
-      socket.off('room-message-created', handleNewRoomMessage);
-      socket.off('chat-message-created', handleNewChatMessage);
-      socket.off('sidebar-refresh-requested', handleSidebarRefreshRequested);
-      socket.off('thread-created');
-      socket.off('pong', handlePong); // Clean up pong listener with specific handler
-      
-      // FIXED: No room cleanup needed since we don't auto-join rooms anymore
-      
-      // Leave user channel
-      socket.emit('leave-user-channel');
-      
+      if (socket) {
+        socket.off('room-message-created', handleRoomMessageCreated);
+        socket.off('chat-message-created', handleChatMessageCreated);
+        socket.off('sidebar-refresh-requested', handleSidebarRefreshRequestedEvent);
+        socket.off('thread-created', handleThreadCreated);
+        socket.off('pong', handlePong);
+        socket.off('user-channel-joined', handleUserChannelJoined);
+      }
+
       // Clean up custom event listener
       window.removeEventListener('forceThreadRefresh', handleForceThreadRefresh as EventListener);
-      
+
       seenThreadsRef.current.clear();
     };
-  }, [userId, userRooms, socket, isConnected, handleNewRoomMessage, handleNewChatMessage, handleSidebarRefreshRequested]);
+  }, [socketReady, userId, userRooms, handleNewRoomMessage, handleNewChatMessage, handleSidebarRefreshRequested]);
+
+  // Fallback polling mechanism when socket is not available
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+
+    if (!socketReady && userRooms && userRooms.length > 0) {
+      console.log('🔄 SIDEBAR: Socket not ready, setting up fallback polling');
+
+      const pollInterval = setInterval(() => {
+        console.log('📊 SIDEBAR: Polling for updates (no socket)');
+        // Trigger SWR revalidation to check for new threads
+        mutate((key) => Array.isArray(key) && key[0] === 'chatPreviews');
+        mutate('chatPreviews');
+        mutate('roomChats');
+      }, 15000); // Poll every 15 seconds when no socket
+
+      return () => {
+        console.log('🛑 SIDEBAR: Clearing fallback polling');
+        clearInterval(pollInterval);
+      };
+    }
+  }, [socketReady, userRooms]);
 
   return {
     triggerSidebarRefresh,
-    isConnected
+    isConnected: socketReady && sidebarSocketRef.current && sidebarSocketRef.current.connected
   };
 }

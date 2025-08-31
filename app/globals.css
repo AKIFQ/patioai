@@ -177,12 +177,13 @@
 
 /* Additional mobile-specific constraints to prevent viewport overflow */
 @media (max-width: 768px) {
+
   .message-input-container,
   .message-input-container * {
     max-width: 100vw !important;
     box-sizing: border-box !important;
   }
-  
+
   .message-input-container textarea {
     width: 100% !important;
     max-width: 100% !important;
@@ -200,7 +201,7 @@
     word-break: break-all !important;
     hyphens: auto !important;
   }
-  
+
   [data-message-content] * {
     max-width: 100% !important;
     overflow-wrap: anywhere !important;

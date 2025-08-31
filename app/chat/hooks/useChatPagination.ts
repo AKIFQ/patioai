@@ -52,18 +52,41 @@ export function useChatPagination({
     }
   }, [initialMessages, cursor, pageSize]);
 
-  // Deduplicate messages by ID to handle real-time updates
+  // Optimized deduplication with memoized comparison
   const deduplicatedMessages = useMemo(() => {
-    const messageMap = new Map<string, Message>();
+    if (messages.length === 0) return [];
     
-    // Add all messages to map, with later ones overwriting earlier duplicates
-    [...messages].forEach(msg => {
+    // Fast path: if messages are already unique by ID (common case), skip expensive operations
+    const uniqueIds = new Set<string>();
+    let hasDuplicates = false;
+    
+    for (const msg of messages) {
+      if (msg.id) {
+        if (uniqueIds.has(msg.id)) {
+          hasDuplicates = true;
+          break;
+        }
+        uniqueIds.add(msg.id);
+      }
+    }
+    
+    if (!hasDuplicates) {
+      // Already unique, just sort if needed
+      return messages.slice().sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+    }
+    
+    // Slow path: deduplicate and sort
+    const messageMap = new Map<string, Message>();
+    messages.forEach(msg => {
       if (msg.id) {
         messageMap.set(msg.id, msg);
       }
     });
     
-    // Return as array sorted by creation date
     return Array.from(messageMap.values()).sort((a, b) => {
       const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -88,17 +111,27 @@ export function useChatPagination({
       );
 
       if (result.messages.length > 0) {
-        // Prepend older messages to the beginning of the list
+        // Optimized prepend with minimal operations
         setMessages(prevMessages => {
-          const combined = [...result.messages, ...prevMessages];
-          // Deduplicate in case of overlap
-          const messageMap = new Map<string, Message>();
-          combined.forEach(msg => {
-            if (msg.id) {
-              messageMap.set(msg.id, msg);
-            }
-          });
-          return Array.from(messageMap.values()).sort((a, b) => {
+          if (prevMessages.length === 0) {
+            return result.messages;
+          }
+          
+          // Create Set of existing message IDs for O(1) lookup
+          const existingIds = new Set(prevMessages.map(m => m.id).filter(Boolean));
+          
+          // Filter out duplicates from new messages
+          const newUniqueMessages = result.messages.filter(msg => 
+            msg.id && !existingIds.has(msg.id)
+          );
+          
+          if (newUniqueMessages.length === 0) {
+            return prevMessages; // No new messages to add
+          }
+          
+          // Prepend and sort only if needed
+          const combined = [...newUniqueMessages, ...prevMessages];
+          return combined.sort((a, b) => {
             const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             return timeA - timeB;
@@ -156,34 +189,45 @@ export function useChatPagination({
     }
   }, [isRoomChat, shareCode, chatSessionId, pageSize]);
 
-  // Update messages when initialMessages change (for real-time updates)
+  // Optimized real-time message updates
   useEffect(() => {
-    if (initialMessages.length > 0) {
-      setMessages(prevMessages => {
-        // Merge with existing messages, with initial messages taking precedence for updates
-        const messageMap = new Map<string, Message>();
+    if (initialMessages.length === 0) return;
+    
+    setMessages(prevMessages => {
+      if (prevMessages.length === 0) {
+        return initialMessages; // First load, no merging needed
+      }
+      
+      // Check if we need to merge at all
+      const prevIds = new Set(prevMessages.map(m => m.id).filter(Boolean));
+      const hasNewMessages = initialMessages.some(msg => msg.id && !prevIds.has(msg.id));
+      
+      if (!hasNewMessages) {
+        // Only updates to existing messages, merge efficiently
+        const updatedMessages = [...prevMessages];
+        const updateMap = new Map(initialMessages.map(msg => [msg.id, msg]));
         
-        // Add existing messages first
-        prevMessages.forEach(msg => {
-          if (msg.id) {
-            messageMap.set(msg.id, msg);
+        for (let i = 0; i < updatedMessages.length; i++) {
+          const existing = updatedMessages[i];
+          const update = updateMap.get(existing.id);
+          if (update) {
+            updatedMessages[i] = update;
           }
-        });
-        
-        // Add/update with initial messages
-        initialMessages.forEach(msg => {
-          if (msg.id) {
-            messageMap.set(msg.id, msg);
-          }
-        });
-        
-        return Array.from(messageMap.values()).sort((a, b) => {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeA - timeB;
-        });
+        }
+        return updatedMessages;
+      }
+      
+      // Full merge needed for new messages
+      const messageMap = new Map<string, Message>();
+      prevMessages.forEach(msg => msg.id && messageMap.set(msg.id, msg));
+      initialMessages.forEach(msg => msg.id && messageMap.set(msg.id, msg));
+      
+      return Array.from(messageMap.values()).sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
       });
-    }
+    });
   }, [initialMessages]);
 
   return {

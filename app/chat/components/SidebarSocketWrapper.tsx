@@ -15,7 +15,7 @@ const fetchRooms = async () => {
 
 interface SidebarSocketWrapperProps {
   userId: string;
-  userRooms: { shareCode: string; name: string }[];
+  userRooms: { shareCode: string; name: string; expiresAt?: string }[];
   children: React.ReactNode;
 }
 
@@ -33,24 +33,43 @@ export default function SidebarSocketWrapper({ userId, userRooms, children }: Si
     }
   );
 
-  // CRITICAL FIX: Use the same socket token format as room sockets
-  // The socket authentication expects a sessionId format like "auth_${userId}"
-  // For anonymous users, we don't initialize socket connections since they don't have persistent sessions
-  const socketToken = userId ? `auth_${userId}` : '';
-// Using socket token
+  // No need for separate socket token - using global socket from room connections
+  console.log('🔗 SidebarSocketWrapper: Using global socket for sidebar updates');
 
-  // Initialize sidebar Socket.IO updates (only for authenticated users)
-  // Use the most current room data from SWR instead of static server-side data
-  const { triggerSidebarRefresh, isConnected } = useSidebarSocket({
-    userId: socketToken, // Use the formatted token instead of raw userId
-    userRooms: socketToken ? (currentRooms || []).map(room => ({
+  // Filter out expired rooms before passing to sidebar socket
+  const activeRooms = (currentRooms || [])
+    .filter(room => {
+      if (!room.expiresAt) return true; // If no expiration date, assume active
+      const now = new Date();
+      const expiresAt = new Date(room.expiresAt);
+      const isActive = now <= expiresAt;
+      if (!isActive) {
+        console.log(`⏰ Filtering out expired room: ${room.shareCode} (expired ${expiresAt.toISOString()})`);
+      }
+      return isActive;
+    })
+    .map(room => ({
       shareCode: room.shareCode || room.share_code,
-      name: room.name
-    })) : [], // Use SWR data which stays updated
+      name: room.name,
+      expiresAt: room.expiresAt
+    }));
+
+  // Initialize sidebar Socket.IO updates using global socket (no separate connection needed)
+  const { triggerSidebarRefresh, isConnected } = useSidebarSocket({
+    userId: userId, // Use original userId, not socket token
+    userRooms: activeRooms, // Only pass active (non-expired) rooms
     onThreadCreated: (threadData) => {
-// New thread created in sidebar
+      console.log('🎉 New thread created in sidebar:', threadData);
       // Could show a toast notification here if desired
     }
+  });
+
+  console.log('🔗 SidebarSocketWrapper status:', { 
+    isConnected, 
+    totalRooms: currentRooms?.length || 0,
+    activeRooms: activeRooms.length,
+    expiredRooms: (currentRooms?.length || 0) - activeRooms.length,
+    globalSocketAvailable: typeof window !== 'undefined' && !!(window as any).__patio_socket
   });
 
 // Socket connection status updated

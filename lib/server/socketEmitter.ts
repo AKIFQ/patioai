@@ -127,32 +127,32 @@ console.warn('Socket.IO not initialized, cannot emit API event');
 export function emitUserEvent(userId: string, eventType: string, data: any) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-console.warn('Socket.IO not initialized, cannot emit user event');
+    console.warn('Socket.IO not initialized, cannot emit user event');
     return;
   }
 
   // Get user channel info to count connected sockets
-const userSockets = socketIO.sockets.adapter.rooms.get(`user:${userId}`);
+  const userSockets = socketIO.sockets.adapter.rooms.get(`user:${userId}`);
   const connectedSockets = userSockets ? userSockets.size : 0;
   
-  // Debug logging removed
+  console.log(`👤 Emitting ${eventType} to user:${userId} (${connectedSockets} connected sockets)`);
 
-emitAPIEvent(eventType, data, `user:${userId}`);
+  emitAPIEvent(eventType, data, `user:${userId}`);
 }
 
 // Helper function to emit room-specific events
 export function emitRoomEvent(shareCode: string, eventType: string, data: any) {
   const socketIO = getSocketIOInstance();
   if (!socketIO) {
-console.warn('Socket.IO not initialized, cannot emit room event');
+    console.warn('Socket.IO not initialized, cannot emit room event');
     return;
   }
 
   // Get room info to count connected users
-const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${shareCode}`);
+  const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${shareCode}`);
   const connectedUsers = roomSockets ? roomSockets.size : 0;
   
-  // Debug logging removed
+  console.log(`📡 Emitting ${eventType} to room:${shareCode} (${connectedUsers} connected users)`);
 
-emitAPIEvent(eventType, data, `room:${shareCode}`);
+  emitAPIEvent(eventType, data, `room:${shareCode}`);
 }
