@@ -95,12 +95,16 @@
   border: 2px solid hsl(var(--border) / 0.8);
   box-shadow: none;
 
-  /* FOREST-400 background for input container */
-  background: #3A584E;
+  /* Match production - subtle brand colors with transparency */
+  background: linear-gradient(to bottom right,
+      hsl(var(--cream-300) / 0.7) 0%,
+      hsl(var(--cream-400) / 0.8) 100%);
 
-  /* Dark mode - FOREST-400 background */
+  /* Dark mode - match production subtle elevation */
   .dark & {
-    background: #3A584E;
+    background: linear-gradient(to bottom right,
+        hsl(var(--elevation-1) / 0.6) 0%,
+        hsl(var(--elevation-2) / 0.7) 100%);
     border-color: hsl(var(--border) / 0.9);
   }
 

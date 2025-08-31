@@ -69,8 +69,7 @@
   overflow: visible;
 }
 
-/* Import mobile chat styles */
-@import url('./chat/styles/mobile-chat.css');
+/* Mobile chat styles are now imported directly in layout.tsx */
 
 /* CSS Custom Properties for Mobile Chat */
 :root {

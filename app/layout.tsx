@@ -8,6 +8,7 @@ import { Toaster as ToastToaster } from '@/components/ui/toaster';
 import { MobileSidebarProvider } from '@/app/chat/components/chat_history/ChatHistorySidebar';
 
 import './globals.css';
+import './chat/styles/mobile-chat.css';
 
 const inter = Inter({
   subsets: ['latin'],
