@@ -171,7 +171,7 @@ After a successful checkout, verify that the user's tier is updated in the datab
 4. ✅ User can access Basic tier features
 5. ✅ User upgrades to Premium tier
 6. ✅ User can access Premium tier features
-
+ssr
 ### Error Scenarios
 1. ❌ Payment fails during checkout
 2. ❌ Webhook signature validation fails
