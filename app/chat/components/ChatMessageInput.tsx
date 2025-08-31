@@ -391,6 +391,12 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     const el = textareaRef.current;
     if (!el) return;
     
+    // If input is empty, reset to normal height immediately
+    if (!input.trim()) {
+      el.style.height = '44px';
+      return;
+    }
+    
     // Reset height to get accurate scrollHeight
     el.style.height = '44px';
     
@@ -439,10 +445,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative w-full max-w-full mb-0 sm:mb-2 rounded-2xl sm:rounded-xl overflow-hidden border-0 
-                   shadow-elevation-2 hover:shadow-elevation-3 focus-within:shadow-elevation-4
-                   flex flex-col transition-smooth message-input-container
-                   bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] backdrop-blur-md"
+        className="mobile-input-container sm:relative sm:w-full sm:max-w-full sm:mb-2 sm:rounded-xl sm:overflow-hidden sm:border-0 
+                   sm:shadow-elevation-2 sm:hover:shadow-elevation-3 sm:focus-within:shadow-elevation-4
+                   sm:flex sm:flex-col sm:transition-smooth message-input-container
+                   sm:bg-gradient-to-br sm:from-[var(--cream-300)] sm:to-[var(--cream-400)] sm:dark:from-[var(--elevation-1)] sm:dark:to-[var(--elevation-2)] sm:backdrop-blur-md"
         style={{ maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}
       >
         <input
@@ -460,17 +466,17 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
           disabled={isLoading}
-          className="w-full pt-4 pb-3 sm:pt-4 sm:pb-2 px-4 sm:px-3 min-h-0 resize-none 
-                     border-0 shadow-none focus:ring-0 focus-visible:ring-0 focus:outline-none 
-                     bg-transparent text-base sm:text-body placeholder:text-muted-foreground/60
-                     placeholder:font-medium leading-relaxed
-                     max-h-[20vh] sm:max-h-[240px] break-words overflow-wrap-anywhere word-break-break-word
-                     min-w-0 max-w-full overflow-y-auto whitespace-pre-wrap overflow-x-hidden
-                     transition-all duration-200 ease-in-out"
+          className="mobile-input-textarea sm:w-full sm:pt-4 sm:pb-3 sm:px-4 sm:min-h-0 sm:resize-none 
+                     sm:border-0 sm:shadow-none sm:focus:ring-0 sm:focus-visible:ring-0 sm:focus:outline-none 
+                     sm:bg-transparent sm:text-base placeholder:text-muted-foreground/60
+                     sm:placeholder:font-medium sm:leading-relaxed
+                     sm:max-h-[240px] sm:break-words sm:overflow-wrap-anywhere sm:word-break-break-word
+                     sm:min-w-0 sm:max-w-full sm:overflow-y-auto sm:whitespace-pre-wrap sm:overflow-x-hidden
+                     sm:transition-all sm:duration-200 sm:ease-in-out"
           rows={1}
           style={{
             minHeight: '44px',
-            maxHeight: 'min(20vh, 240px)', // Limit to 20% of viewport height or 10 lines
+            maxHeight: 'min(30vh, 200px)', // Better mobile limits
             height: 'auto',
             maxWidth: '100%',
             width: '100%',
@@ -479,8 +485,8 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
         />
 
         {/* Bottom controls row with buttons */}
-        <div className="flex px-4 sm:px-3 pb-3 pt-2 sm:pb-2 sm:pt-1.5 items-center gap-2 sm:gap-2 justify-between min-w-0 max-w-full">
-          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-1 overflow-hidden">
+        <div className="mobile-toolbar-controls sm:flex sm:px-3 sm:pb-2 sm:pt-1.5 sm:items-center sm:gap-2 sm:justify-between sm:min-w-0 sm:max-w-full">
+          <div className="mobile-toolbar-left sm:flex sm:items-center sm:gap-1.5 sm:min-w-0 sm:flex-1 sm:overflow-hidden">
             {/* Plus menu with Attach and Web search toggle */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -488,10 +494,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-9 w-9 sm:h-8 sm:w-8 cursor-pointer rounded-full flex items-center justify-center 
-                             bg-[var(--elevation-2)] hover:bg-[var(--elevation-3)] 
-                             transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
-                             hover:scale-105 active:scale-95 flex-shrink-0"
+                  className="mobile-toolbar-button sm:h-8 sm:w-8 sm:cursor-pointer sm:rounded-full sm:flex sm:items-center sm:justify-center 
+                             sm:bg-[var(--elevation-2)] sm:hover:bg-[var(--elevation-3)] 
+                             sm:transition-smooth sm:border-0 sm:shadow-elevation-1 sm:hover:shadow-elevation-2
+                             sm:hover:scale-105 sm:active:scale-95 sm:flex-shrink-0"
                   disabled={isLoading}
                   aria-label="More tools"
                 >
@@ -594,7 +600,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-1.5 flex-shrink-0">
+          <div className="mobile-toolbar-right sm:flex sm:items-center sm:gap-1.5 sm:flex-shrink-0">
             {/* Prompt button or Stop button */}
             {!isLoading && (
               <>
@@ -604,10 +610,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     size="icon"
                     variant="ghost"
                     onClick={onStopAI}
-                    className="h-9 w-9 sm:h-8 sm:w-8 rounded-full flex items-center justify-center 
-                               bg-destructive/10 hover:bg-destructive/20 
-                               transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
-                               hover:scale-105 active:scale-95 flex-shrink-0 group"
+                    className="mobile-toolbar-button bg-destructive/10 hover:bg-destructive/20 group
+                               sm:h-8 sm:w-8 sm:rounded-full sm:flex sm:items-center sm:justify-center 
+                               sm:transition-smooth sm:border-0 sm:shadow-elevation-1 sm:hover:shadow-elevation-2
+                               sm:hover:scale-105 sm:active:scale-95 sm:flex-shrink-0"
                     title="Stop AI response"
                   >
                     <Square className="text-destructive w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-105 transition-transform" />
@@ -619,11 +625,12 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                     variant="ghost"
                     onClick={handlePromptSubmit}
                     disabled={!input.trim() && attachedFiles.length === 0}
-                    className="h-9 w-9 sm:h-8 sm:w-8 rounded-full flex items-center justify-center 
-                               bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40
-                               hover:from-amber-200 hover:to-orange-200 dark:hover:from-amber-800/50 dark:hover:to-orange-800/50
-                               transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
-                               hover:scale-105 active:scale-95 flex-shrink-0 group disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="mobile-toolbar-button mobile-ai-button group disabled:opacity-50 disabled:cursor-not-allowed
+                               sm:h-8 sm:w-8 sm:rounded-full sm:flex sm:items-center sm:justify-center 
+                               sm:bg-gradient-to-br sm:from-amber-100 sm:to-orange-100 sm:dark:from-amber-900/40 sm:dark:to-orange-900/40
+                               sm:hover:from-amber-200 sm:hover:to-orange-200 sm:dark:hover:from-amber-800/50 sm:dark:hover:to-orange-800/50
+                               sm:transition-smooth sm:border-0 sm:shadow-elevation-1 sm:hover:shadow-elevation-2
+                               sm:hover:scale-105 sm:active:scale-95 sm:flex-shrink-0"
                     title="Send with AI response (Shift + Enter)"
                   >
                     <Zap className="text-amber-600 dark:text-amber-400 w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-105 transition-transform" />
@@ -647,15 +654,16 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   size="icon"
                   variant="ghost"
                   disabled={!input.trim() && attachedFiles.length === 0}
-                  className="h-9 w-9 sm:h-8 sm:w-8 rounded-full flex items-center justify-center 
-                             bg-gradient-to-br from-primary to-primary/90
-                             hover:from-primary/90 hover:to-primary/80
-                             transition-smooth border-0 shadow-elevation-1 hover:shadow-elevation-2
-                             hover:scale-105 active:scale-95 flex-shrink-0 group 
-                             disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="mobile-toolbar-button mobile-send-button group 
+                             disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
+                             sm:h-8 sm:w-8 sm:rounded-full sm:flex sm:items-center sm:justify-center 
+                             sm:bg-gradient-to-br sm:from-amber-400 sm:to-orange-500
+                             sm:hover:from-amber-500 sm:hover:to-orange-600
+                             sm:transition-smooth sm:border-0 sm:shadow-elevation-1 sm:hover:shadow-elevation-2
+                             sm:hover:scale-105 sm:active:scale-95 sm:flex-shrink-0"
                   title="Send (Enter). Long-press on mobile to Ask AI (Shift+Enter)"
                 >
-                  <Send className="text-primary-foreground w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-105 transition-transform" />
+                  <Send className="text-white w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-105 transition-transform" />
                 </Button>
               )
             )}

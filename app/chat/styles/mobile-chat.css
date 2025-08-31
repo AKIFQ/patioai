@@ -1,0 +1,385 @@
+/* 
+ * MOBILE CHAT UI - INDUSTRY STANDARD IMPLEMENTATION
+ * Optimized for all mobile devices, browsers, and keyboard handling
+ */
+
+/* ===== CORE MOBILE CONTAINER ===== */
+.mobile-chat-container {
+  /* Use the most reliable viewport units for mobile */
+  height: 100vh;
+  height: 100dvh;
+  /* Dynamic viewport height - accounts for browser UI */
+  min-height: -webkit-fill-available;
+  /* iOS Safari fallback */
+
+  /* Ensure proper flex behavior */
+  display: flex;
+  flex-direction: column;
+
+  /* Prevent any overflow issues */
+  overflow: hidden;
+  position: relative;
+
+  /* Hardware acceleration for smooth performance */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+
+  /* Ensure proper touch handling */
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ===== MESSAGES AREA ===== */
+.mobile-messages-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* Smooth scrolling */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+  /* Proper padding for safe areas */
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+
+  /* Ensure messages don't get cut off */
+  padding-bottom: 1rem;
+}
+
+/* ===== MOBILE INPUT TOOLBAR ===== */
+.mobile-input-toolbar {
+  /* CRITICAL: Proper positioning for keyboard */
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+
+  /* Ensure it sticks to keyboard on all devices */
+  margin: 0;
+
+  /* NO SHADOW - seamless connection to chat area */
+  border: none !important;
+  box-shadow: none !important;
+
+  /* Transparent background - let input container handle styling */
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+
+  /* Safe area padding - CRITICAL for notched devices */
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  padding-top: 0.5rem;
+
+  /* Hardware acceleration */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* ===== INPUT CONTAINER ===== */
+.mobile-input-container {
+  /* Sleeker padding - reduced for cleaner look */
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+
+  /* Proper border radius for mobile */
+  border-radius: 1.25rem;
+
+  /* NO SHADOW - clean appearance */
+  border: 2px solid hsl(var(--border) / 0.8);
+  box-shadow: none;
+
+  /* FOREST-400 background for input container */
+  background: #3A584E;
+
+  /* Dark mode - FOREST-400 background */
+  .dark & {
+    background: #3A584E;
+    border-color: hsl(var(--border) / 0.9);
+  }
+
+  /* Enhanced backdrop blur for modern effect */
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+
+  /* Smooth transitions */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Ensure buttons stay within rounded corners */
+  overflow: hidden;
+}
+
+.mobile-input-container:focus-within {
+  /* Focus state with NO SHADOW */
+  border-color: hsl(var(--primary) / 0.8);
+  box-shadow: none;
+
+  transform: translateY(-1px);
+}
+
+/* ===== TEXTAREA STYLING ===== */
+.mobile-input-textarea {
+  /* Remove all default styling */
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+
+  /* Proper sizing */
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 44px !important;
+  /* iOS minimum touch target */
+  max-height: min(30vh, 200px) !important;
+  /* Reasonable max height */
+
+  /* Typography */
+  font-size: 16px !important;
+  /* Prevents zoom on iOS */
+  line-height: 1.5 !important;
+  font-weight: 400;
+
+  /* Padding - minimal and consistent */
+  padding: 0.875rem 1rem !important;
+
+  /* Text handling */
+  resize: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+
+  /* Smooth scrolling */
+  -webkit-overflow-scrolling: touch;
+
+  /* Remove iOS styling */
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+.mobile-input-textarea::placeholder {
+  color: hsl(var(--muted-foreground) / 0.6);
+  font-weight: 400;
+}
+
+/* ===== TOOLBAR CONTROLS ===== */
+.mobile-toolbar-controls {
+  /* Sleeker padding - minimal for cleaner look */
+  padding: 0.125rem 0.25rem 0.25rem 0.25rem;
+
+  /* Flex layout */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem;
+
+  /* Ensure no overflow */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mobile-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ===== BUTTON STYLING ===== */
+.mobile-toolbar-button {
+  /* Consistent sizing */
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+
+  /* Remove default padding */
+  padding: 0 !important;
+
+  /* Perfect circle */
+  border-radius: 50% !important;
+
+  /* Use brand colors */
+  border: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--elevation-2)) !important;
+  box-shadow:
+    0 2px 8px hsl(var(--shadow) / 0.1),
+    0 1px 2px hsl(var(--shadow) / 0.05) !important;
+
+  /* Dark mode */
+  .dark & {
+    background: hsl(var(--elevation-3)) !important;
+  }
+
+  /* Smooth transitions */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+
+  /* Center content */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.mobile-toolbar-button:hover {
+  background: hsl(var(--elevation-3)) !important;
+  transform: translateY(-1px) scale(1.05);
+  box-shadow:
+    0 4px 12px hsl(var(--shadow) / 0.15),
+    0 2px 4px hsl(var(--shadow) / 0.1) !important;
+
+  .dark & {
+    background: hsl(var(--elevation-4)) !important;
+  }
+}
+
+.mobile-toolbar-button:hover {
+  transform: translateY(-1px) scale(1.05);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+}
+
+.mobile-toolbar-button:active {
+  transform: translateY(0) scale(0.95);
+}
+
+/* ===== SEND BUTTON SPECIAL STYLING ===== */
+.mobile-send-button {
+  background: linear-gradient(135deg,
+      hsl(43 96% 56%) 0%,
+      hsl(38 92% 50%) 100%) !important;
+  border-color: hsl(43 96% 56% / 0.3) !important;
+  color: #000000 !important;
+}
+
+.mobile-send-button:hover {
+  background: linear-gradient(135deg,
+      hsl(43 96% 56% / 0.9) 0%,
+      hsl(38 92% 50% / 0.8) 100%) !important;
+}
+
+/* Override desktop styles for mobile */
+@media (max-width: 768px) {
+  .mobile-send-button {
+    background: linear-gradient(135deg,
+        hsl(43 96% 56%) 0%,
+        hsl(38 92% 50%) 100%) !important;
+    border-color: hsl(43 96% 56% / 0.3) !important;
+    color: #000000 !important;
+  }
+
+  .mobile-send-button:hover {
+    background: linear-gradient(135deg,
+        hsl(43 96% 56% / 0.9) 0%,
+        hsl(38 92% 50% / 0.8) 100%) !important;
+  }
+
+  .mobile-send-button .text-primary-foreground {
+    color: #000000 !important;
+  }
+
+  /* Override the Send icon specifically */
+  .mobile-send-button svg {
+    color: #000000 !important;
+  }
+}
+
+/* ===== AI BUTTON STYLING ===== */
+.mobile-ai-button {
+  /* Use brand amber/orange colors */
+  background: linear-gradient(135deg,
+      hsl(43 96% 56%) 0%,
+      hsl(38 92% 50%) 100%) !important;
+  border-color: hsl(43 96% 56% / 0.3) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* ===== KEYBOARD DETECTION & HANDLING ===== */
+@supports (height: 100dvh) {
+  .mobile-chat-container {
+    height: 100dvh;
+  }
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .mobile-chat-container {
+    min-height: -webkit-fill-available;
+  }
+
+  .mobile-input-toolbar {
+    /* Ensure toolbar sticks to keyboard on iOS */
+    position: -webkit-sticky;
+    position: sticky;
+  }
+}
+
+/* Android Chrome specific fixes */
+@media screen and (max-width: 768px) {
+  .mobile-input-toolbar {
+    /* Ensure proper positioning on Android */
+    position: sticky;
+    bottom: 0;
+  }
+}
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+@media (max-width: 480px) {
+  .mobile-toolbar-controls {
+    padding: 0.375rem 0.75rem 0.625rem 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .mobile-toolbar-button {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+
+  .mobile-input-textarea {
+    padding: 0.75rem 0.875rem !important;
+  }
+}
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+
+  .mobile-input-container,
+  .mobile-toolbar-button {
+    transition: none !important;
+  }
+}
+
+/* ===== HIGH CONTRAST MODE ===== */
+@media (prefers-contrast: high) {
+  .mobile-input-toolbar {
+    border-top: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .mobile-input-container {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .mobile-toolbar-button {
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+/* Dark mode is handled by CSS custom properties and .dark class */

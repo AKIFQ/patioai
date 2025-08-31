@@ -124,7 +124,7 @@ export async function checkRoomUsageLimit(
     // Calculate reset time based on period
     let resetTime: Date | undefined;
     const now = new Date();
-    
+
     switch (period) {
       case 'hour':
         resetTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0, 0, 0);
@@ -163,7 +163,7 @@ export async function getRoomUsageMultiple(
   checks: Array<{ resource: RoomResource; period: UsagePeriod }>
 ): Promise<Record<string, number>> {
   const results: Record<string, number> = {};
-  
+
   try {
     const promises = checks.map(async ({ resource, period }) => {
       const result = await getRoomUsage(roomId, resource, period);

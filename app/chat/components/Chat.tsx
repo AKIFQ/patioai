@@ -1198,7 +1198,7 @@ console.error('Error creating new chat:', error);
   }, [isMobile, openMobile, setOpenMobile]);
 
   return (
-    <div ref={touchAreaRef} className="flex h-full w-full flex-col relative mobile-chat-container">
+    <div ref={touchAreaRef} className="mobile-chat-container sm:flex sm:h-full sm:w-full sm:flex-col sm:relative">
       {/* Swipe overlay indicator (only during active swipe) */}
       {isSwipeActive && (
         <div
@@ -1480,7 +1480,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
         )}
       </div>
 
-      <div className="message-input-container w-full z-10 pb-2 sm:pb-3 px-3 sm:px-4 md:px-6 bg-gradient-to-t from-background via-background/95 to-transparent pb-safe flex-shrink-0">
+      <div className="mobile-input-toolbar sm:message-input-container sm:w-full sm:z-10 sm:pb-2 sm:px-3 md:px-4 sm:pb-safe sm:flex-shrink-0">
         {/* Typing indicator above message input */}
         {roomContext && (
           <TypingIndicator
