@@ -88,8 +88,6 @@ console.log(` [${messageId}] Message saved successfully:`, {
 
     // CRITICAL: Emit specific new thread event for sidebar refresh
     if (isFirstMessage && !isAiResponse) {
-      console.log(`🆕 NEW THREAD CREATED - emitting thread-created event for ${shareCode}`);
-      
       const threadEventData = {
         threadId,
         roomId,

@@ -335,7 +335,7 @@ export class SocketDatabaseService {
 
       return { success: true, cleanedCount: sessionIds.length };
     } catch (error) {
-      console.error('Error cleaning up abandoned sessions:', error);
+      // Silent fail - session cleanup is not critical
       return { success: false, error: 'Database error' };
     }
   }

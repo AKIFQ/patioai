@@ -153,13 +153,13 @@ console.error(`Error during disconnect cleanup for user ${socket.userId}:`, erro
       const result = await SocketDatabaseService.cleanupAbandonedSessions(userId);
       
       if (!result.success) {
-console.error(`Error cleaning up abandoned sessions for user ${userId}:`, result.error);
+        // Silent fail - session cleanup is not critical
         return;
       }
       
       // Debug logging removed
     } catch (error) {
-console.error(`Error cleaning up abandoned sessions for user ${userId}:`, error);
+      // Silent fail - session cleanup is not critical
     }
   }
 

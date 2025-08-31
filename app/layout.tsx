@@ -22,6 +22,14 @@ const jomolhari = Jomolhari({
   display: 'swap'
 });
 
+export const generateViewport = () => ({
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover', // For devices with notches
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://www.patioai.chat/'),
   title: {
@@ -33,13 +41,7 @@ export const metadata: Metadata = {
   authors: [{ name: 'PatioAI' }],
   creator: 'PatioAI',
   publisher: 'PatioAI',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover', // For devices with notches
-  },
+
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },

@@ -20,7 +20,6 @@ interface SidebarSocketWrapperProps {
 }
 
 export default function SidebarSocketWrapper({ userId, userRooms, children }: SidebarSocketWrapperProps) {
-// Initializing sidebar wrapper
 
   // Use SWR to get the most up-to-date room data, with server-side data as fallback
   const { data: currentRooms } = useSWR(
@@ -33,8 +32,7 @@ export default function SidebarSocketWrapper({ userId, userRooms, children }: Si
     }
   );
 
-  // No need for separate socket token - using global socket from room connections
-  console.log('🔗 SidebarSocketWrapper: Using global socket for sidebar updates');
+
 
   // Filter out expired rooms before passing to sidebar socket
   const activeRooms = (currentRooms || [])
@@ -42,11 +40,7 @@ export default function SidebarSocketWrapper({ userId, userRooms, children }: Si
       if (!room.expiresAt) return true; // If no expiration date, assume active
       const now = new Date();
       const expiresAt = new Date(room.expiresAt);
-      const isActive = now <= expiresAt;
-      if (!isActive) {
-        console.log(`⏰ Filtering out expired room: ${room.shareCode} (expired ${expiresAt.toISOString()})`);
-      }
-      return isActive;
+      return now <= expiresAt;
     })
     .map(room => ({
       shareCode: room.shareCode || room.share_code,
@@ -54,27 +48,19 @@ export default function SidebarSocketWrapper({ userId, userRooms, children }: Si
       expiresAt: room.expiresAt
     }));
 
-  // Initialize sidebar Socket.IO updates using global socket (no separate connection needed)
-  const { triggerSidebarRefresh, isConnected } = useSidebarSocket({
-    userId: userId, // Use original userId, not socket token
-    userRooms: activeRooms, // Only pass active (non-expired) rooms
+  // Initialize sidebar Socket.IO updates
+  useSidebarSocket({
+    userId: userId,
+    userRooms: activeRooms,
     onThreadCreated: (threadData) => {
-      console.log('🎉 New thread created in sidebar:', threadData);
-      // Could show a toast notification here if desired
+      // Dispatch window event for RoomsSection
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('roomThreadCreated', {
+          detail: threadData
+        }));
+      }
     }
   });
 
-  console.log('🔗 SidebarSocketWrapper status:', { 
-    isConnected, 
-    totalRooms: currentRooms?.length || 0,
-    activeRooms: activeRooms.length,
-    expiredRooms: (currentRooms?.length || 0) - activeRooms.length,
-    globalSocketAvailable: typeof window !== 'undefined' && !!(window as any).__patio_socket
-  });
-
-// Socket connection status updated
-
-  // Expose triggerSidebarRefresh to children if needed (same API as original)
-  // This maintains backward compatibility
   return <>{children}</>;
 }

@@ -187,7 +187,7 @@ export async function cleanupOldRoomUsageCounters(): Promise<RoomUsageResult> {
     const { error } = await supabase.rpc('cleanup_old_room_usage_counters');
 
     if (error) {
-      console.error('Error cleaning up old room usage counters:', error);
+      // Silent fail - cleanup is not critical
       return { success: false, error: error.message };
     }
 

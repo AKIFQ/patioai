@@ -128,9 +128,9 @@ async function ensureUserInRoom(shareCode: string, displayName: string, userId?:
                     user_id: userId || null // Link to authenticated user if available
                 });
 
-            console.log('Added user to room:', { userId, displayName, roomId: roomInfo.room.id });
+
         } else {
-            console.log('User already in room:', { userId, displayName });
+
         }
     } catch (error) {
         console.error('Error ensuring user in room:', error);
@@ -156,7 +156,7 @@ export default async function RoomChatPage(props: {
 
     // Prevent "User" from being used as a display name - redirect to join form
     if (searchParams.displayName === 'User') {
-        console.log('Redirecting user with invalid "User" display name to join form');
+
         redirect(`/room/${shareCode}`);
     }
 
@@ -182,14 +182,14 @@ export default async function RoomChatPage(props: {
 
     // Get thread ID from URL (prioritize threadId over legacy chatSession)
     let chatSessionId = searchParams.threadId || searchParams.chatSession;
-    console.log('🔍 URL Search Params:', { threadId: searchParams.threadId, chatSession: searchParams.chatSession, chatSessionId });
+
     if (!chatSessionId) {
         // Always generate a new thread ID - no persistent main thread
         // This ensures every room entry starts a fresh conversation
         chatSessionId = crypto.randomUUID();
-        console.log('🆕 Generated new thread for room entry:', chatSessionId);
+
     } else {
-        console.log('📌 Using existing thread ID from URL:', chatSessionId);
+
     }
 
     // Get current user info to check if they're the creator
@@ -271,9 +271,9 @@ export default async function RoomChatPage(props: {
                 ...(msg.sources && { sources: typeof msg.sources === 'string' ? JSON.parse(msg.sources) : msg.sources })
             }));
 
-            console.log(`Loaded messages for thread ${chatSessionId}:`, roomMessages.length);
+
         } else {
-            console.log(`No messages found for thread ${chatSessionId}`);
+
         }
     } catch (error) {
         console.error('Error loading room messages:', error);
@@ -285,8 +285,7 @@ export default async function RoomChatPage(props: {
     const selectedOption =
         cookieStore.get('selectedOption')?.value ?? 'gpt-3.5-turbo-1106';
 
-    console.log('Room page rendering with chatSessionId:', chatSessionId);
-    console.log('Room messages count:', roomMessages.length);
+
 
 
 

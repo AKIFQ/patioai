@@ -152,7 +152,7 @@ export function emitRoomEvent(shareCode: string, eventType: string, data: any) {
   const roomSockets = socketIO.sockets.adapter.rooms.get(`room:${shareCode}`);
   const connectedUsers = roomSockets ? roomSockets.size : 0;
   
-  console.log(`📡 Emitting ${eventType} to room:${shareCode} (${connectedUsers} connected users)`);
+
 
   emitAPIEvent(eventType, data, `room:${shareCode}`);
 }
