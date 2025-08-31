@@ -85,42 +85,43 @@
 /* ===== INPUT CONTAINER ===== */
 .mobile-input-container {
   /* Sleeker padding - reduced for cleaner look */
-  margin: 0;
-  padding: 0.5rem 0.75rem;
+  margin: 0 !important;
+  padding: 0.5rem 0.75rem !important;
 
   /* Proper border radius for mobile */
-  border-radius: 1.25rem;
+  border-radius: 1.25rem !important;
 
   /* NO SHADOW - clean appearance */
-  border: 2px solid hsl(var(--border) / 0.8);
-  box-shadow: none;
+  border: 2px solid hsl(var(--border) / 0.8) !important;
+  box-shadow: none !important;
 
-  /* FOREST-400 background for input container */
-  background: #3A584E;
-
-  /* Dark mode - FOREST-400 background */
-  .dark & {
-    background: #3A584E;
-    border-color: hsl(var(--border) / 0.9);
-  }
+  /* Semi-transparent background like localhost - matches your preference */
+  background: rgba(58, 88, 78, 0.85) !important;
 
   /* Enhanced backdrop blur for modern effect */
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
+  backdrop-filter: blur(15px) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+
+  /* Dark mode - consistent semi-transparent background */
+  .dark & {
+    background: rgba(58, 88, 78, 0.85) !important;
+    border-color: hsl(var(--border) / 0.9) !important;
+  }
 
   /* Smooth transitions */
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 
   /* Ensure buttons stay within rounded corners */
-  overflow: hidden;
+  overflow: hidden !important;
 }
 
 .mobile-input-container:focus-within {
-  /* Focus state with NO SHADOW */
-  border-color: hsl(var(--primary) / 0.8);
-  box-shadow: none;
+  /* Focus state with NO SHADOW - maintain localhost appearance */
+  border-color: hsl(var(--primary) / 0.8) !important;
+  box-shadow: none !important;
+  background: rgba(58, 88, 78, 0.9) !important;
 
-  transform: translateY(-1px);
+  transform: translateY(-1px) !important;
 }
 
 /* ===== TEXTAREA STYLING ===== */
@@ -276,6 +277,23 @@
 
 /* Override desktop styles for mobile */
 @media (max-width: 768px) {
+
+  /* Ensure mobile input container styling takes priority */
+  .mobile-input-container {
+    background: rgba(58, 88, 78, 0.85) !important;
+    border-radius: 1.25rem !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    border: 2px solid hsl(var(--border) / 0.8) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-input-container:focus-within {
+    background: rgba(58, 88, 78, 0.9) !important;
+    border-color: hsl(var(--primary) / 0.8) !important;
+    box-shadow: none !important;
+  }
+
   .mobile-send-button {
     background: linear-gradient(135deg,
         hsl(43 96% 56%) 0%,
