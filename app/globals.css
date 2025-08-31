@@ -57,20 +57,511 @@
 /* Enhanced message input container for mobile */
 .message-input-container {
   /* Enhanced visibility with lighter background */
-  background: hsl(var(--elevation-2) / 0.8);
-  border-top: 1px solid hsl(var(--border) / 0.5);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: hsl(var(--elevation-2) / 0.8) !important;
+  border-top: 1px solid hsl(var(--border) / 0.5) !important;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
   /* Ensure bottom spacing */
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.5rem !important;
   /* Prevent container from growing too large - limit to 25% of viewport */
-  max-height: 25vh;
-  overflow: visible;
+  max-height: 25vh !important;
+  overflow: visible !important;
 }
 
-/* Import mobile chat styles */
-@import url('./chat/styles/mobile-chat.css');
+/* CRITICAL: Ensure mobile classes override responsive classes */
+@media (max-width: 768px) {
+  .mobile-chat-container {
+    height: 100vh !important;
+    height: 100dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .mobile-input-toolbar {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 50 !important;
+    background: transparent !important;
+  }
+
+  .mobile-input-container {
+    background: rgba(58, 88, 78, 0.85) !important;
+    border-radius: 1.25rem !important;
+    padding: 0.5rem 0.75rem !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+  }
+}
+
+/* CRITICAL MOBILE STYLES - Inline to prevent production build issues */
+/* ===== MOBILE CHAT CONTAINER ===== */
+.mobile-chat-container {
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: -webkit-fill-available !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  position: relative !important;
+  transform: translateZ(0) !important;
+  -webkit-transform: translateZ(0) !important;
+  touch-action: pan-y !important;
+}
+
+/* ===== MOBILE INPUT TOOLBAR ===== */
+.mobile-input-toolbar {
+  position: sticky !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 50 !important;
+  margin: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding-left: max(0.75rem, env(safe-area-inset-left)) !important;
+  padding-right: max(0.75rem, env(safe-area-inset-right)) !important;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+  padding-top: 0.5rem !important;
+  transform: translateZ(0) !important;
+  -webkit-transform: translateZ(0) !important;
+}
+
+/* ===== MOBILE INPUT CONTAINER ===== */
+.mobile-input-container {
+  margin: 0 !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: 1.25rem !important;
+  border: 2px solid hsl(var(--border) / 0.8) !important;
+  box-shadow: none !important;
+  background: rgba(58, 88, 78, 0.85) !important;
+  backdrop-filter: blur(15px) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow: hidden !important;
+}
+
+.mobile-input-container:focus-within {
+  border-color: hsl(var(--primary) / 0.8) !important;
+  box-shadow: none !important;
+  background: rgba(58, 88, 78, 0.9) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ===== MOBILE TEXTAREA ===== */
+.mobile-input-textarea {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 44px !important;
+  max-height: min(30vh, 200px) !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+  font-weight: 400 !important;
+  padding: 0.875rem 1rem !important;
+  resize: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  -webkit-overflow-scrolling: touch !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  border-radius: 0 !important;
+}
+
+.mobile-input-textarea::placeholder {
+  color: hsl(var(--muted-foreground) / 0.6) !important;
+  font-weight: 400 !important;
+}
+
+/* ===== MOBILE TOOLBAR CONTROLS ===== */
+.mobile-toolbar-controls {
+  padding: 0.125rem 0.25rem 0.25rem 0.25rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.375rem !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.mobile-toolbar-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.mobile-toolbar-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  flex-shrink: 0 !important;
+}
+
+/* ===== MOBILE BUTTONS ===== */
+.mobile-toolbar-button {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  border: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--elevation-2)) !important;
+  box-shadow: 0 2px 8px hsl(var(--shadow) / 0.1), 0 1px 2px hsl(var(--shadow) / 0.05) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.mobile-send-button {
+  background: linear-gradient(135deg, hsl(43 96% 56%) 0%, hsl(38 92% 50%) 100%) !important;
+  border-color: hsl(43 96% 56% / 0.3) !important;
+  color: #000000 !important;
+}
+
+/* Mobile-specific media queries */
+@media (max-width: 768px) {
+  .mobile-input-container {
+    background: rgba(58, 88, 78, 0.85) !important;
+    border-radius: 1.25rem !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    border: 2px solid hsl(var(--border) / 0.8) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-input-container:focus-within {
+    background: rgba(58, 88, 78, 0.9) !important;
+    border-color: hsl(var(--primary) / 0.8) !important;
+    box-shadow: none !important;
+  }
+}
+
+/* 
+ * COMPLETE MOBILE CHAT UI - MOVED FROM mobile-chat.css
+ * Optimized for all mobile devices, browsers, and keyboard handling
+ */
+
+/* ===== MESSAGES AREA ===== */
+.mobile-messages-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* Smooth scrolling */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+  /* Proper padding for safe areas */
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+
+  /* Ensure messages don't get cut off */
+  padding-bottom: 1rem;
+}
+
+/* ===== AI BUTTON STYLING ===== */
+.mobile-ai-button {
+  /* Use brand amber/orange colors */
+  background: linear-gradient(135deg,
+      hsl(43 96% 56%) 0%,
+      hsl(38 92% 50%) 100%) !important;
+  border-color: hsl(43 96% 56% / 0.3) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* ===== KEYBOARD DETECTION & HANDLING ===== */
+@supports (height: 100dvh) {
+  .mobile-chat-container {
+    height: 100dvh !important;
+  }
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .mobile-chat-container {
+    min-height: -webkit-fill-available !important;
+  }
+
+  .mobile-input-toolbar {
+    /* Ensure toolbar sticks to keyboard on iOS */
+    position: -webkit-sticky !important;
+    position: sticky !important;
+  }
+}
+
+/* Android Chrome specific fixes */
+@media screen and (max-width: 768px) {
+  .mobile-input-toolbar {
+    /* Ensure proper positioning on Android */
+    position: sticky !important;
+    bottom: 0 !important;
+  }
+}
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+@media (max-width: 480px) {
+  .mobile-toolbar-controls {
+    padding: 0.375rem 0.75rem 0.625rem 0.75rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .mobile-toolbar-button {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+
+  .mobile-input-textarea {
+    padding: 0.75rem 0.875rem !important;
+  }
+}
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+
+  .mobile-input-container,
+  .mobile-toolbar-button {
+    transition: none !important;
+  }
+}
+
+/* ===== HIGH CONTRAST MODE ===== */
+@media (prefers-contrast: high) {
+  .mobile-input-toolbar {
+    border-top: 2px solid rgba(255, 255, 255, 0.3) !important;
+  }
+
+  .mobile-input-container {
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  }
+
+  .mobile-toolbar-button {
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+/* Dark mode is handled by CSS custom properties and .dark class */
+
+/* ===== CRITICAL AI INVOKE & MESSAGE STYLING ===== */
+/* AI Invoke Button - matching actual component inline styles */
+.mobile-ai-button {
+  /* Base mobile styling */
+  height: 36px !important;
+  width: 36px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  flex-shrink: 0 !important;
+  
+  /* Gradient background matching component */
+  background: linear-gradient(to bottom right, rgb(254 243 199), rgb(255 237 213)) !important;
+}
+
+.dark .mobile-ai-button {
+  background: linear-gradient(to bottom right, rgb(180 83 9 / 0.4), rgb(194 65 12 / 0.4)) !important;
+}
+
+.mobile-ai-button:hover {
+  background: linear-gradient(to bottom right, rgb(254 215 170), rgb(254 215 170)) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+}
+
+.dark .mobile-ai-button:hover {
+  background: linear-gradient(to bottom right, rgb(146 64 14 / 0.5), rgb(154 52 18 / 0.5)) !important;
+}
+
+.mobile-ai-button:active {
+  transform: scale(0.95) !important;
+}
+
+.mobile-ai-button:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.mobile-ai-button:disabled:hover {
+  transform: scale(1) !important;
+}
+
+/* AI Button Icon */
+.mobile-ai-button svg {
+  color: rgb(217 119 6) !important;
+  width: 16px !important;
+  height: 16px !important;
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.dark .mobile-ai-button svg {
+  color: rgb(251 191 36) !important;
+}
+
+.mobile-ai-button:hover svg {
+  transform: scale(1.05) !important;
+}
+
+/* Send Button - matching actual component inline styles */
+.mobile-send-button {
+  /* Base mobile styling */
+  height: 36px !important;
+  width: 36px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  flex-shrink: 0 !important;
+  
+  /* Gradient background matching component */
+  background: linear-gradient(to bottom right, rgb(251 191 36), rgb(249 115 22)) !important;
+}
+
+.mobile-send-button:hover {
+  background: linear-gradient(to bottom right, rgb(245 158 11), rgb(234 88 12)) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+}
+
+.mobile-send-button:active {
+  transform: scale(0.95) !important;
+}
+
+.mobile-send-button:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.mobile-send-button:disabled:hover {
+  transform: scale(1) !important;
+}
+
+/* Send Button Icon */
+.mobile-send-button svg {
+  color: white !important;
+  width: 16px !important;
+  height: 16px !important;
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.mobile-send-button:hover svg {
+  transform: scale(1.05) !important;
+}
+
+/* Desktop responsive overrides */
+@media (min-width: 640px) {
+  .mobile-ai-button,
+  .mobile-send-button {
+    height: 32px !important;
+    width: 32px !important;
+  }
+  
+  .mobile-ai-button svg,
+  .mobile-send-button svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+}
+
+/* Message Container Styling */
+.message-container,
+.chat-message,
+[data-message="true"] {
+  margin-bottom: 1rem !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 0.75rem !important;
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border) / 0.5) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* User Message Styling */
+.user-message,
+[data-role="user"] {
+  background: hsl(var(--primary) / 0.1) !important;
+  border-color: hsl(var(--primary) / 0.2) !important;
+  margin-left: 2rem !important;
+}
+
+/* AI Message Styling */
+.ai-message,
+.assistant-message,
+[data-role="assistant"] {
+  background: hsl(var(--card)) !important;
+  border-color: hsl(var(--border) / 0.5) !important;
+  margin-right: 2rem !important;
+}
+
+/* Message Text Content */
+.message-content,
+.message-text {
+  line-height: 1.6 !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Message Avatar/Icon */
+.message-avatar,
+.user-avatar,
+.ai-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Ensure proper message layout on mobile */
+@media (max-width: 768px) {
+
+  .message-container,
+  .chat-message,
+  [data-message="true"] {
+    margin-left: 0.5rem !important;
+    margin-right: 0.5rem !important;
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  .user-message,
+  [data-role="user"] {
+    margin-left: 1rem !important;
+  }
+
+  .ai-message,
+  .assistant-message,
+  [data-role="assistant"] {
+    margin-right: 1rem !important;
+  }
+}
 
 /* CSS Custom Properties for Mobile Chat */
 :root {
@@ -152,6 +643,7 @@
 
 /* Legacy mobile constraints - now handled by mobile-chat.css */
 @media (max-width: 768px) {
+
   /* Ensure chat messages don't overflow viewport on mobile */
   [data-message-content] {
     max-width: 100% !important;
