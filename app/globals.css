@@ -779,6 +779,11 @@
   --elevation-4: var(--cream-400);
   --elevation-5: var(--cream-500);
 
+  /* Avatar Brand Colors */
+  --avatar-primary: #f59e0b;
+  --avatar-secondary: #10b981;
+  --avatar-accent: #f97316;
+
   --radius: 0.75rem;
   --radius-sm: 0.5rem;
   --radius-lg: 1rem;
@@ -849,6 +854,11 @@
   --elevation-3: var(--forest-500);
   --elevation-4: var(--forest-400);
   --elevation-5: var(--forest-900);
+
+  /* Avatar Brand Colors - Dark Mode */
+  --avatar-primary: #fbbf24;
+  --avatar-secondary: #34d399;
+  --avatar-accent: #fb923c;
 }
 
 @theme inline {

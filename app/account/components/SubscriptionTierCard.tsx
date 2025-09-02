@@ -92,13 +92,13 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
   const getTierColor = (tier: string) => {
     switch (tier) {
       case 'free':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600';
       case 'basic':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
+        return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700';
       case 'premium':
-        return 'bg-amber-200 text-amber-900 border-amber-300';
+        return 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-900 border-amber-300 dark:from-amber-900/30 dark:to-orange-900/30 dark:text-amber-200 dark:border-amber-600';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600';
     }
   };
 
@@ -248,7 +248,7 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
             )}
 
             {/* Premium Tier */}
-            <Card className="p-6 relative overflow-hidden border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-50 dark:to-orange-50 dark:text-[var(--forest-920)]">
+            <Card className="p-6 relative overflow-hidden border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 text-slate-900">
               <div className="absolute top-3 right-3">
                 <Crown className="h-5 w-5 text-amber-600" />
               </div>
@@ -256,13 +256,13 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
               <div className="space-y-4">
                 <div>
                   <h4 className="text-lg font-medium">Premium Plan</h4>
-                  <p className="text-2xl font-medium text-amber-600 dark:text-amber-400">$50/month</p>
-                  <p className="text-sm text-muted-foreground/90">
+                  <p className="text-2xl font-medium text-amber-600">$50/month</p>
+                  <p className="text-sm text-slate-700">
                     Premium AI models + enterprise features
                   </p>
                 </div>
 
-                <div className="space-y-1 text-foreground/90">
+                <div className="space-y-1 text-slate-900">
                   {TIER_PRICING.premium.features.slice(0, 4).map((feature, index) => (
                     <div key={index} className="flex items-center gap-2 text-sm">
                       <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
@@ -293,12 +293,12 @@ export default function SubscriptionTierCard({ subscriptionInfo }: SubscriptionT
 
       {/* Premium User Message */}
       {currentTier === 'premium' && (
-        <Card className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+        <Card className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-slate-900">
           <div className="flex items-center gap-3 mb-3">
             <Crown className="h-5 w-5 text-amber-600" />
             <h3 className="text-lg font-medium text-amber-900">Premium Member</h3>
           </div>
-          <p className="text-sm text-amber-800/80">
+          <p className="text-sm text-slate-700">
             You're using our highest tier with access to the most advanced AI models and enterprise features. 
             Thank you for your support!
           </p>

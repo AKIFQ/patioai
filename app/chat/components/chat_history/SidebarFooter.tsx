@@ -261,8 +261,8 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
                       variant="outline"
                       className="h-20 flex flex-col gap-2 p-3 hover:bg-muted/50 transition-all duration-200"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                        <User className="h-4 w-4 text-purple-600" />
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <User className="h-4 w-4 text-amber-600" />
                       </div>
                       <span className="text-xs font-medium">Profile</span>
                     </Button>
