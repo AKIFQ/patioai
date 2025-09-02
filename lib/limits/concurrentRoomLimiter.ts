@@ -35,23 +35,25 @@ export async function checkConcurrentRoomLimit(
     let currentRoomsQuery;
 
     if (userId) {
-      // Authenticated user - check by user_id
+      // Authenticated user - check by user_id, exclude expired rooms
       currentRoomsQuery = supabase
         .from('room_participants')
         .select(`
           room_id,
-          rooms!inner(share_code, name)
+          rooms!inner(share_code, name, expires_at)
         `)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .gt('rooms.expires_at', new Date().toISOString());
     } else if (sessionId) {
-      // Anonymous user - check by session_id pattern
+      // Anonymous user - check by session_id pattern, exclude expired rooms
       currentRoomsQuery = supabase
         .from('room_participants')
         .select(`
           room_id,
-          rooms!inner(share_code, name)
+          rooms!inner(share_code, name, expires_at)
         `)
-        .like('session_id', `${sessionId.split('_')[0]}_${sessionId.split('_')[1]}%`);
+        .like('session_id', `${sessionId.split('_')[0]}_${sessionId.split('_')[1]}%`)
+        .gt('rooms.expires_at', new Date().toISOString());
     } else {
       return {
         allowed: false,
@@ -122,18 +124,20 @@ export async function getCurrentRoomParticipation(
         .select(`
           room_id,
           joined_at,
-          rooms!inner(share_code, name)
+          rooms!inner(share_code, name, expires_at)
         `)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .gt('rooms.expires_at', new Date().toISOString());
     } else if (sessionId) {
       query = supabase
         .from('room_participants')
         .select(`
           room_id,
           joined_at,
-          rooms!inner(share_code, name)
+          rooms!inner(share_code, name, expires_at)
         `)
-        .like('session_id', `${sessionId.split('_')[0]}_${sessionId.split('_')[1]}%`);
+        .like('session_id', `${sessionId.split('_')[0]}_${sessionId.split('_')[1]}%`)
+        .gt('rooms.expires_at', new Date().toISOString());
     } else {
       return [];
     }
