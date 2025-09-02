@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/ui/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { Toaster as ToastToaster } from '@/components/ui/toaster';
 import { MobileSidebarProvider } from '@/app/chat/components/chat_history/ChatHistorySidebar';
+import { MobileNotification } from '@/components/ui/MobileNotification';
 
 import './globals.css';
 
@@ -86,11 +87,13 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: {
   children: ReactNode;
 }) {
+  const session = await getSession();
+  
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -111,6 +114,13 @@ export default function RootLayout({
         >
           {/* PWA Status Bar Background Fix for iOS */}
           <div className="pwa-status-bar-bg" />
+          
+          {/* Mobile Optimization Warning - Show for everyone */}
+          <MobileNotification 
+            message="Not optimized for mobile yet, please use the desktop version for the best experience."
+            storageKey="mobile-optimization-warning-dismissed"
+          />
+          
           <MobileSidebarProvider>
             <main className="w-full min-w-0">{children}</main>
             <Toaster />

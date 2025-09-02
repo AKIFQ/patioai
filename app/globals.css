@@ -42,6 +42,17 @@
   z-index: 9999;
 }
 
+/* Mobile Notification Styling */
+.mobile-notification-visible {
+  padding-top: 60px; /* Space for notification */
+}
+
+@media (min-width: 768px) {
+  .mobile-notification-visible {
+    padding-top: 0; /* No padding on desktop */
+  }
+}
+
 /* Mobile keyboard and input handling */
 @supports (height: 100dvh) {
   .mobile-chat-container {
