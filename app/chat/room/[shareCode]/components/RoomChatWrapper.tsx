@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ChatComponent from '../../../components/Chat';
 import { ChatErrorBoundary } from '@/components/ErrorBoundary';
+import { toast } from 'sonner';
 import type { Message } from 'ai';
 
 
@@ -109,6 +110,35 @@ console.log(' Room context updated:', {
     setIsInitialized(true);
 
   }, [shareCode, searchParams, router, roomInfo]);
+
+  // Listen for password change notifications
+  useEffect(() => {
+    const handlePasswordChanged = (event: CustomEvent) => {
+      const { message, newPassword } = event.detail;
+      
+      // Show a helpful toast with the new password
+      toast.info(
+        `🔑 Room Password Updated`,
+        {
+          description: `New password: ${newPassword}`,
+          duration: 8000, // Show for 8 seconds
+          action: {
+            label: "Copy",
+            onClick: () => {
+              navigator.clipboard.writeText(newPassword);
+              toast.success("Password copied!");
+            },
+          },
+        }
+      );
+    };
+
+    window.addEventListener('room-password-changed', handlePasswordChanged as EventListener);
+    
+    return () => {
+      window.removeEventListener('room-password-changed', handlePasswordChanged as EventListener);
+    };
+  }, []);
 
   // Show loading state while initializing
   if (!isInitialized || !roomContext) {

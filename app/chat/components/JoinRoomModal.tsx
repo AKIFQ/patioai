@@ -179,7 +179,7 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
               <Button
                 onClick={handleNext}
                 disabled={!roomLink.trim() || !extractShareCodeFromLink(roomLink)}
-                className="w-full bg-forest-base hover:bg-forest-600"
+                className="w-full bg-forest-base hover:bg-forest-600 text-white"
               >
                 Next
               </Button>
@@ -275,7 +275,7 @@ export default function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
           <Button
             onClick={handleNext}
             disabled={!roomLink.trim() || !extractShareCodeFromLink(roomLink)}
-            className="bg-forest-base hover:bg-forest-600"
+            className="bg-forest-base hover:bg-forest-600 text-white"
           >
             Next
           </Button>

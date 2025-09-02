@@ -397,9 +397,9 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs p-3">
                             <div className="space-y-1 text-xs">
-                              <p className="font-medium">Auto-Generated Security</p>
-                              <p>Passwords are automatically generated and refreshed every 36 hours to ensure maximum room security.</p>
-                              <p className="text-muted-foreground">Each room gets a new secure password every 36 hours.</p>
+                              <p className="font-medium">Secure Room Access</p>
+                              <p>Passwords are automatically generated to ensure room security.</p>
+                              <p className="text-muted-foreground">Room creators can regenerate passwords at any time.</p>
                             </div>
                           </TooltipContent>
                         </Tooltip>
@@ -427,7 +427,7 @@ export default function JoinRoomForm({ shareCode }: JoinRoomFormProps) {
                 <Button 
                   onClick={handleJoinRoom} 
                   disabled={isJoining || !displayName.trim() || !password.trim()}
-                  className="w-full bg-amber-500 hover:bg-amber-600"
+                  className="w-full bg-forest-base hover:bg-forest-600 text-white"
                 >
                   {isJoining ? (
                     <>

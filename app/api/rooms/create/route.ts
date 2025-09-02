@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
         expires_at: new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000).toISOString(),
         password: null // Will be set by database trigger
       })
-      .select('id, name, share_code, creator_tier, max_participants, expires_at, created_at, password, password_expires_at')
+      .select('id, name, share_code, creator_tier, max_participants, expires_at, created_at, password')
       .single();
 
     if (error) {
@@ -196,7 +196,6 @@ export async function POST(req: NextRequest) {
         expiresAt: room.expires_at,
         createdAt: room.created_at,
         password: room.password,
-        passwordExpiresAt: room.password_expires_at
       },
       shareableLink
     });

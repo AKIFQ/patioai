@@ -246,7 +246,7 @@ export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }:
           </svg>
         </div>
       ),
-      color: 'bg-primary hover:bg-primary/90 transition-all duration-200',
+      color: 'bg-forest-base hover:bg-forest-600 text-white transition-all duration-200',
       action: handleWhatsAppShare,
       description: 'Share via WhatsApp'
     },
@@ -260,7 +260,7 @@ export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }:
           </svg>
         </div>
       ),
-      color: 'bg-primary hover:bg-primary/90 transition-all duration-200',
+      color: 'bg-forest-base hover:bg-forest-600 text-white transition-all duration-200',
       action: handleTelegramShare,
       description: 'Share via Telegram'
     },
@@ -316,7 +316,7 @@ export default function ShareRoomModal({ isOpen, onClose, room, shareableLink }:
           </svg>
         </div>
       ),
-      color: 'bg-primary hover:bg-primary/90 transition-all duration-200',
+      color: 'bg-forest-base hover:bg-forest-600 text-white transition-all duration-200',
       action: handleSMSShare,
       description: 'Send via text message'
     }

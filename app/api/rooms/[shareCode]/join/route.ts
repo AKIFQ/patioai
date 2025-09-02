@@ -60,7 +60,7 @@ export async function POST(
     // Get room with password information for validation
     const { data: roomWithPassword, error: roomError } = await supabase
       .from('rooms')
-      .select('id, name, share_code, max_participants, creator_tier, expires_at, created_at, password, password_expires_at')
+      .select('id, name, share_code, max_participants, creator_tier, expires_at, created_at, password')
       .eq('share_code', shareCode)
       .single();
     
@@ -72,13 +72,6 @@ export async function POST(
       );
     }
 
-    // Check if password has expired
-    if (roomWithPassword.password_expires_at && new Date(roomWithPassword.password_expires_at) < new Date()) {
-      return NextResponse.json(
-        { error: 'Room password has expired. Please contact the room admin for a new password.' },
-        { status: 400 }
-      );
-    }
 
     // Check password if room has one
     if (roomWithPassword.password && roomWithPassword.password !== password) {

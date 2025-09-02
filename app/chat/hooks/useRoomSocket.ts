@@ -408,6 +408,23 @@ export function useRoomSocket({
           }
         });
         addTrackedListener('room-deleted', handleRoomDeleted);
+        
+        // Password change notification handler
+        const passwordChangedHandler = (payload: { 
+          message: string; 
+          newPassword: string; 
+          timestamp: string;
+        }) => {
+          console.log('Room password changed:', payload);
+          // Show notification to user
+          if (typeof window !== 'undefined') {
+            const event = new CustomEvent('room-password-changed', {
+              detail: payload
+            });
+            window.dispatchEvent(event);
+          }
+        };
+        addTrackedListener('password-changed', passwordChangedHandler);
 
         // Streaming listeners with tracking
         const aiStreamStartHandler = (payload: { threadId?: string; timestamp?: number; modelId?: string }) => {

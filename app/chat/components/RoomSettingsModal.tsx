@@ -30,6 +30,7 @@ import {
 
 // Import ShareRoomModal
 import ShareRoomModal from './ShareRoomModal';
+import RoomPasswordManager from './RoomPasswordManager';
 
 interface RoomContext {
   shareCode: string;
@@ -312,7 +313,7 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 }
                 setShowShareModal(true);
               }}
-              className="w-full h-9 touch-manipulation flex items-center gap-2 bg-primary hover:bg-primary/90 transition-all duration-200"
+              className="w-full h-9 touch-manipulation flex items-center gap-2 bg-forest-base hover:bg-forest-600 text-white transition-all duration-200"
               style={{ minHeight: '36px' }}
             >
               <Share2 className="h-4 w-4" />
@@ -320,35 +321,13 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             </Button>
           </div>
 
-          {/* Room Password (Admin Only) */}
+          {/* Room Password Manager (Admin Only) */}
           {isCreator && (
             <div className="space-y-2">
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Room Password</div>
-              <div className="flex gap-2">
-                <div className="flex-1 text-sm px-3 py-2 bg-muted/30 border border-border/40 rounded-lg font-mono break-all">
-                  {isLoadingPassword ? (
-                    <span className="text-muted-foreground/60">Loading password...</span>
-                  ) : roomPassword ? (
-                    roomPassword
-                  ) : (
-                    <span className="text-muted-foreground/60">Click share to load password</span>
-                  )}
-                </div>
-                {roomPassword && roomPassword !== 'Password unavailable' && (
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={() => {
-                      navigator.clipboard.writeText(roomPassword);
-                      toast.success('Password copied to clipboard');
-                    }}
-                    className="h-9 w-9 p-0 touch-manipulation"
-                    style={{ minHeight: '36px', minWidth: '36px' }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
+              <RoomPasswordManager 
+                shareCode={roomContext.shareCode}
+                roomName={roomContext.roomName}
+              />
             </div>
           )}
 
@@ -488,7 +467,6 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
             name: roomContext.roomName,
             shareCode: roomContext.shareCode,
             password: roomPassword || 'Password loading...',
-            passwordExpiresAt: expiresAt || new Date().toISOString()
           }}
           shareableLink={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
         />
@@ -533,7 +511,6 @@ const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           name: roomContext.roomName,
           shareCode: roomContext.shareCode,
           password: roomPassword || 'Password loading...',
-          passwordExpiresAt: expiresAt || new Date().toISOString()
         }}
         shareableLink={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${roomContext.shareCode}`}
       />
