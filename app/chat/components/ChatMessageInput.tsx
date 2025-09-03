@@ -448,7 +448,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
         className="mobile-input-container sm:relative sm:w-full sm:max-w-full sm:mb-2 sm:rounded-xl sm:overflow-hidden sm:border-0 
                    sm:shadow-elevation-2 sm:hover:shadow-elevation-3 sm:focus-within:shadow-elevation-4
                    sm:flex sm:flex-col sm:transition-smooth message-input-container
-                   sm:bg-gradient-to-br sm:from-[var(--cream-300)] sm:to-[var(--cream-400)] sm:dark:from-[var(--elevation-1)] sm:dark:to-[var(--elevation-2)] sm:backdrop-blur-md"
+                   sm:bg-gradient-to-br sm:from-[var(--cream-300)] sm:to-[var(--cream-400)] sm:dark:from-[var(--elevation-2)] sm:dark:to-[var(--elevation-2)] sm:backdrop-blur-md"
         style={{ maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}
       >
         <input
@@ -468,7 +468,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           disabled={isLoading}
           className="mobile-input-textarea sm:w-full sm:pt-4 sm:pb-3 sm:px-4 sm:min-h-0 sm:resize-none 
                      sm:border-0 sm:shadow-none sm:focus:ring-0 sm:focus-visible:ring-0 sm:focus:outline-none 
-                     sm:bg-transparent sm:text-base placeholder:text-muted-foreground/60
+                     sm:bg-[var(--elevation-2)] sm:text-base text-foreground placeholder:text-foreground/80
                      sm:placeholder:font-medium sm:leading-relaxed
                      sm:max-h-[240px] sm:break-words sm:overflow-wrap-anywhere sm:word-break-break-word
                      sm:min-w-0 sm:max-w-full sm:overflow-y-auto sm:whitespace-pre-wrap sm:overflow-x-hidden

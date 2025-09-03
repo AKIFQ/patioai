@@ -184,11 +184,11 @@ const ChatMessage = memo(({
                      shadow-[0_2px_12px_color-mix(in_srgb,var(--primary)_20%,transparent)]
                      hover:shadow-[0_4px_16px_color-mix(in_srgb,var(--primary)_25%,transparent)]`
                   : message.role === 'assistant'
-                    ? `bg-[#FFFFE0] dark:bg-[var(--forest-950)] text-foreground ${isMobile ? 'rounded-bl-md' : 'rounded-bl-lg'}
+                    ? `bg-[#FFFFE0] dark:bg-[#213D35] text-foreground ${isMobile ? 'rounded-bl-md' : 'rounded-bl-lg'}
                        border border-[#E5E5E5] dark:border-0 backdrop-blur-sm
                        shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_8%,transparent)]
                        hover:shadow-[0_4px_12px_color-mix(in_srgb,var(--foreground)_12%,transparent)]`
-                    : `bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[var(--elevation-1)] dark:to-[var(--elevation-2)] text-foreground ${isMobile ? 'rounded-bl-md' : 'rounded-bl-lg'}
+                    : `bg-gradient-to-br from-[var(--cream-300)] to-[var(--cream-400)] dark:from-[#213D35] dark:to-[#213D35] text-foreground ${isMobile ? 'rounded-bl-md' : 'rounded-bl-lg'}
                        border border-[#E5E5E5] dark:border-0 backdrop-blur-sm
                        shadow-[0_1px_6px_color-mix(in_srgb,var(--foreground)_6%,transparent)]
                        hover:shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_10%,transparent)]`

@@ -98,7 +98,7 @@
   }
 
   .mobile-input-container {
-    background: rgba(58, 88, 78, 0.85) !important;
+    background: rgba(33, 61, 53, 0.85) !important;
     border-radius: 1.25rem !important;
     padding: 0.5rem 0.75rem !important;
     backdrop-filter: blur(15px) !important;
@@ -149,7 +149,7 @@
   border-radius: 1.25rem !important;
   border: 2px solid hsl(var(--border) / 0.8) !important;
   box-shadow: none !important;
-  background: rgba(58, 88, 78, 0.85) !important;
+  background: rgba(33, 61, 53, 0.85) !important;
   backdrop-filter: blur(15px) !important;
   -webkit-backdrop-filter: blur(15px) !important;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -159,7 +159,7 @@
 .mobile-input-container:focus-within {
   border-color: hsl(var(--primary) / 0.8) !important;
   box-shadow: none !important;
-  background: rgba(58, 88, 78, 0.9) !important;
+  background: rgba(33, 61, 53, 0.9) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -246,7 +246,7 @@
 /* Mobile-specific media queries */
 @media (max-width: 768px) {
   .mobile-input-container {
-    background: rgba(58, 88, 78, 0.85) !important;
+    background: rgba(33, 61, 53, 0.85) !important;
     border-radius: 1.25rem !important;
     backdrop-filter: blur(15px) !important;
     -webkit-backdrop-filter: blur(15px) !important;
@@ -255,7 +255,7 @@
   }
 
   .mobile-input-container:focus-within {
-    background: rgba(58, 88, 78, 0.9) !important;
+    background: rgba(33, 61, 53, 0.9) !important;
     border-color: hsl(var(--primary) / 0.8) !important;
     box-shadow: none !important;
   }
@@ -828,9 +828,9 @@
   --cream-faint: rgba(255, 255, 240, 0.3);
 
   /* Modern Design Tokens */
-  --background: var(--forest-920);
+  --background: #0B1411;
   --foreground: var(--cream-base);
-  --card: var(--forest-600);
+  --card: #213D35;
   --card-foreground: var(--cream-base);
   --popover: var(--forest-500);
   --popover-foreground: var(--cream-base);
@@ -845,11 +845,11 @@
   --destructive: #E53E3E;
   --destructive-foreground: var(--cream-base);
   --border: var(--forest-500);
-  --input: var(--forest-600);
+  --input: #213D35;
   --ring: var(--cream-subtle);
 
   /* Sidebar Monochromatic */
-  --sidebar: var(--forest-950);
+  --sidebar: #050907;
   --sidebar-foreground: var(--cream-base);
   --sidebar-primary: var(--cream-base);
   --sidebar-primary-foreground: var(--forest-700);

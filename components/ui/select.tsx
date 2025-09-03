@@ -33,7 +33,7 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "data-[placeholder]:text-muted-foreground/60 [&_svg:not([class*='text-'])]:text-muted-foreground aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 flex h-9 w-full items-center justify-between rounded-xl border-0 bg-gradient-to-br from-[var(--elevation-1)] to-[var(--elevation-2)] px-3 py-2 text-sm shadow-elevation-1 transition-smooth outline-none hover:shadow-elevation-2 focus-visible:shadow-elevation-3 disabled:cursor-not-allowed disabled:opacity-50 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&>span]:line-clamp-1 backdrop-blur-sm",
+        "data-[placeholder]:text-foreground/60 [&_svg:not([class*='text-'])]:text-foreground aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 flex h-9 w-full items-center justify-between rounded-xl border-0 bg-gradient-to-br from-[var(--elevation-1)] to-[var(--elevation-2)] px-3 py-2 text-sm shadow-elevation-1 transition-smooth outline-none hover:shadow-elevation-2 focus-visible:shadow-elevation-3 disabled:cursor-not-allowed disabled:opacity-50 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&>span]:line-clamp-1 backdrop-blur-sm",
         className
       )}
       {...props}
