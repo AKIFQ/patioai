@@ -446,9 +446,9 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
       <form
         onSubmit={handleFormSubmit}
         className="mobile-input-container sm:relative sm:w-full sm:max-w-full sm:mb-2 sm:rounded-xl sm:overflow-hidden sm:border-0 
-                   sm:shadow-elevation-2 sm:hover:shadow-elevation-3 sm:focus-within:shadow-elevation-4
+                   !shadow-none hover:!shadow-none focus-within:!shadow-none
                    sm:flex sm:flex-col sm:transition-smooth message-input-container
-                   sm:bg-gradient-to-br sm:from-[var(--cream-300)] sm:to-[var(--cream-400)] sm:dark:from-[var(--elevation-2)] sm:dark:to-[var(--elevation-2)] sm:backdrop-blur-md"
+                   !backdrop-blur-none"
         style={{ maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}
       >
         <input
@@ -466,9 +466,10 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
           disabled={isLoading}
-          className="mobile-input-textarea sm:w-full sm:pt-4 sm:pb-3 sm:px-4 sm:min-h-0 sm:resize-none 
+          className="mobile-input-textarea !bg-transparent !backdrop-blur-none !shadow-none !rounded-none
+                     sm:w-full sm:pt-4 sm:pb-3 sm:px-4 sm:min-h-0 sm:resize-none 
                      sm:border-0 sm:shadow-none sm:focus:ring-0 sm:focus-visible:ring-0 sm:focus:outline-none 
-                     sm:bg-[var(--elevation-2)] sm:text-base text-foreground placeholder:text-foreground/80
+                     sm:text-base text-foreground placeholder:text-foreground/80
                      sm:placeholder:font-medium sm:leading-relaxed
                      sm:max-h-[240px] sm:break-words sm:overflow-wrap-anywhere sm:word-break-break-word
                      sm:min-w-0 sm:max-w-full sm:overflow-y-auto sm:whitespace-pre-wrap sm:overflow-x-hidden
@@ -495,8 +496,8 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   variant="ghost"
                   size="sm"
                   className="mobile-toolbar-button sm:h-8 sm:w-8 sm:cursor-pointer sm:rounded-full sm:flex sm:items-center sm:justify-center 
-                             sm:bg-[var(--elevation-2)] sm:hover:bg-[var(--elevation-3)] 
-                             sm:transition-smooth sm:border-0 sm:shadow-elevation-1 sm:hover:shadow-elevation-2
+                             !bg-transparent hover:!bg-transparent 
+                             sm:transition-smooth sm:border-0 !shadow-none hover:!shadow-none
                              sm:hover:scale-105 sm:active:scale-95 sm:flex-shrink-0"
                   disabled={isLoading}
                   aria-label="More tools"
@@ -504,7 +505,7 @@ console.log(` [${submissionId}] PROMPT SUBMIT: Completed`);
                   <Plus className="h-4 w-4 sm:h-4 sm:w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 border-0 bg-[var(--elevation-2)] backdrop-blur-md shadow-elevation-3 rounded-xl">
+              <DropdownMenuContent className="w-56 border-0 !bg-transparent !backdrop-blur-none !shadow-none rounded-xl">
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs">
                   <Paperclip className="h-3.5 w-3.5 mr-2" /> Attach file
                 </DropdownMenuItem>
