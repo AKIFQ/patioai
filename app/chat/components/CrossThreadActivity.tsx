@@ -15,10 +15,10 @@ interface CrossThreadActivityProps {
   currentUser: string;
 }
 
-const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({ 
-  currentThreadId, 
-  activities, 
-  currentUser 
+const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
+  currentThreadId,
+  activities,
+  currentUser
 }) => {
   const [displayActivities, setDisplayActivities] = useState<ThreadActivity[]>([]);
   const activityTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -34,7 +34,7 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
           clearTimeout(existingTimeout);
           activityTimeoutsRef.current.delete(activity.threadId);
         }
-        
+
         // Update display activities immediately
         setDisplayActivities(prev => {
           const filtered = prev.filter(a => a.threadId !== activity.threadId);
@@ -43,20 +43,20 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
           }
           return filtered;
         });
-        
+
         // Set timeout to remove activity after 10 seconds of inactivity
         if (activity.activeUsers.length === 0 && activity.typingUsers.length === 0) {
           const timeout = setTimeout(() => {
             setDisplayActivities(prev => prev.filter(a => a.threadId !== activity.threadId));
             activityTimeoutsRef.current.delete(activity.threadId);
           }, 10000); // 10 seconds linger
-          
+
           activityTimeoutsRef.current.set(activity.threadId, timeout);
         }
       }
     });
   }, [activities, currentThreadId]);
-  
+
   // CRITICAL: Separate cleanup effect to prevent timeout leaks
   useEffect(() => {
     return () => {
@@ -67,8 +67,8 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
   }, []); // Empty dependencies - only run on mount/unmount
 
   // Filter out current thread and current user
-  const otherThreadActivities = displayActivities.filter(activity => 
-    activity.threadId !== currentThreadId && 
+  const otherThreadActivities = displayActivities.filter(activity =>
+    activity.threadId !== currentThreadId &&
     (activity.activeUsers.length > 0 || activity.typingUsers.length > 0)
   );
 
@@ -77,29 +77,47 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
   }
 
   const getActivityText = () => {
-    const allTypingUsers: string[] = [];
-    const allActiveUsers: string[] = [];
-    
+    // Use Sets to avoid duplicates and prioritize typing over active
+    const allTypingUsers = new Set<string>();
+    const allActiveUsers = new Set<string>();
+
+    // First pass: collect all typing users
     otherThreadActivities.forEach(activity => {
-      allTypingUsers.push(...activity.typingUsers.filter(user => user !== currentUser));
-      allActiveUsers.push(...activity.activeUsers.filter(user => user !== currentUser && !allTypingUsers.includes(user)));
+      activity.typingUsers.forEach(user => {
+        if (user !== currentUser) {
+          allTypingUsers.add(user);
+        }
+      });
+    });
+
+    // Second pass: collect active users who are not typing
+    otherThreadActivities.forEach(activity => {
+      activity.activeUsers.forEach(user => {
+        if (user !== currentUser && !allTypingUsers.has(user)) {
+          allActiveUsers.add(user);
+        }
+      });
     });
 
     const parts: string[] = [];
-    
-    if (allTypingUsers.length > 0) {
-      if (allTypingUsers.length === 1) {
-        parts.push(`${allTypingUsers[0]} typing in other thread`);
+
+    // Convert sets to arrays for display
+    const typingArray = Array.from(allTypingUsers);
+    const activeArray = Array.from(allActiveUsers);
+
+    if (typingArray.length > 0) {
+      if (typingArray.length === 1) {
+        parts.push(`${typingArray[0]} is typing in other thread`);
       } else {
-        parts.push(`${allTypingUsers.join(', ')} typing in other threads`);
+        parts.push(`${typingArray.join(', ')} are typing in other threads`);
       }
     }
-    
-    if (allActiveUsers.length > 0) {
-      if (allActiveUsers.length === 1) {
-        parts.push(`${allActiveUsers[0]} active in other thread`);
+
+    if (activeArray.length > 0) {
+      if (activeArray.length === 1) {
+        parts.push(`${activeArray[0]} is active in other thread`);
       } else {
-        parts.push(`${allActiveUsers.join(', ')} active in other threads`);
+        parts.push(`${activeArray.join(', ')} are active in other threads`);
       }
     }
 
@@ -107,13 +125,13 @@ const CrossThreadActivity: React.FC<CrossThreadActivityProps> = ({
   };
 
   const activityText = getActivityText();
-  
-console.log(' CrossThreadActivity render:', {
+
+  console.log(' CrossThreadActivity render:', {
     currentThreadId,
     activities: otherThreadActivities,
     activityText
   });
-  
+
   if (!activityText) {
     return null;
   }
