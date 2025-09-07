@@ -98,7 +98,7 @@
   }
 
   .mobile-input-container {
-    background: rgba(33, 61, 53, 0.85) !important;
+    background: hsl(var(--elevation-2) / 0.85) !important;
     border-radius: 1.25rem !important;
     padding: 0.5rem 0.75rem !important;
     backdrop-filter: blur(15px) !important;
@@ -147,9 +147,13 @@
   margin: 0 !important;
   padding: 0.5rem 0.75rem !important;
   border-radius: 1.25rem !important;
-  border: 2px solid hsl(var(--border) / 0.8) !important;
+  border: 1px solid #E5E5E5 !important;
+  
+  .dark & {
+    border: none !important; /* No border in dark mode */
+  }
   box-shadow: none !important;
-  background: rgba(33, 61, 53, 0.85) !important;
+  /* Background will be handled by mobile-chat.css with proper theme support */
   backdrop-filter: blur(15px) !important;
   -webkit-backdrop-filter: blur(15px) !important;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -159,7 +163,7 @@
 .mobile-input-container:focus-within {
   border-color: hsl(var(--primary) / 0.8) !important;
   box-shadow: none !important;
-  background: rgba(33, 61, 53, 0.9) !important;
+  /* Focus background will be handled by mobile-chat.css with proper theme support */
   transform: translateY(-1px) !important;
 }
 
@@ -246,16 +250,20 @@
 /* Mobile-specific media queries */
 @media (max-width: 768px) {
   .mobile-input-container {
-    background: rgba(33, 61, 53, 0.85) !important;
+    background: hsl(var(--elevation-2) / 0.85) !important;
     border-radius: 1.25rem !important;
     backdrop-filter: blur(15px) !important;
     -webkit-backdrop-filter: blur(15px) !important;
-    border: 2px solid hsl(var(--border) / 0.8) !important;
+    border: 1px solid #E5E5E5 !important;
+  
+  .dark & {
+    border: none !important; /* No border in dark mode */
+  }
     box-shadow: none !important;
   }
 
   .mobile-input-container:focus-within {
-    background: rgba(33, 61, 53, 0.9) !important;
+    background: hsl(var(--elevation-3) / 0.9) !important;
     border-color: hsl(var(--primary) / 0.8) !important;
     box-shadow: none !important;
   }
@@ -727,8 +735,8 @@
   --base-cream: #FFFFF0;
   --cream-50: #FEFEFE;
   /* Lightest - elevated elements */
-  --cream-100: #FAFAF5;
-  /* Subtle surface variation */
+  --cream-100: #FEFFFE;
+  /* Chat area background color */
   --cream-200: #F8F8F0;
   /* Light surface */
   --cream-300: #F5F5E8;
@@ -773,7 +781,7 @@
   --ring: var(--forest-subtle);
 
   /* Sidebar Monochromatic */
-  --sidebar: #FFFFE0;
+  --sidebar: #FCFFFA;
   --sidebar-foreground: var(--forest-base);
   --sidebar-primary: var(--forest-base);
   --sidebar-primary-foreground: var(--base-cream);

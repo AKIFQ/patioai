@@ -92,19 +92,23 @@
   border-radius: 1.25rem !important;
 
   /* NO SHADOW - clean appearance */
-  border: 2px solid hsl(var(--border) / 0.8) !important;
+  border: 1px solid #E5E5E5 !important;
+  
+  .dark & {
+    border: none !important; /* No border in dark mode */
+  }
   box-shadow: none !important;
 
-  /* Semi-transparent background like localhost - matches your preference */
-  background: rgba(33, 61, 53, 0.85) !important;
+  /* Light mode background - sidebar/toolbar color */
+  background: rgba(252, 255, 250, 0.85) !important; /* #FCFFFA sidebar/toolbar color */
 
   /* Enhanced backdrop blur for modern effect */
   backdrop-filter: blur(15px) !important;
   -webkit-backdrop-filter: blur(15px) !important;
 
-  /* Dark mode - consistent semi-transparent background */
+  /* Dark mode - forest green background */
   .dark & {
-    background: rgba(33, 61, 53, 0.85) !important;
+    background: rgba(43, 74, 67, 0.85) !important;
     border-color: hsl(var(--border) / 0.9) !important;
   }
 
@@ -117,11 +121,17 @@
 
 .mobile-input-container:focus-within {
   /* Focus state with NO SHADOW - maintain localhost appearance */
-  border-color: hsl(var(--primary) / 0.8) !important;
+  border-color: #D0D0D0 !important;
   box-shadow: none !important;
-  background: rgba(33, 61, 53, 0.9) !important;
+  /* Light mode focus - same sidebar/toolbar color */
+  background: rgba(252, 255, 250, 0.9) !important; /* Same #FCFFFA color for focus */
 
   transform: translateY(-1px) !important;
+}
+
+.dark .mobile-input-container:focus-within {
+  /* Dark mode focus - lighter forest green */
+  background: rgba(50, 79, 71, 0.9) !important;
 }
 
 /* ===== TEXTAREA STYLING ===== */
@@ -280,18 +290,34 @@
 
   /* Ensure mobile input container styling takes priority */
   .mobile-input-container {
-    background: rgba(33, 61, 53, 0.85) !important;
+    /* Light mode - sidebar/toolbar color */
+    background: rgba(252, 255, 250, 0.85) !important;
     border-radius: 1.25rem !important;
     backdrop-filter: blur(15px) !important;
     -webkit-backdrop-filter: blur(15px) !important;
-    border: 2px solid hsl(var(--border) / 0.8) !important;
+    border: 1px solid #E5E5E5 !important;
+  
+  .dark & {
+    border: none !important; /* No border in dark mode */
+  }
     box-shadow: none !important;
+  }
+  
+  .dark .mobile-input-container {
+    /* Dark mode */
+    background: rgba(43, 74, 67, 0.85) !important;
   }
 
   .mobile-input-container:focus-within {
-    background: rgba(33, 61, 53, 0.9) !important;
-    border-color: hsl(var(--primary) / 0.8) !important;
+    /* Light mode focus - same sidebar/toolbar color */
+    background: rgba(252, 255, 250, 0.9) !important;
+    border-color: #D0D0D0 !important;
     box-shadow: none !important;
+  }
+  
+  .dark .mobile-input-container:focus-within {
+    /* Dark mode focus */
+    background: rgba(50, 79, 71, 0.9) !important;
   }
 
   .mobile-send-button {

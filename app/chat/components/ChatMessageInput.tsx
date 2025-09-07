@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
 import { useUpload } from '../context/uploadContext';
 import { toast } from 'sonner';
+// Import mobile chat styles
+import '../styles/mobile-chat.css';
 // Shadcn UI components
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';

@@ -76,7 +76,7 @@ export function ModelSelector({
               <span className="text-[10px] sm:text-xs">Auto</span>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="w-28 sm:w-40 border-0 bg-[rgba(33,61,53,0.85)] !backdrop-blur-none !shadow-none rounded-xl">
+          <SelectContent className="w-28 sm:w-40 border border-[#E5E5E5] bg-[#FCFFFA] dark:bg-[#213D35] dark:border-none !backdrop-blur-none !shadow-none rounded-xl">
             <SelectItem value="auto">
               <span className="text-xs sm:text-sm">Auto</span>
             </SelectItem>
@@ -105,7 +105,7 @@ export function ModelSelector({
             )}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent className="border-0 bg-[rgba(33,61,53,0.85)] !backdrop-blur-none !shadow-none rounded-xl">
+        <SelectContent className="border border-[#E5E5E5] bg-[#FCFFFA] dark:bg-[#213D35] dark:border-none !backdrop-blur-none !shadow-none rounded-xl">
           {Object.entries(availableModels).map(([key, model]) => (
             <SelectItem key={key} value={key}>
               <div className="flex items-center gap-2 w-full">
