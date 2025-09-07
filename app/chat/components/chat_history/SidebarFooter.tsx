@@ -5,6 +5,7 @@ import { Settings, User, LogOut, Palette, CreditCard, Sun, Moon, Monitor } from 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useSearchParams } from 'next/navigation';
+import { signout } from '@/app/(auth)/action';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,7 +78,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
     // For anonymous users, get the actual display name from URL parameters
     const currentDisplayName = searchParams.get('displayName');
     const displayName = currentDisplayName || 'Anonymous User';
-    
+
     return (
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 px-3 py-2">
@@ -110,8 +111,8 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
       className="w-full justify-start gap-3 h-12 px-3 touch-manipulation"
       style={{ minHeight: '48px' }} // iOS touch target minimum
     >
-      <SmartAvatar 
-        user={userInfo} 
+      <SmartAvatar
+        user={userInfo}
         size={32}
         style="thumbs"
       />
@@ -132,8 +133,8 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
     <>
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-center gap-3">
-          <SmartAvatar 
-            user={userInfo} 
+          <SmartAvatar
+            user={userInfo}
             size={40}
             style="thumbs"
           />
@@ -147,7 +148,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           </div>
         </div>
       </div>
-      
+
       <div className="p-2 space-y-1">
         <Button
           variant="ghost"
@@ -160,7 +161,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
             <span className="text-sm">Account Settings</span>
           </Link>
         </Button>
-        
+
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 h-12 px-3 touch-manipulation"
@@ -169,7 +170,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           <User className="h-4 w-4" />
           <span className="text-sm">Profile Settings</span>
         </Button>
-        
+
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-3">
             <Palette className="h-5 w-5" />
@@ -177,9 +178,9 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           </div>
           <ModeToggle />
         </div>
-        
+
         <div className="border-t border-border my-2" />
-        
+
         <div className="px-3">
           <SignOut />
         </div>
@@ -194,10 +195,10 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
           <SheetTrigger asChild>
             {TriggerButton}
           </SheetTrigger>
-          <SheetContent 
-            side="bottom" 
+          <SheetContent
+            side="bottom"
             className="h-auto max-h-[85vh] p-0 rounded-t-xl border-t-2"
-            style={{ 
+            style={{
               WebkitOverflowScrolling: 'touch',
               touchAction: 'pan-y'
             }}
@@ -207,14 +208,14 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
             </VisuallyHidden>
             {/* Drag handle */}
             <div className="w-16 h-2 rounded-full bg-muted-foreground/30 mx-auto mt-3 mb-4" />
-            
+
             {/* Header Section - Fixed */}
             <div className="px-6 py-6 border-b border-border/40 flex-shrink-0">
               <div className="text-center space-y-4">
                 <div className="flex justify-center">
                   <div className="relative">
-                    <SmartAvatar 
-                      user={userInfo} 
+                    <SmartAvatar
+                      user={userInfo}
                       size={80}
                       style="thumbs"
                       className="ring-4 ring-blue-100 dark:ring-blue-900/30"
@@ -256,7 +257,7 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
                         <span className="text-xs font-medium">Account</span>
                       </Link>
                     </Button>
-                    
+
                     <Button
                       variant="outline"
                       className="h-20 flex flex-col gap-2 p-3 hover:bg-muted/50 transition-all duration-200"
@@ -317,17 +318,17 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
         <DropdownMenuTrigger asChild>
           {TriggerButton}
         </DropdownMenuTrigger>
-        
-        <DropdownMenuContent 
-          align="end" 
+
+        <DropdownMenuContent
+          align="end"
           side="top"
-          className="w-64 mb-2"
+          className="w-64 mb-2 bg-[#FCFFFA] dark:bg-[#213D35] border border-[#E5E5E5] dark:border-none !backdrop-blur-none !shadow-none rounded-xl"
         >
-          <div className="px-2 py-1.5">
+          <div className="px-3 py-2">
             <div className="flex items-center gap-2">
-              <SmartAvatar 
-                user={userInfo} 
-                size={32}
+              <SmartAvatar
+                user={userInfo}
+                size={28}
                 style="thumbs"
               />
               <div className="flex flex-col flex-1 min-w-0">
@@ -340,34 +341,32 @@ export default function ChatSidebarFooter({ userInfo }: SidebarFooterProps) {
               </div>
             </div>
           </div>
-          
-          <DropdownMenuSeparator />
-          
-          <DropdownMenuItem className="gap-2" asChild>
+
+          <DropdownMenuSeparator className="my-1" />
+
+          <DropdownMenuItem className="gap-2 py-1.5" asChild>
             <Link href="/account">
-              <CreditCard className="h-4 w-4" />
-              Account Settings
+              <Settings className="h-4 w-4" />
+              Settings
             </Link>
           </DropdownMenuItem>
-          
-          <DropdownMenuItem className="gap-2">
-            <User className="h-4 w-4" />
-            Profile Settings
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem className="gap-2 justify-between">
+
+          <DropdownMenuItem className="gap-2 justify-between py-1.5">
             <div className="flex items-center gap-2">
               <Palette className="h-4 w-4" />
               Theme
             </div>
             <ModeToggle />
           </DropdownMenuItem>
-          
-          <DropdownMenuSeparator />
-          
-          <div className="px-2 py-1">
-            <SignOut />
-          </div>
+
+          <DropdownMenuItem className="gap-2 py-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" asChild>
+            <form action={signout} className="w-full">
+              <button type="submit" className="flex items-center gap-2 w-full text-left">
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </button>
+            </form>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

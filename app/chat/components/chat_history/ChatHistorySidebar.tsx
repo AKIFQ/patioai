@@ -175,7 +175,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   const isMobileSidebarOpen = openMobile;
   const closeMobileSidebar = useCallback(() => setOpenMobile(false), [setOpenMobile]);
   const router = useRouter();
-  
+
   // Get global modal context
   const { openCreateRoomModal, openJoinRoomModal } = useModalContext();
 
@@ -230,10 +230,10 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
 
   // Add SWR for anonymous room threads when in room context
   const { data: anonymousRoomData, mutate: mutateAnonymousThreads } = useSWR(
-    (!userInfo?.email && currentRoomShareCode && displayName) 
-      ? `anonymousRoomThreads_${currentRoomShareCode}_${displayName}` 
+    (!userInfo?.email && currentRoomShareCode && displayName)
+      ? `anonymousRoomThreads_${currentRoomShareCode}_${displayName}`
       : null,
-    (!userInfo?.email && currentRoomShareCode && displayName) 
+    (!userInfo?.email && currentRoomShareCode && displayName)
       ? () => fetchRoomThreadsForAnonymous(currentRoomShareCode, displayName)
       : null,
     {
@@ -304,7 +304,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       const baseRooms = rooms || [];
       // If we have anonymous room data, ensure the current room is included
       if (anonymousRoomData?.room && currentRoomShareCode) {
-        const existingRoom = baseRooms.find((room: any) => 
+        const existingRoom = baseRooms.find((room: any) =>
           (room.shareCode || room.share_code) === currentRoomShareCode
         );
         if (!existingRoom) {
@@ -415,7 +415,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       return allRoomThreads;
     } else {
       // Room context: Show only threads for the current room
-      
+
       // For anonymous users, use the fetched thread data directly
       if (!userInfo?.email && anonymousRoomData?.threads) {
         return anonymousRoomData.threads.map((thread: any) => ({
@@ -433,7 +433,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       const threadFirstMessages = new Map();
       const threadLatestTimes = new Map();
 
-      const currentRoom = availableRooms.find((room: any) => 
+      const currentRoom = availableRooms.find((room: any) =>
         (room.shareCode || room.share_code) === currentRoomShareCode
       );
 
@@ -492,16 +492,14 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
   // We render the sidebar only when open to avoid layout shift
   const mobileOverlay = isMobile ? (
     <div
-      className={`fixed inset-0 z-[100] md:hidden transition-opacity duration-300 ease-out ${
-        isMobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-      }`}
+      className={`fixed inset-0 z-[100] md:hidden transition-opacity duration-300 ease-out ${isMobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
       aria-hidden={!isMobileSidebarOpen}
     >
-      <div 
-        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ease-out ${
-          isMobileSidebarOpen ? 'opacity-100' : 'opacity-0'
-        }`} 
-        onClick={closeMobileSidebar} 
+      <div
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ease-out ${isMobileSidebarOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+        onClick={closeMobileSidebar}
       />
     </div>
   ) : null;
@@ -595,13 +593,11 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
       {mobileOverlay}
       <Sidebar
         collapsible="none"
-        className={`h-full border-r-0 shadow-elevation-2 w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-sidebar ${
-          isMobile 
-            ? `fixed left-0 top-0 bottom-0 w-[280px] z-[101] mobile-sidebar sidebar-slide sidebar-transition transition-transform duration-300 ease-out ${
-                isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-              }` 
-            : 'sidebar-slide'
-        }`}
+        className={`h-full border-r border-r-[#E5E5E5] dark:border-r-0 w-0 md:w-[240px] lg:w-[280px] flex-shrink-0 flex flex-col bg-sidebar ${isMobile
+          ? `fixed left-0 top-0 bottom-0 w-[280px] z-[101] mobile-sidebar sidebar-slide sidebar-transition transition-transform duration-300 ease-out ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`
+          : 'sidebar-slide'
+          }`}
       >
         <SidebarHeader className="px-3 sm:px-4 lg:px-5 py-4 sm:py-5 border-b-0 bg-sidebar gap-0">
           {/* PatioAI Logo - Larger with more spacing */}
@@ -697,7 +693,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
               currentRoomShareCode ? (
                 <div className="max-h-32 overflow-y-auto">
                   <div className="space-y-1">
-                    {availableRooms.filter((room: any) => 
+                    {availableRooms.filter((room: any) =>
                       (room.shareCode || room.share_code) === currentRoomShareCode
                     ).map((room: any) => (
                       <div
@@ -747,7 +743,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   {currentRooms.map((room: any) => {
                     const isExpired = new Date() > new Date(room.expiresAt);
                     const isExpiringSoon = !isExpired && (new Date(room.expiresAt).getTime() - Date.now()) < 24 * 60 * 60 * 1000;
-                    
+
                     return (
                       <Link
                         key={room.id}
@@ -759,22 +755,20 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                           }
                           handleRoomSelect();
                         }}
-                        className={`block w-full text-left p-2 sm:p-3 rounded-lg transition-colors ${
-                          isExpired 
-                            ? 'opacity-50 pointer-events-none' 
-                            : currentRoomShareCode === room.shareCode
+                        className={`block w-full text-left p-2 sm:p-3 rounded-lg transition-colors ${isExpired
+                          ? 'opacity-50 pointer-events-none'
+                          : currentRoomShareCode === room.shareCode
                             ? 'bg-primary/10 text-primary'
                             : 'hover:bg-muted/60'
                           }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
-                          <div className={`w-2 h-2 rounded-full ${
-                            isExpired 
-                              ? 'bg-destructive' 
-                              : isExpiringSoon 
-                              ? 'bg-amber-500 animate-pulse' 
+                          <div className={`w-2 h-2 rounded-full ${isExpired
+                            ? 'bg-destructive'
+                            : isExpiringSoon
+                              ? 'bg-amber-500 animate-pulse'
                               : 'bg-emerald-500 animate-pulse'
-                          }`} />
+                            }`} />
                           <span className={`font-medium text-sm truncate ${isExpired ? 'line-through text-muted-foreground' : ''}`}>
                             {room.name}
                           </span>
@@ -855,7 +849,7 @@ const CombinedDrawer: FC<CombinedDrawerProps> = ({
                   Personal Chat
                 </h4>
               </div>
-              
+
               {/* Personal Chats */}
               <ChatHistorySection
                 initialChatPreviews={initialChatPreviews}
@@ -1166,64 +1160,62 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                   <div className="max-h-32 overflow-y-auto">
                     <div className="space-y-1">
                       {rooms.map((room) => {
-                      const isExpired = new Date() > new Date(room.expiresAt);
-                      const isExpiringSoon = !isExpired && (new Date(room.expiresAt).getTime() - Date.now()) < 24 * 60 * 60 * 1000;
-                      
-                      return (
-                        <Link
-                          key={room.id}
-                          href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${crypto.randomUUID()}`}
-                          onClick={(e) => {
-                            if (isExpired) {
-                              e.preventDefault();
-                              return;
-                            }
-                            handleRoomSelect();
-                          }}
-                          className={`block w-full text-left p-2 rounded-lg transition-colors ${
-                            isExpired 
-                              ? 'opacity-50 pointer-events-none' 
+                        const isExpired = new Date() > new Date(room.expiresAt);
+                        const isExpiringSoon = !isExpired && (new Date(room.expiresAt).getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+
+                        return (
+                          <Link
+                            key={room.id}
+                            href={isExpired ? '#' : `/chat/room/${room.shareCode}?displayName=${encodedDisplayName}&sessionId=${encodedSessionId}&threadId=${crypto.randomUUID()}`}
+                            onClick={(e) => {
+                              if (isExpired) {
+                                e.preventDefault();
+                                return;
+                              }
+                              handleRoomSelect();
+                            }}
+                            className={`block w-full text-left p-2 rounded-lg transition-colors ${isExpired
+                              ? 'opacity-50 pointer-events-none'
                               : currentRoomShareCode === room.shareCode
-                              ? 'bg-primary/10 text-primary'
-                              : 'hover:bg-muted/60'
-                            }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className={`w-2 h-2 rounded-full ${
-                              isExpired 
-                                ? 'bg-destructive' 
-                                : isExpiringSoon 
-                                ? 'bg-amber-500 animate-pulse' 
-                                : 'bg-emerald-500 animate-pulse'
-                            }`} />
-                            <span className={`font-medium text-sm truncate ${isExpired ? 'line-through text-muted-foreground' : ''}`}>
-                              {room.name}
-                            </span>
-                            <div className="flex items-center gap-1 ml-auto">
-                              {room.isCreator && (
-                                <Crown className="h-3 w-3 text-amber-500" />
-                              )}
-                              {isExpired && (
-                                <span className="px-1 py-0.5 bg-destructive/20 text-destructive rounded text-xs font-medium">
-                                  Expired
-                                </span>
-                              )}
-                              {isExpiringSoon && (
-                                <span className="px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-xs font-medium">
-                                  Soon
-                                </span>
-                              )}
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className={`w-2 h-2 rounded-full ${isExpired
+                                ? 'bg-destructive'
+                                : isExpiringSoon
+                                  ? 'bg-amber-500 animate-pulse'
+                                  : 'bg-emerald-500 animate-pulse'
+                                }`} />
+                              <span className={`font-medium text-sm truncate ${isExpired ? 'line-through text-muted-foreground' : ''}`}>
+                                {room.name}
+                              </span>
+                              <div className="flex items-center gap-1 ml-auto">
+                                {room.isCreator && (
+                                  <Crown className="h-3 w-3 text-amber-500" />
+                                )}
+                                {isExpired && (
+                                  <span className="px-1 py-0.5 bg-destructive/20 text-destructive rounded text-xs font-medium">
+                                    Expired
+                                  </span>
+                                )}
+                                {isExpiringSoon && (
+                                  <span className="px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-xs font-medium">
+                                    Soon
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground/70">
-                            <span>{room.participantCount} online</span>
-                            <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
-                              {room.tier}
-                            </span>
-                          </div>
-                        </Link>
-                      );
-                    })}
+                            <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                              <span>{room.participantCount} online</span>
+                              <span className="px-1.5 py-0.5 bg-muted/50 rounded text-xs font-medium">
+                                {room.tier}
+                              </span>
+                            </div>
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1236,7 +1228,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                     {currentRoomShareCode ? 'Room Threads' : 'Personal Chat'}
                   </h3>
                 </div>
-                
+
                 {currentRoomShareCode ? (
                   <div>
                     {processedThreads.length === 0 ? (
@@ -1276,7 +1268,7 @@ const MobileSidebar: FC<CombinedDrawerProps> = ({
                       currentChatId={currentChatId}
                       searchParams={searchParams}
                       onChatSelect={handleChatSelect}
-                      mutateChatPreviews={async () => {}}
+                      mutateChatPreviews={async () => { }}
                     />
 
                     {/* Room Threads */}

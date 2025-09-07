@@ -1223,7 +1223,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Mobile Header with Hamburger Menu - only for rooms */}
       {roomContext && (
-              <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md h-12 shadow-sm w-full md:hidden pt-safe">
+              <div className="sticky top-0 bg-background/95 backdrop-blur-md h-12 shadow-sm w-full md:hidden pt-safe peer-data-[state=expanded]:ml-(--sidebar-width) transition-[margin] duration-200 ease-linear">
         <div className="flex items-center justify-between w-full h-full px-2">
           {/* Left side - Hamburger Menu + Logo + Room Name */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1300,7 +1300,7 @@ transform: `translateX(${swipeProgress < 1 ? -20 + (swipeProgress * 20) : 0}px)`
 
       {/* Desktop Chat Header - only for rooms */}
       {roomContext && (
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block">
+      <div className="sticky top-0 bg-background/80 backdrop-blur-md px-2 sm:px-3 md:px-6 py-1 sm:py-1.5 md:py-2.5 flex-shrink-0 hidden md:block peer-data-[state=expanded]:ml-(--sidebar-width) transition-[margin] duration-200 ease-linear">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {roomContext ? (

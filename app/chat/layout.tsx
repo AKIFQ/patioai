@@ -248,7 +248,7 @@ export default async function Layout(props: { children: React.ReactNode }) {
   const userData = await fetchUserData();
 
   return (
-    <div className="h-screen w-full bg-background overflow-hidden" data-chat-page>
+    <div className="h-screen w-full bg-background overflow-x-hidden" data-chat-page>
       <ModalProvider>
         <SidebarProvider className="h-full w-full flex">
           <SidebarSocketWrapper

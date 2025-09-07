@@ -63,11 +63,15 @@ export function ModelSelector({
     );
   };
 
-  // For free users, only show a compact "Auto" control (no upgrade CTA here)
+  // For free users, show Auto + Upgrade option
   if (userTier === 'free') {
     return (
       <div className="flex items-center gap-2">
-        <Select value="auto" onValueChange={() => {}}>
+        <Select value="auto" onValueChange={(value) => {
+          if (value === 'upgrade') {
+            window.location.href = '/account';
+          }
+        }}>
           <SelectTrigger className="h-6 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs rounded-full border-0 
                                             !bg-transparent hover:bg-white/5 !backdrop-blur-none
                                             transition-smooth !shadow-none hover:!shadow-none focus-visible:!shadow-none 
@@ -76,9 +80,18 @@ export function ModelSelector({
               <span className="text-[10px] sm:text-xs">Auto</span>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="w-28 sm:w-40 border border-[#E5E5E5] bg-[#FCFFFA] dark:bg-[#213D35] dark:border-none !backdrop-blur-none !shadow-none rounded-xl">
+          <SelectContent className="w-40 sm:w-48 border border-[#E5E5E5] bg-[#FCFFFA] dark:bg-[#213D35] dark:border-none !backdrop-blur-none !shadow-none rounded-xl">
             <SelectItem value="auto">
-              <span className="text-xs sm:text-sm">Auto</span>
+              <div className="flex items-center gap-2">
+                <Zap className="h-3 w-3" />
+                <span className="text-xs sm:text-sm">Auto</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="upgrade">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-3 w-3" />
+                <span className="text-xs sm:text-sm font-medium">Upgrade for More Models</span>
+              </div>
             </SelectItem>
           </SelectContent>
         </Select>
